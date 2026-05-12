@@ -5,8 +5,8 @@
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
-// @updateURL    https://gist.githubusercontent.com/ugomez809/3db20b7a3709032c50bec2c58b46d0fe/raw/Rico-sdr-vm.script.user.js
-// @downloadURL  https://gist.githubusercontent.com/ugomez809/3db20b7a3709032c50bec2c58b46d0fe/raw/Rico-sdr-vm.script.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
