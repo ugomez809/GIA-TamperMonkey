@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Pickup / Hangup Counters
 // @namespace    local.ricochet-counters
-// @version      0.5.5
+// @version      0.5.6
 // @description  Adds Pickup and Hangup counters to Ricochet and sends click/report webhooks.
 // @match        https://giainc.ricochet.me/*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-counters.user.js
@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '0.5.5';
+  const SCRIPT_VERSION = '0.5.6';
   const HOST_ID = 'rc-call-counter-host';
   const STYLE_ID = 'rc-call-counter-style';
   const STORAGE_PREFIX = 'rcCallCounter.';
@@ -497,6 +497,16 @@
       const currentValue = readCount(counterId);
       const delta = action === 'increment' ? 1 : -1;
       const nextValue = writeCount(counterId, currentValue + delta);
+      const alsoUpdatedCounters = [];
+
+      if (counterId === 'hangup' && action === 'increment') {
+        const pickupNextValue = writeCount('pickup', readCount('pickup') + 1);
+        alsoUpdatedCounters.push({
+          counterId: 'pickup',
+          counterLabel: 'Pick Ups',
+          counterValueAfterClick: pickupNextValue,
+        });
+      }
 
       sendClickWebhook({
         action,
@@ -504,6 +514,7 @@
         counterId,
         counterLabel: counter ? counter.label : counterId,
         counterValueAfterClick: nextValue,
+        alsoUpdatedCounters,
       });
     });
 

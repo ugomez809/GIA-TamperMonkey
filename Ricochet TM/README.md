@@ -13,3 +13,5 @@ Counters roll over at 11:59 PM California time so each day starts from zero.
 Counts are stored in Tampermonkey storage, not Ricochet page storage, so clearing Ricochet cache/cookies should not reset them.
 
 Report payloads include `submittedBy`, `reportSentBy`, `sentBy`, and `whoSentIt` for webhook table mapping.
+
+Clicking Hang Ups `+` increases both Hang Ups and Pick Ups by one.
