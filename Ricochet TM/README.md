@@ -1,9 +1,13 @@
-# Ricochet Tampermonkey Counter
+# Ricochet Tampermonkey Scripts
 
-Install/update link:
+Install/update links:
 
 ```text
+Ricochet Pickup / Hangup Counters
 https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-counters.user.js
+
+Ricochet VoiceMail Lead Watcher
+https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-voicemail-lead-watcher.user.js
 ```
 
 Tampermonkey uses the same raw GitHub URL in `@updateURL` and `@downloadURL`.
