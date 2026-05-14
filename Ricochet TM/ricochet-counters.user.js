@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Pickup / Hangup Counters
 // @namespace    local.ricochet-counters
-// @version      0.5.6
+// @version      0.5.7
 // @description  Adds Pickup and Hangup counters to Ricochet and sends click/report webhooks.
 // @match        https://giainc.ricochet.me/*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-counters.user.js
@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '0.5.6';
+  const SCRIPT_VERSION = '0.5.7';
   const HOST_ID = 'rc-call-counter-host';
   const STYLE_ID = 'rc-call-counter-style';
   const STORAGE_PREFIX = 'rcCallCounter.';
@@ -67,6 +67,14 @@
     second: '2-digit',
     hourCycle: 'h23',
     timeZoneName: 'short',
+  });
+
+  const californiaNavClockFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: CALIFORNIA_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
   });
 
   function hasTampermonkeyStorage() {
@@ -143,6 +151,11 @@
 
   function getCaliforniaParts(date = new Date()) {
     return readDateParts(californiaDisplayFormatter, date);
+  }
+
+  function getCaliforniaClockValue(date = new Date()) {
+    const parts = readDateParts(californiaNavClockFormatter, date);
+    return `${parts.hour}/${parts.minute}/${parts.second}`;
   }
 
   function getCaliforniaClockParts(date = new Date()) {
@@ -225,6 +238,37 @@
 
       .navbar-nav > #${HOST_ID}.rc-call-counter-host {
         float: left;
+      }
+
+      #${HOST_ID} .rc-call-clock {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 70px;
+        height: 36px;
+        box-sizing: border-box;
+        overflow: hidden;
+        color: #fff;
+        background: linear-gradient(180deg, rgba(84, 163, 222, 0.18), rgba(44, 64, 84, 0.42));
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 3px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.16);
+        font-family: inherit;
+      }
+
+      #${HOST_ID} .rc-call-clock-value {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        height: 100%;
+        padding: 0 5px;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
       }
 
       #${HOST_ID} .rc-call-counter {
@@ -433,6 +477,14 @@
     return measuredHeight > 0 ? `${measuredHeight}px` : '44px';
   }
 
+  function createClockMarkup() {
+    return `
+      <div class="rc-call-clock" aria-label="California time clock">
+        <div class="rc-call-clock-value" data-rc-clock-value>--/--/--</div>
+      </div>
+    `;
+  }
+
   function createCounterMarkup(counter) {
     return `
       <div class="rc-call-counter" data-counter="${counter.id}" aria-label="${counter.label} counter">
@@ -465,7 +517,7 @@
     const host = document.createElement(asListItem ? 'li' : 'div');
     host.id = HOST_ID;
     host.className = 'rc-call-counter-host';
-    host.innerHTML = `${counters.map(createCounterMarkup).join('')}${createOptionsMarkup()}`;
+    host.innerHTML = `${createClockMarkup()}${counters.map(createCounterMarkup).join('')}${createOptionsMarkup()}`;
 
     host.addEventListener('click', (event) => {
       const optionsTrigger = event.target.closest('.rc-counter-options-trigger');
@@ -783,6 +835,13 @@
     window.setInterval(maybeSendScheduledDailyReport, 15000);
   }
 
+  function renderClock() {
+    const clockValue = document.querySelector(`#${HOST_ID} [data-rc-clock-value]`);
+    if (!clockValue) return;
+
+    clockValue.textContent = getCaliforniaClockValue();
+  }
+
   function attachGlobalListeners() {
     if (globalListenersAttached) return;
     globalListenersAttached = true;
@@ -840,6 +899,7 @@
     }
 
     host.style.setProperty('--rc-counter-nav-height', getNavHeight(helpLink));
+    renderClock();
     renderCounts();
     return true;
   }
@@ -867,6 +927,8 @@
     attachGlobalListeners();
     watchForNavigationChanges();
     startDailyReportTimer();
+    renderClock();
+    window.setInterval(renderClock, 1000);
     window.setInterval(mountCounters, 2000);
   }
 

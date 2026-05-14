@@ -19,3 +19,5 @@ Counts are stored in Tampermonkey storage, not Ricochet page storage, so clearin
 Report payloads include `submittedBy`, `reportSentBy`, `sentBy`, and `whoSentIt` for webhook table mapping.
 
 Clicking Hang Ups `+` increases both Hang Ups and Pick Ups by one.
+
+The navbar block includes a live 12-hour California time clock next to Pick Ups.
