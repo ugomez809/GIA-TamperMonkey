@@ -21,3 +21,5 @@ Report payloads include `submittedBy`, `reportSentBy`, `sentBy`, and `whoSentIt`
 Clicking Hang Ups `+` increases both Hang Ups and Pick Ups by one.
 
 The navbar block includes a live 12-hour California time clock next to Pick Ups.
+
+The clock uses a small `PT` marker to identify Pacific time.

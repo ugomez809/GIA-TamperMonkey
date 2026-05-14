@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Pickup / Hangup Counters
 // @namespace    local.ricochet-counters
-// @version      0.5.10
+// @version      0.5.11
 // @description  Adds Pickup and Hangup counters to Ricochet and sends click/report webhooks.
 // @match        https://giainc.ricochet.me/*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-counters.user.js
@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '0.5.10';
+  const SCRIPT_VERSION = '0.5.11';
   const HOST_ID = 'rc-call-counter-host';
   const STYLE_ID = 'rc-call-counter-style';
   const STORAGE_PREFIX = 'rcCallCounter.';
@@ -244,6 +244,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        position: relative;
         width: 100px;
         height: 36px;
         box-sizing: border-box;
@@ -269,6 +270,18 @@
         line-height: 1;
         text-align: center;
         font-variant-numeric: tabular-nums;
+      }
+
+      #${HOST_ID} .rc-call-clock-zone {
+        position: absolute;
+        top: 2px;
+        right: 4px;
+        color: rgba(255, 255, 255, 0.58);
+        font-size: 7px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0;
+        pointer-events: none;
       }
 
       #${HOST_ID} .rc-call-counter {
@@ -480,6 +493,7 @@
   function createClockMarkup() {
     return `
       <div class="rc-call-clock" aria-label="California time clock">
+        <span class="rc-call-clock-zone" aria-hidden="true">PT</span>
         <div class="rc-call-clock-value" data-rc-clock-value>--:--:-- --</div>
       </div>
     `;
