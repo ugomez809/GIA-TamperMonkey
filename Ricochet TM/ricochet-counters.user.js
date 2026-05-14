@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Pickup / Hangup Counters
 // @namespace    local.ricochet-counters
-// @version      0.5.7
+// @version      0.5.8
 // @description  Adds Pickup and Hangup counters to Ricochet and sends click/report webhooks.
 // @match        https://giainc.ricochet.me/*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-counters.user.js
@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '0.5.7';
+  const SCRIPT_VERSION = '0.5.8';
   const HOST_ID = 'rc-call-counter-host';
   const STYLE_ID = 'rc-call-counter-style';
   const STORAGE_PREFIX = 'rcCallCounter.';
@@ -155,7 +155,7 @@
 
   function getCaliforniaClockValue(date = new Date()) {
     const parts = readDateParts(californiaNavClockFormatter, date);
-    return `${parts.hour}/${parts.minute}/${parts.second}`;
+    return `${parts.hour}:${parts.minute}:${parts.second} ${parts.dayPeriod}`;
   }
 
   function getCaliforniaClockParts(date = new Date()) {
@@ -480,7 +480,7 @@
   function createClockMarkup() {
     return `
       <div class="rc-call-clock" aria-label="California time clock">
-        <div class="rc-call-clock-value" data-rc-clock-value>--/--/--</div>
+        <div class="rc-call-clock-value" data-rc-clock-value>--:--:-- --</div>
       </div>
     `;
   }
