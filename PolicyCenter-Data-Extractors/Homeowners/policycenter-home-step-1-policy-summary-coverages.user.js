@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PolicyCenter — Step 1: Policy Summary → Coverages → Optional → Detailed (ALWAYS ON)
+// @name         PolicyCenter — HOME Helper: Policy Summary → Coverages → Optional → Detailed (ALWAYS ON)
 // @namespace    tm.pc.step1.summary.to.coverages
-// @version      1.0.2
+// @version      1.0.3
 // @description  ALWAYS ON. When header starts with "Policy Summary" (ex: "Policy Summary: 123") → click Coverages once → wait 2s → click Optional Coverages → wait 2s → click Detailed Coverages. Runs once per Policy Summary visibility. STOP is session-only; reload re-arms.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -36,8 +36,8 @@
    * UI
    ******************************************************************/
   const UI = (() => {
-    const RIGHT_PX = 346;
-    const BOTTOM_PX = 390;
+    const RIGHT_PX = 1342;
+    const BOTTOM_PX = 14;
 
     const host = document.createElement("div");
     host.id = "tm_pc_step1_summary_host";
@@ -66,7 +66,7 @@
       "display:flex;align-items:center;justify-content:space-between;padding:10px 10px 8px;border-bottom:1px solid rgba(0,0,0,.08)";
 
     const title = document.createElement("div");
-    title.textContent = "PC Step1 — Summary → Coverages";
+    title.textContent = "PC Helper — Summary → Coverages";
     title.style.cssText = "font-weight:700";
 
     const status = document.createElement("div");
@@ -161,7 +161,7 @@
       const ss = String(t.getSeconds()).padStart(2, "0");
       pre.textContent += `[${hh}:${mm}:${ss}] ${msg}\n`;
       logWrap.scrollTop = logWrap.scrollHeight;
-      try { console.log("[PC Step1]", msg); } catch {}
+      try { console.log("[PC Summary Helper]", msg); } catch {}
     };
 
     const setStatus = (s) => (status.textContent = s);

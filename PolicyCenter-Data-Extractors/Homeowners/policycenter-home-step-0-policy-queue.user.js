@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 0: Policy Queue (loop → GO AHEAD Step1) (chunk counter + pause countdown)
 // @namespace    tm.pc.step0.policyqueue
-// @version      1.4.1
+// @version      1.4.2
 // @description  Manual START loop. CUSTOM: every N successes pause M minutes. Shows CHUNK counter + PAUSE countdown (live tick). FIX: timestamp overflow safe.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -26,8 +26,8 @@
     OK:       'tm_pc_step0_success_v1',
     BAD:      'tm_pc_step0_fail_v1',
     IN_DRAFT: 'tm_pc_step0_input_draft_v1',
-    UI_RIGHT:        'tm_pc_step0_ui_right_v2',
-    UI_BOTTOM:       'tm_pc_step0_ui_bottom_v2',
+    UI_RIGHT:        'tm_pc_step0_ui_right_v3',
+    UI_BOTTOM:       'tm_pc_step0_ui_bottom_v3',
     UI_BOXES_OFF:    'tm_pc_step0_ui_boxes_off_v1',
     UI_MINI:         'tm_pc_step0_ui_mini_v1',
     UI_REQUEUE_FAIL: 'tm_pc_step0_ui_requeue_fail_v1',
@@ -82,6 +82,7 @@
     minBottom: 8,
     edgePad: 8,
     panelWidth: 360,
+    panelHeightEstimate: 640,
     miniSize: 52,
     maxRightPad: 24,
     maxBottomPad: 24,
@@ -118,11 +119,13 @@
     Math.max(CFG.minRight, window.innerWidth - width - CFG.edgePad);
   const maxUiBottom = (height = CFG.miniSize) =>
     Math.max(CFG.minBottom, window.innerHeight - height - CFG.edgePad);
-  const preferredUiRight = () => maxUiRight(CFG.panelWidth);
+  const preferredUiRight = () => CFG.defaultRight;
+  const preferredUiBottom = (height = CFG.panelHeightEstimate) =>
+    clamp(Math.round((window.innerHeight - height) / 2), CFG.minBottom, maxUiBottom(height));
   const readUiRight = (width = CFG.panelWidth) =>
     clamp(Number(loadStr(LS.UI_RIGHT, preferredUiRight())), CFG.minRight, maxUiRight(width));
-  const readUiBottom = (height = CFG.miniSize) =>
-    clamp(Number(loadStr(LS.UI_BOTTOM, CFG.defaultBottom)), CFG.minBottom, maxUiBottom(height));
+  const readUiBottom = (height = CFG.panelHeightEstimate) =>
+    clamp(Number(loadStr(LS.UI_BOTTOM, preferredUiBottom(height))), CFG.minBottom, maxUiBottom(height));
 
   function loadArr(key) {
     try {
@@ -626,7 +629,7 @@
       const width = Math.max(CFG.miniSize, box?.width || (this.state.mini ? CFG.miniSize : CFG.panelWidth));
       const height = Math.max(CFG.miniSize, box?.height || CFG.miniSize);
       const currentRight = parseInt(this.host.style.right || `${preferredUiRight()}`, 10);
-      const currentBottom = parseInt(this.host.style.bottom || `${CFG.defaultBottom}`, 10);
+      const currentBottom = parseInt(this.host.style.bottom || `${preferredUiBottom(height)}`, 10);
       const right = clamp(currentRight, CFG.minRight, maxUiRight(width));
       const bottom = clamp(currentBottom, CFG.minBottom, maxUiBottom(height));
       this.host.style.right = `${right}px`;

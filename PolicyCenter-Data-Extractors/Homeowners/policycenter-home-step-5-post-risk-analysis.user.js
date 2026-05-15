@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 5: Homeowners → POST to Sheets + HARD Risk Analysis Click (ALWAYS ON)
 // @namespace    tm.pc.home.step5.post.sheets
-// @version      1.0.10
+// @version      1.0.11
 // @description  ALWAYS ON. When tm_pc_stage_v1 == quote_done: build Homeowners payload from tm_pc_home_payload_v1 + tm_pc_coverages_v1 + tm_pc_quote_v1, CLEAN/FORMAT fields (+ *N/A for empty), POST ONCE (hard anti-multi-post gates), then HARD click Risk Analysis (Guidewire-safe) + 60s failsafe force-click. STOP session-only; reload re-arms. UI bottom-left.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -21,8 +21,8 @@
   "use strict";
   try { if (window.top !== window.self) return; } catch {}
 
-  if (window.__tm_pc_home_step5_running_v1010) return;
-  window.__tm_pc_home_step5_running_v1010 = true;
+  if (window.__tm_pc_home_step5_running_v1011) return;
+  window.__tm_pc_home_step5_running_v1011 = true;
 
   const CFG = {
     scriptId: "tm_pc_home_step5_post_sheets_v1",
@@ -101,7 +101,7 @@
         const s = document.createElement("style");
         s.id = styleId;
         s.textContent = `
-          #${rootId}{position:fixed;left:390px;bottom:12px;z-index:2147483647;font:12px system-ui,Segoe UI,Arial}
+          #${rootId}{position:fixed;left:12px;bottom:12px;z-index:2147483647;font:12px system-ui,Segoe UI,Arial}
           #${rootId}_fab{
             width:44px;height:44px;border-radius:999px;display:flex;align-items:center;justify-content:center;
             background:rgba(20,20,20,.92);color:#fff;border:1px solid rgba(255,255,255,.18);
@@ -114,7 +114,7 @@
             border-radius:999px;padding:2px 6px;font-size:10px;min-width:18px;text-align:center
           }
           #${rootId}_drawer{
-            position:absolute;left:0;bottom:54px;width:min(740px, calc(100vw - 404px));min-width:min(520px, calc(100vw - 404px));max-height:calc(100vh - 86px);
+            position:absolute;left:0;bottom:54px;width:min(740px, calc(100vw - 24px));min-width:min(520px, calc(100vw - 24px));max-height:calc(100vh - 86px);
             background:rgba(20,20,20,.92);color:#fff;border:1px solid rgba(255,255,255,.15);
             border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.4);overflow:hidden
           }
@@ -632,7 +632,7 @@
 
     out.meta = (out.meta && isObj(out.meta)) ? out.meta : {};
     out.meta.sent_at = new Date().toISOString();
-    out.meta.from = "tm_step5_home_v1.0.10";
+    out.meta.from = "tm_step5_home_v1.0.11";
     out.meta.stage = clean(lsGet(CFG.kStage));
     out.policyNumber = pn;
     out.PolicyNumber = pn;
