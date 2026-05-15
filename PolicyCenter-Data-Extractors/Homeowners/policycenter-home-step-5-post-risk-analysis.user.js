@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 5: Homeowners → POST to Sheets + HARD Risk Analysis Click (ALWAYS ON)
 // @namespace    tm.pc.home.step5.post.sheets
-// @version      1.0.12
+// @version      1.0.13
 // @description  ALWAYS ON. When tm_pc_stage_v1 == quote_done: build complete Homeowners payload from tm_pc_home_payload_v1 + tm_pc_coverages_v1 + tm_pc_quote_v1, refuse incomplete posts, then HARD click Risk Analysis after a successful POST. STOP session-only; reload re-arms.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -679,7 +679,7 @@
 
     out.meta = (out.meta && isObj(out.meta)) ? out.meta : {};
     out.meta.sent_at = new Date().toISOString();
-    out.meta.from = "tm_step5_home_v1.0.12";
+    out.meta.from = "tm_step5_home_v1.0.13";
     out.meta.stage = clean(lsGet(CFG.kStage));
     out.policyNumber = pn;
     out.PolicyNumber = pn;
@@ -816,10 +816,22 @@
 
       // HARD gates
       if (!manual) {
-        if (alreadyPostedLast(pn)) { UI.log(`SKIP: last-policy gate pn=${pn}`); return; }
-        if (isDeduped(pn)) { UI.log(`SKIP: deduped pn=${pn}`); return; }
+        if (alreadyPostedLast(pn)) {
+          UI.log(`SKIP: last-policy gate pn=${pn}`);
+          clearFailsafe();
+          return;
+        }
+        if (isDeduped(pn)) {
+          UI.log(`SKIP: deduped pn=${pn}`);
+          clearFailsafe();
+          return;
+        }
         const lastTok = clean(getSessionToken());
-        if (token && lastTok && token === lastTok) { UI.log(`SKIP: session-token gate token=${token}`); return; }
+        if (token && lastTok && token === lastTok) {
+          UI.log(`SKIP: session-token gate token=${token}`);
+          clearFailsafe();
+          return;
+        }
       }
 
       UI.log("POST ONCE…");
@@ -906,7 +918,7 @@
     fire(false);
   }
 
-  UI.log("Loaded. Auto-arming… (stage=quote_done → post once → HARD Risk click; 60s failsafe)");
+  UI.log("Loaded. Auto-arming… (stage=quote_done → complete payload → post once → Risk click)");
   tick(true);
   setInterval(() => tick(false), CFG.tickMs);
 })();
