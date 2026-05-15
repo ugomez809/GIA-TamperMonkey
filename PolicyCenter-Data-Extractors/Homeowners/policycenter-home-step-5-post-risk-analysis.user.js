@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 5: Homeowners → POST to Sheets + HARD Risk Analysis Click (ALWAYS ON)
 // @namespace    tm.pc.home.step5.post.sheets
-// @version      1.0.8
+// @version      1.0.9
 // @description  ALWAYS ON. When tm_pc_stage_v1 == quote_done: build Homeowners payload from tm_pc_home_payload_v1 + tm_pc_coverages_v1 + tm_pc_quote_v1, CLEAN/FORMAT fields (+ *N/A for empty), POST ONCE (hard anti-multi-post gates), then HARD click Risk Analysis (Guidewire-safe) + 60s failsafe force-click. STOP session-only; reload re-arms. UI bottom-left.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -21,8 +21,8 @@
   "use strict";
   try { if (window.top !== window.self) return; } catch {}
 
-  if (window.__tm_pc_home_step5_running_v108) return;
-  window.__tm_pc_home_step5_running_v108 = true;
+  if (window.__tm_pc_home_step5_running_v109) return;
+  window.__tm_pc_home_step5_running_v109 = true;
 
   const CFG = {
     scriptId: "tm_pc_home_step5_post_sheets_v1",
@@ -399,7 +399,7 @@
     lsSet(CFG.kLastPostedAt, String(Date.now()));
   };
 
-  const getSessionToken = () => { try { sessionStorage.getItem(CFG.sessionTokenKey) || ""; } catch { return ""; } };
+  const getSessionToken = () => { try { return sessionStorage.getItem(CFG.sessionTokenKey) || ""; } catch { return ""; } };
   const setSessionToken = (t) => { try { sessionStorage.setItem(CFG.sessionTokenKey, t || ""); } catch {} };
 
   // cleaning helpers
@@ -632,8 +632,10 @@
 
     out.meta = (out.meta && isObj(out.meta)) ? out.meta : {};
     out.meta.sent_at = new Date().toISOString();
-    out.meta.from = "tm_step5_home_v1.0.8";
+    out.meta.from = "tm_step5_home_v1.0.9";
     out.meta.stage = clean(lsGet(CFG.kStage));
+    out.policyNumber = pn;
+    out.PolicyNumber = pn;
 
     // Policy_Info
     if (out.Policy_Info && isObj(out.Policy_Info)) {
@@ -646,6 +648,7 @@
     }
     ensureStrKey(out.Policy_Info, "Status");
     ensureStrKey(out.Policy_Info, "StatusRaw");
+    out.Policy_Info.PolicyNumber = pn;
 
     // Dwelling
     if (out.Dwelling && isObj(out.Dwelling)) {
