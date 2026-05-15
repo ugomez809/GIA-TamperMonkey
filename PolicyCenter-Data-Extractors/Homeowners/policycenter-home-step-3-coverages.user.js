@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 3: Coverages Extractor (All + Optional + Detailed + Exclusions/Conditions) (ALWAYS ON)
 // @namespace    tm.pc.step3.coverages
-// @version      1.0.8
+// @version      1.0.9
 // @description  ALWAYS ON. Auto-arms on load (STOP is session-only). Rule: Coverages visible → run ONCE → wait until Coverages NOT visible before allowing another run. If run errors, gate clears to auto-retry. NEW: Per-subtab timebox: wait up to 2s for "ready"; if not ready, capture whatever is there and move on. Hard cap 3s per subtab before clicking next.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -66,7 +66,7 @@
     host.style.cssText = [
       "position:fixed",
       "left:auto",
-      "right:726px",
+      "right:678px",
       "bottom:14px",
       "z-index:2147483647",
       "font:12px/1.2 system-ui,Segoe UI,Roboto,Arial",
@@ -149,7 +149,7 @@
     mini.style.cssText = [
       "position:fixed",
       "left:auto",
-      "right:726px",
+      "right:678px",
       "bottom:14px",
       "width:44px",
       "height:44px",
@@ -230,11 +230,11 @@
 
     function applyFallback() {
       host.style.left = "auto";
-      host.style.right = "726px";
+      host.style.right = "678px";
       host.style.bottom = DEFAULT_BOTTOM + "px";
 
       mini.style.left = "auto";
-      mini.style.right = "726px";
+      mini.style.right = "678px";
       mini.style.bottom = DEFAULT_BOTTOM + "px";
     }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 6: Forms → POST ONCE → Clear → ALWAYS Click Risk Analysis (ALWAYS ON)
 // @namespace    tm.pc.step6.forms.post.risk
-// @version      1.2.5
+// @version      1.2.6
 // @description  ALWAYS ON. When Forms header is visible: wait 5s → POST policy payload ONCE (no retries, no duplicates) → clear all tm_pc_* (keeps Step6 dedupe keys) → click Risk Analysis. FAILSAFE: after 2 minutes on Forms, click Risk Analysis no matter what (ignores busy). Sends Vehicles ONLY when VIN matches a Step5 subtotal VIN (unmatched VINs are skipped). Saves failed policy numbers to auto-downloaded pc_failed_posts.txt. UI: bottom-left circle toggles log drawer.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -22,8 +22,8 @@
   'use strict';
   try { if (window.top !== window.self) return; } catch {}
 
-  if (window.__tm_pc_step6_v125_running) return;
-  window.__tm_pc_step6_v125_running = true;
+  if (window.__tm_pc_step6_v126_running) return;
+  window.__tm_pc_step6_v126_running = true;
 
   const CFG = {
     scriptId: 'tm_pc_step6_forms_post_risk_v1',
@@ -72,7 +72,7 @@
         const s = document.createElement('style');
         s.id = styleId;
         s.textContent = `
-          #${rootId}{position:fixed;left:12px;bottom:12px;z-index:2147483647;font:12px system-ui,Segoe UI,Arial}
+          #${rootId}{position:fixed;left:390px;bottom:12px;z-index:2147483647;font:12px system-ui,Segoe UI,Arial}
           #${rootId}_fab{
             width:44px;height:44px;border-radius:999px;display:flex;align-items:center;justify-content:center;
             background:rgba(20,20,20,.92);color:#fff;border:1px solid rgba(255,255,255,.18);
@@ -85,7 +85,7 @@
             border-radius:999px;padding:2px 6px;font-size:10px;min-width:18px;text-align:center
           }
           #${rootId}_drawer{
-            position:absolute;left:0;bottom:54px;min-width:520px;max-width:700px;
+            position:absolute;left:0;bottom:54px;width:min(700px, calc(100vw - 404px));min-width:min(520px, calc(100vw - 404px));max-height:calc(100vh - 86px);
             background:rgba(20,20,20,.92);color:#fff;border:1px solid rgba(255,255,255,.15);
             border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.4);overflow:hidden
           }

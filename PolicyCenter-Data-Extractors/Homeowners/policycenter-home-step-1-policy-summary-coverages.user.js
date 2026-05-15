@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 1: Policy Summary → Coverages → Optional → Detailed (ALWAYS ON)
 // @namespace    tm.pc.step1.summary.to.coverages
-// @version      1.0.1
+// @version      1.0.2
 // @description  ALWAYS ON. When header starts with "Policy Summary" (ex: "Policy Summary: 123") → click Coverages once → wait 2s → click Optional Coverages → wait 2s → click Detailed Coverages. Runs once per Policy Summary visibility. STOP is session-only; reload re-arms.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -36,14 +36,15 @@
    * UI
    ******************************************************************/
   const UI = (() => {
-    const RIGHT_PX = 1010;
+    const RIGHT_PX = 346;
+    const BOTTOM_PX = 390;
 
     const host = document.createElement("div");
-    host.id = "tm_pc_step1_host";
+    host.id = "tm_pc_step1_summary_host";
     host.style.cssText = [
       "position:fixed",
       `right:${RIGHT_PX}px`,
-      "bottom:14px",
+      `bottom:${BOTTOM_PX}px`,
       "z-index:2147483647",
       "font:12px/1.2 system-ui,Segoe UI,Roboto,Arial",
       "color:#111",
@@ -120,12 +121,12 @@
     host.appendChild(panel);
 
     const mini = document.createElement("div");
-    mini.textContent = "PC1";
+    mini.textContent = "PC1S";
     mini.title = "Click to show/hide";
     mini.style.cssText = [
       "position:fixed",
       `right:${RIGHT_PX}px`,
-      "bottom:14px",
+      `bottom:${BOTTOM_PX}px`,
       "width:44px",
       "height:44px",
       "border-radius:999px",

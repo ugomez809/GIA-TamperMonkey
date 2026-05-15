@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 4: Quote Extractor (ALWAYS ON)
 // @namespace    tm.pc.step4.quote
-// @version      1.0.7
+// @version      1.0.8
 // @description  ALWAYS ON. Quote visible → run ONCE → then wait until Quote is NOT visible before allowing another run. STOP is session-only; reload re-arms. Fix Fees/Taxes fallback by label. Split Discounts vs Surcharges (reads DiscountModifiers & SurchargeModifiers lists). Capture Reconstruction Cost block (Homeowners).
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -70,8 +70,8 @@
     host.id = "tm_pc_step4_host";
     host.style.cssText = [
       "position:fixed",
-      "right:1034px",
-      "bottom:14px",
+      "right:14px",
+      "bottom:390px",
       "z-index:2147483647",
       "font:12px/1.2 system-ui,Segoe UI,Roboto,Arial",
       "color:#111",
@@ -148,8 +148,8 @@
     mini.title = "Click to show/hide";
     mini.style.cssText = [
       "position:fixed",
-      "right:1034px",
-      "bottom:14px",
+      "right:14px",
+      "bottom:390px",
       "width:44px",
       "height:44px",
       "border-radius:999px",

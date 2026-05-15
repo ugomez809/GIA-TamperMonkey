@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 0: Policy Queue (loop → GO AHEAD Step1) (chunk counter + pause countdown)
 // @namespace    tm.pc.step0.policyqueue
-// @version      1.4.0
+// @version      1.4.1
 // @description  Manual START loop. CUSTOM: every N successes pause M minutes. Shows CHUNK counter + PAUSE countdown (live tick). FIX: timestamp overflow safe.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -26,8 +26,8 @@
     OK:       'tm_pc_step0_success_v1',
     BAD:      'tm_pc_step0_fail_v1',
     IN_DRAFT: 'tm_pc_step0_input_draft_v1',
-    UI_RIGHT:        'tm_pc_step0_ui_right_v1',
-    UI_BOTTOM:       'tm_pc_step0_ui_bottom_v1',
+    UI_RIGHT:        'tm_pc_step0_ui_right_v2',
+    UI_BOTTOM:       'tm_pc_step0_ui_bottom_v2',
     UI_BOXES_OFF:    'tm_pc_step0_ui_boxes_off_v1',
     UI_MINI:         'tm_pc_step0_ui_mini_v1',
     UI_REQUEUE_FAIL: 'tm_pc_step0_ui_requeue_fail_v1',
@@ -80,6 +80,9 @@
 
     minRight: 8,
     minBottom: 8,
+    edgePad: 8,
+    panelWidth: 360,
+    miniSize: 52,
     maxRightPad: 24,
     maxBottomPad: 24,
     defaultRight: 14,
@@ -111,6 +114,15 @@
     if (!Number.isFinite(x)) return a;
     return Math.max(a, Math.min(b, x));
   };
+  const maxUiRight = (width = CFG.panelWidth) =>
+    Math.max(CFG.minRight, window.innerWidth - width - CFG.edgePad);
+  const maxUiBottom = (height = CFG.miniSize) =>
+    Math.max(CFG.minBottom, window.innerHeight - height - CFG.edgePad);
+  const preferredUiRight = () => maxUiRight(CFG.panelWidth);
+  const readUiRight = (width = CFG.panelWidth) =>
+    clamp(Number(loadStr(LS.UI_RIGHT, preferredUiRight())), CFG.minRight, maxUiRight(width));
+  const readUiBottom = (height = CFG.miniSize) =>
+    clamp(Number(loadStr(LS.UI_BOTTOM, CFG.defaultBottom)), CFG.minBottom, maxUiBottom(height));
 
   function loadArr(key) {
     try {
@@ -302,8 +314,8 @@
       if (!host) {
         host = document.createElement('div');
         host.id = 'tm-pc-step0-host';
-        const right = clamp(Number(loadStr(LS.UI_RIGHT, CFG.defaultRight)), CFG.minRight, window.innerWidth - CFG.maxRightPad);
-        const bottom = clamp(Number(loadStr(LS.UI_BOTTOM, CFG.defaultBottom)), CFG.minBottom, window.innerHeight - CFG.maxBottomPad);
+        const right = readUiRight();
+        const bottom = readUiBottom();
         host.style.cssText = `position:fixed;right:${right}px;bottom:${bottom}px;z-index:2147483647;pointer-events:auto;`;
         (document.documentElement || document.body).appendChild(host);
       }
@@ -317,14 +329,14 @@
       this.root.innerHTML = `
 <style>
   :root{--base:${BASE};--baseB: rgba(57,59,135,.34);--baseC: rgba(57,59,135,.55);--txt:#e5e7eb;--txt2:#f3f4f6;--line: rgba(255,255,255,.12);}
-  .wrap{width:360px;color:var(--txt);border:1px solid var(--line);border-radius:16px;
+  .wrap{width:${CFG.panelWidth}px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);color:var(--txt);border:1px solid var(--line);border-radius:16px;
     background: radial-gradient(900px 420px at 10% 10%, rgba(57,59,135,.42), transparent 55%), linear-gradient(180deg, rgba(17,24,39,.92), rgba(3,7,18,.88));
     box-shadow:0 18px 50px rgba(0,0,0,.45);overflow:hidden;font:12px/1.25 system-ui,Segoe UI,Arial;backdrop-filter: blur(10px);}
   .hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:grab;user-select:none;touch-action:none}
   .hdr:active{cursor:grabbing}
   .ttl{font-weight:950;letter-spacing:.2px;color:var(--txt2)}
   .pill{font-weight:900;font-size:11px;padding:5px 8px;border-radius:999px;border:1px solid rgba(57,59,135,.45);background:rgba(57,59,135,.14);color:var(--txt2);white-space:nowrap}
-  .body{padding:10px 12px 12px}
+  .body{padding:10px 12px 12px;max-height:calc(100vh - 82px);overflow:auto}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
   .btn{padding:7px 10px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--txt2);cursor:pointer;font-weight:950}
   .btn:hover{background:rgba(255,255,255,.10)}
@@ -553,8 +565,9 @@
         if (this.state.mini) return;
         e.preventDefault();
 
-        const right = clamp(Number(loadStr(LS.UI_RIGHT, CFG.defaultRight)), CFG.minRight, window.innerWidth - CFG.maxRightPad);
-        const bottom = clamp(Number(loadStr(LS.UI_BOTTOM, CFG.defaultBottom)), CFG.minBottom, window.innerHeight - CFG.maxBottomPad);
+        const box = this.host?.getBoundingClientRect?.();
+        const right = readUiRight(Math.max(CFG.miniSize, box?.width || CFG.panelWidth));
+        const bottom = readUiBottom(Math.max(CFG.miniSize, box?.height || CFG.miniSize));
 
         this.state.drag.on = true;
         this.state.drag.sx = e.clientX;
@@ -573,8 +586,9 @@
         let nextRight = this.state.drag.sr - dx;
         let nextBottom = this.state.drag.sb - dy;
 
-        nextRight = clamp(nextRight, CFG.minRight, Math.max(CFG.minRight, window.innerWidth - CFG.maxRightPad));
-        nextBottom = clamp(nextBottom, CFG.minBottom, Math.max(CFG.minBottom, window.innerHeight - CFG.maxBottomPad));
+        const box = this.host?.getBoundingClientRect?.();
+        nextRight = clamp(nextRight, CFG.minRight, maxUiRight(Math.max(CFG.miniSize, box?.width || CFG.panelWidth)));
+        nextBottom = clamp(nextBottom, CFG.minBottom, maxUiBottom(Math.max(CFG.miniSize, box?.height || CFG.miniSize)));
 
         this.host.style.right = `${nextRight}px`;
         this.host.style.bottom = `${nextBottom}px`;
@@ -584,11 +598,7 @@
         if (!this.state.drag.on) return;
         this.state.drag.on = false;
 
-        const right = clamp(parseInt(this.host.style.right || `${CFG.defaultRight}`, 10) || CFG.defaultRight, CFG.minRight, Math.max(CFG.minRight, window.innerWidth - CFG.maxRightPad));
-        const bottom = clamp(parseInt(this.host.style.bottom || `${CFG.defaultBottom}`, 10) || CFG.defaultBottom, CFG.minBottom, Math.max(CFG.minBottom, window.innerHeight - CFG.maxBottomPad));
-
-        saveStr(LS.UI_RIGHT, right);
-        saveStr(LS.UI_BOTTOM, bottom);
+        this.keepInViewport(true);
       };
 
       dragEl.addEventListener('pointerdown', onDown);
@@ -597,20 +607,34 @@
       dragEl.addEventListener('pointercancel', onUp);
 
       window.addEventListener('resize', () => {
-        const right = clamp(Number(loadStr(LS.UI_RIGHT, CFG.defaultRight)), CFG.minRight, Math.max(CFG.minRight, window.innerWidth - CFG.maxRightPad));
-        const bottom = clamp(Number(loadStr(LS.UI_BOTTOM, CFG.defaultBottom)), CFG.minBottom, Math.max(CFG.minBottom, window.innerHeight - CFG.maxBottomPad));
-        if (this.host) {
-          this.host.style.right = `${right}px`;
-          this.host.style.bottom = `${bottom}px`;
-        }
+        this.keepInViewport(true);
       }, { passive: true });
 
-      const right = clamp(Number(loadStr(LS.UI_RIGHT, CFG.defaultRight)), CFG.minRight, window.innerWidth - CFG.maxRightPad);
-      const bottom = clamp(Number(loadStr(LS.UI_BOTTOM, CFG.defaultBottom)), CFG.minBottom, window.innerHeight - CFG.maxBottomPad);
+      const right = readUiRight();
+      const bottom = readUiBottom();
       this.host.style.right = `${right}px`;
       this.host.style.bottom = `${bottom}px`;
 
       this.render(true);
+      this.keepInViewport(true);
+    },
+
+    keepInViewport(save = false) {
+      if (!this.host || !this.root) return;
+      const active = this.state.mini ? this.root.getElementById('mini') : this.root.getElementById('wrap');
+      const box = active?.getBoundingClientRect?.() || this.host.getBoundingClientRect?.();
+      const width = Math.max(CFG.miniSize, box?.width || (this.state.mini ? CFG.miniSize : CFG.panelWidth));
+      const height = Math.max(CFG.miniSize, box?.height || CFG.miniSize);
+      const currentRight = parseInt(this.host.style.right || `${preferredUiRight()}`, 10);
+      const currentBottom = parseInt(this.host.style.bottom || `${CFG.defaultBottom}`, 10);
+      const right = clamp(currentRight, CFG.minRight, maxUiRight(width));
+      const bottom = clamp(currentBottom, CFG.minBottom, maxUiBottom(height));
+      this.host.style.right = `${right}px`;
+      this.host.style.bottom = `${bottom}px`;
+      if (save) {
+        saveStr(LS.UI_RIGHT, right);
+        saveStr(LS.UI_BOTTOM, bottom);
+      }
     },
 
     toast(msg) {
@@ -730,6 +754,7 @@
         if (taOk && (forceReloadTextareas || taOk.value !== ok.join('\n'))) taOk.value = ok.join('\n');
         if (taBad && (forceReloadTextareas || taBad.value !== bad.join('\n'))) taBad.value = bad.join('\n');
       }
+      this.keepInViewport(false);
     },
 
     setupLiveSync() {
@@ -747,11 +772,10 @@
           GM_addValueChangeListener(k, (_name, _old, _new, remote) => {
             if (!remote) return;
             if (k === LS.UI_RIGHT || k === LS.UI_BOTTOM) {
-              const right = clamp(Number(loadStr(LS.UI_RIGHT, CFG.defaultRight)), CFG.minRight, window.innerWidth - CFG.maxRightPad);
-              const bottom = clamp(Number(loadStr(LS.UI_BOTTOM, CFG.defaultBottom)), CFG.minBottom, window.innerHeight - CFG.maxBottomPad);
               if (this.host) {
-                this.host.style.right = `${right}px`;
-                this.host.style.bottom = `${bottom}px`;
+                this.host.style.right = `${readUiRight()}px`;
+                this.host.style.bottom = `${readUiBottom()}px`;
+                this.keepInViewport(false);
               }
             }
             this.render(true);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 4: PA Coverages → 1-row export + Quote click (ALWAYS ON)
 // @namespace    tm.pc.step4.pacoverages
-// @version      1.1.2
+// @version      1.1.3
 // @description  ALWAYS ON each load (STOP is session-only). When PA Coverages header visible: extract "all vehicles in CA" + per-vehicle coverages across Next pages, build ONE ROW (v1..v10), save JSON+TXT exports to localStorage, then click Quote. Won’t re-run again until header disappears and comes back.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
@@ -50,8 +50,8 @@
 
     hostId: 'tm_pc_step4_host',
     bubbleId: 'tm_pc_step4_bubble',
-    uiRightPx: 1010,
-    uiBottomPx: 14,
+    uiRightPx: 14,
+    uiBottomPx: 390,
     maxLogLines: 520,
 
     quoteLabel: 'Quote',
