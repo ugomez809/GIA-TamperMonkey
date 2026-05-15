@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 3: Coverages Extractor (All + Optional + Detailed + Exclusions/Conditions) (ALWAYS ON)
 // @namespace    tm.pc.step3.coverages
-// @version      1.0.9
-// @description  ALWAYS ON. Auto-arms on load (STOP is session-only). Rule: Coverages visible → run ONCE → wait until Coverages NOT visible before allowing another run. If run errors, gate clears to auto-retry. NEW: Per-subtab timebox: wait up to 2s for "ready"; if not ready, capture whatever is there and move on. Hard cap 3s per subtab before clicking next.
+// @version      1.1.0
+// @description  ALWAYS ON. Auto-arms on load (STOP is session-only). Rule: Step2 signal + Coverages visible → run ONCE → wait until Coverages NOT visible before allowing another run. If run errors, gate clears to auto-retry. Per-subtab timebox: wait up to 2s for "ready"; if not ready, capture whatever is there and move on.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-3.farmersinsurance.com/pc/PolicyCenter.do*
@@ -22,6 +22,8 @@
    ******************************************************************/
   const LS = {
     STAGE: "tm_pc_stage_v1",
+    HOME_STAGE: "tm_pc_home_stage_v1",
+    STEP3_GO: "tm_pc_home_step3_go_v1",
     OUT: "tm_pc_coverages_v1",
     READY: "tm_pc_coverages_ready_v1",
     DONE_POLICY: "tm_pc_coverages_done_policy_v1",
@@ -375,6 +377,15 @@
   };
 
   const readPolicyNumber = () => clean(qAny(SEL_INFOBAR_POLICY)?.textContent);
+  const lsGet = (key) => {
+    try { return localStorage.getItem(key) || ""; } catch { return ""; }
+  };
+  const lsSet = (key, value) => {
+    try { localStorage.setItem(key, String(value ?? "")); } catch {}
+  };
+  const step3GateReady = () =>
+    clean(lsGet(LS.STEP3_GO)) === "1" || clean(lsGet(LS.HOME_STAGE)) === "dwelling_done";
+  const consumeStep3Gate = () => lsSet(LS.STEP3_GO, "0");
 
   /******************************************************************
    * NAV + CARD SUBTABS
@@ -629,6 +640,7 @@
   let busy = false;
   let pollTimer = null;
   let runCount = 0;
+  let lastGateLogAt = 0;
 
   // gate: run once per Coverages visibility
   let ranThisVisibility = false;
@@ -657,6 +669,10 @@
 
   const runOnce = async (why) => {
     if (busy) return true;
+    if (why !== "FORCE_RUN" && !step3GateReady()) {
+      UI.log(`Skip: waiting for Step2 signal (${LS.STEP3_GO}=1)`);
+      return false;
+    }
     busy = true;
     runCount++;
 
@@ -710,6 +726,7 @@
       writeLS(LS.READY, { ok: true, ts: payload.ts, tab: "Coverages", policyNumber: payload.policyNumber });
 
       localStorage.setItem(LS.STAGE, "coverages_done");
+      consumeStep3Gate();
       markDoneForPolicy(payload.policyNumber);
 
       UI.log("Saved to localStorage:");
@@ -761,6 +778,15 @@
 
       // run once per Coverages visibility session
       if (visible && !ranThisVisibility) {
+        if (!step3GateReady()) {
+          const now = Date.now();
+          if (now - lastGateLogAt > 3000) {
+            UI.log(`Coverages visible, waiting for Step2 signal (${LS.STEP3_GO}=1)`);
+            lastGateLogAt = now;
+          }
+          return;
+        }
+
         const policyNumber = readPolicyNumber();
         if (policyNumber && alreadyDoneForPolicy(policyNumber)) {
           ranThisVisibility = true;

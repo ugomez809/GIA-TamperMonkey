@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 0: Policy Queue (loop → GO AHEAD Step1) (chunk counter + pause countdown)
 // @namespace    tm.pc.step0.policyqueue
-// @version      1.4.2
-// @description  Manual START loop. CUSTOM: every N successes pause M minutes. Shows CHUNK counter + PAUSE countdown (live tick). FIX: timestamp overflow safe.
+// @version      1.4.3
+// @description  Manual START loop. CUSTOM: every N successes pause M minutes. Shows CHUNK counter + PAUSE countdown (live tick). Clears extractor state before each policy.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-3.farmersinsurance.com/pc/PolicyCenter.do*
@@ -99,6 +99,24 @@
     maxEvery: 10000,
     maxMinutes: 600,
   };
+
+  const EXTRACTOR_LOCAL_KEYS = [
+    LS.GO_AHEAD,
+    'tm_pc_home_payload_v1',
+    'tm_pc_home_step1_policyinfo_v1',
+    'tm_pc_home_step1_ready_v1',
+    'tm_pc_home_dwelling_v1',
+    'tm_pc_home_dwelling_ready_v1',
+    'tm_pc_home_stage_v1',
+    'tm_pc_home_step2_go_v1',
+    'tm_pc_home_step3_go_v1',
+    'tm_pc_coverages_v1',
+    'tm_pc_coverages_ready_v1',
+    'tm_pc_coverages_done_policy_v1',
+    'tm_pc_quote_v1',
+    'tm_pc_quote_ready_v1',
+    'tm_pc_stage_v1',
+  ];
 
   const STORE = (() => {
     const hasGM = (typeof GM_getValue === 'function' && typeof GM_setValue === 'function');
@@ -1003,6 +1021,14 @@
 
   function shouldStop() { return !UI.state.running; }
 
+  function resetExtractorStorageForPolicy(policyNum) {
+    for (const key of EXTRACTOR_LOCAL_KEYS) {
+      try { localStorage.removeItem(key); } catch {}
+    }
+    try { localStorage.setItem(LS.GO_AHEAD, '0'); } catch {}
+    UI.log(`Extractor storage reset for ${policyNum}`);
+  }
+
   function moveToSuccess(policyNum) {
     const q = loadArr(LS.Q);
     const ok = loadArr(LS.OK);
@@ -1075,6 +1101,7 @@
     UI.state.current = pOrig;
     UI.setStatus('SEARCH');
     UI.render();
+    resetExtractorStorageForPolicy(pOrig);
 
     const variants = buildAttemptStrings(pOrig);
 

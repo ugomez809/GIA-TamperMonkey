@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 4: Quote Extractor (ALWAYS ON)
 // @namespace    tm.pc.step4.quote
-// @version      1.0.9
-// @description  ALWAYS ON. Quote visible → run ONCE → then wait until Quote is NOT visible before allowing another run. STOP is session-only; reload re-arms. Fix Fees/Taxes fallback by label. Split Discounts vs Surcharges (reads DiscountModifiers & SurchargeModifiers lists). Capture Reconstruction Cost block (Homeowners).
+// @version      1.1.0
+// @description  ALWAYS ON. Coverages-done gate + Quote visible → run ONCE → then wait until Quote is NOT visible before allowing another run. STOP is session-only; reload re-arms. Split Discounts vs Surcharges and capture Reconstruction Cost block.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-3.farmersinsurance.com/pc/PolicyCenter.do*
@@ -22,6 +22,7 @@
    ******************************************************************/
   const LS = {
     STAGE: "tm_pc_stage_v1",
+    COVERAGES_OUT: "tm_pc_coverages_v1",
     OUT: "tm_pc_quote_v1",
     READY: "tm_pc_quote_ready_v1",
   };
@@ -507,6 +508,32 @@
   };
 
   const readPolicyNumber = () => clean(qAny(SEL_INFOBAR_POLICY)?.textContent);
+  const lsGet = (key) => {
+    try { return localStorage.getItem(key) || ""; } catch { return ""; }
+  };
+  const readJSON = (key, fallback = {}) => {
+    try {
+      const raw = lsGet(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const canAutoRunQuote = () => {
+    const stage = clean(lsGet(LS.STAGE));
+    if (stage !== "coverages_done") return { ok: false, why: `${LS.STAGE}=${stage || "(blank)"}` };
+
+    const cov = readJSON(LS.COVERAGES_OUT, {});
+    const currentPolicy = readPolicyNumber();
+    const covPolicy = clean(cov.policyNumber);
+    if (currentPolicy && covPolicy && currentPolicy !== covPolicy) {
+      return { ok: false, why: `coverages policy mismatch ${covPolicy} != ${currentPolicy}` };
+    }
+
+    return { ok: true, why: "coverages_done" };
+  };
 
   /******************************************************************
    * RUNNER (run once per visibility)
@@ -515,6 +542,7 @@
   let busy = false;
   let pollTimer = null;
   let ranThisVisibility = false;
+  let lastGateLogAt = 0;
 
   const setArmedUI = (v) => {
     armed = v;
@@ -531,6 +559,15 @@
     try {
       UI.setStatus("RUNNING");
       UI.log(`Run start (${why})`);
+
+      if (why !== "FORCE_RUN") {
+        const gate = canAutoRunQuote();
+        if (!gate.ok) {
+          UI.log(`Skip: waiting for Coverages done (${gate.why})`);
+          UI.setStatus("ARMED");
+          return;
+        }
+      }
 
       const ok = await waitFor(() => isQuoteVisible() ? true : null, { timeout: 12000 });
       if (!ok) {
@@ -606,6 +643,16 @@
       }
 
       if (visible && !ranThisVisibility) {
+        const gate = canAutoRunQuote();
+        if (!gate.ok) {
+          const now = Date.now();
+          if (now - lastGateLogAt > 3000) {
+            UI.log(`Quote visible, waiting for Coverages done (${gate.why})`);
+            lastGateLogAt = now;
+          }
+          return;
+        }
+
         ranThisVisibility = true;
         extractAndSave("QUOTE_VISIBLE");
       }

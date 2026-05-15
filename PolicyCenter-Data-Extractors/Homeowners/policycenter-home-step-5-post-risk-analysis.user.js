@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 5: Homeowners → POST to Sheets + HARD Risk Analysis Click (ALWAYS ON)
 // @namespace    tm.pc.home.step5.post.sheets
-// @version      1.0.11
-// @description  ALWAYS ON. When tm_pc_stage_v1 == quote_done: build Homeowners payload from tm_pc_home_payload_v1 + tm_pc_coverages_v1 + tm_pc_quote_v1, CLEAN/FORMAT fields (+ *N/A for empty), POST ONCE (hard anti-multi-post gates), then HARD click Risk Analysis (Guidewire-safe) + 60s failsafe force-click. STOP session-only; reload re-arms. UI bottom-left.
+// @version      1.0.12
+// @description  ALWAYS ON. When tm_pc_stage_v1 == quote_done: build complete Homeowners payload from tm_pc_home_payload_v1 + tm_pc_coverages_v1 + tm_pc_quote_v1, refuse incomplete posts, then HARD click Risk Analysis after a successful POST. STOP session-only; reload re-arms.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-3.farmersinsurance.com/pc/PolicyCenter.do*
@@ -612,6 +612,53 @@
     if (!isObj(obj)) return;
     if (!(key in obj) || isEmptyVal(obj[key])) obj[key] = NA_TOKEN;
   };
+  const usefulText = (v) => {
+    const t = clean(v);
+    return !!t && t !== NA_TOKEN;
+  };
+  const anyUseful = (obj, keys) => {
+    if (!isObj(obj)) return false;
+    return keys.some((key) => usefulText(obj[key]));
+  };
+  const allCoveragesUseful = (cov) => {
+    if (!isObj(cov)) return false;
+    const t = clean(cov["Coverages.AllCoverages"]);
+    return t.length > 30 && /Primary Coverages|Deductibles|Dwelling|Personal Property|All Perils/i.test(t);
+  };
+  const missingPayloadParts = (out) => {
+    const missing = [];
+
+    if (!anyUseful(out.Policy_Info, [
+      "Account Number",
+      "Primary Named Insured",
+      "Effective Date",
+      "Expiration Date",
+    ])) missing.push("Policy_Info");
+
+    if (!anyUseful(out.Dwelling, [
+      "RiskAddress",
+      "County",
+      "YearBuilt",
+      "SquareFeet",
+      "Occupancy",
+      "DwellingProtection_AllInOneCell",
+    ])) missing.push("Dwelling");
+
+    if (!anyUseful(out.Eligibility, [
+      "DogsAtResidence",
+      "MortgageeTable",
+    ])) missing.push("Eligibility");
+
+    if (!allCoveragesUseful(out.Coverages)) missing.push("Coverages.AllCoverages");
+
+    if (!anyUseful(out.Quote, [
+      "Quote.TotalPremium",
+      "Quote.TotalCost",
+      "Quote.FeesTaxesAndSurcharges",
+    ])) missing.push("Quote");
+
+    return missing;
+  };
   // =================================
 
   const buildPayload = () => {
@@ -632,7 +679,7 @@
 
     out.meta = (out.meta && isObj(out.meta)) ? out.meta : {};
     out.meta.sent_at = new Date().toISOString();
-    out.meta.from = "tm_step5_home_v1.0.11";
+    out.meta.from = "tm_step5_home_v1.0.12";
     out.meta.stage = clean(lsGet(CFG.kStage));
     out.policyNumber = pn;
     out.PolicyNumber = pn;
@@ -705,6 +752,12 @@
     out.meta.has_coverages = !!out.Coverages;
     out.meta.has_quote = !!out.Quote;
 
+    const missing = missingPayloadParts(out);
+    if (missing.length) {
+      out.meta.incomplete_missing = missing;
+      return { ok: false, pn, error: `Incomplete payload; not posting. Missing: ${missing.join(", ")}` };
+    }
+
     // ✅ FINAL PASS: turn any remaining empty leaf values into *N/A
     out = fillNADeep(out);
 
@@ -752,6 +805,9 @@
 
       if (!built.ok) {
         UI.log(`Build failed: ${built.error}`);
+        clearFailsafe();
+        firedThisVisit = false;
+        readySeenAt = Date.now();
         return;
       }
 
@@ -766,19 +822,20 @@
         if (token && lastTok && token === lastTok) { UI.log(`SKIP: session-token gate token=${token}`); return; }
       }
 
-      // mark BEFORE network
-      if (!manual) {
-        markDeduped(pn);
-        markPostedLast(pn);
-        if (token) setSessionToken(token);
-      }
-
       UI.log("POST ONCE…");
       const res = await postOnce(built.payload);
 
       UI.log(`POST status=${res.status} ok=${res.ok} resp="${(res.txt || "").slice(0, 160).replace(/\s+/g, " ").trim()}"`);
 
-      if (manual && res.ok) {
+      if (!res.ok) {
+        UI.log("POST failed; staying on this page so it can retry instead of advancing with missing data.");
+        clearFailsafe();
+        firedThisVisit = false;
+        readySeenAt = Date.now();
+        return;
+      }
+
+      if (res.ok) {
         markDeduped(pn);
         markPostedLast(pn);
         if (token) setSessionToken(token);
@@ -786,7 +843,7 @@
 
       // ✅ HARD click risk
       UI.log("Risk click: start…");
-      const clicked = await clickRiskWithWait(res.ok ? "after-post" : "after-post-fail");
+      const clicked = await clickRiskWithWait("after-post");
       riskClickedThisVisit = riskClickedThisVisit || !!clicked;
 
       if (!clicked) {

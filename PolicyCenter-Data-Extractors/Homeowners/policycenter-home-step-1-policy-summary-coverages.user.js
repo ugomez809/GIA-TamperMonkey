@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         PolicyCenter — HOME Helper: Policy Summary → Coverages → Optional → Detailed (ALWAYS ON)
+// @name         PolicyCenter — HOME Helper: Policy Summary → Coverages → Optional → Detailed (MANUAL)
 // @namespace    tm.pc.step1.summary.to.coverages
-// @version      1.0.3
-// @description  ALWAYS ON. When header starts with "Policy Summary" (ex: "Policy Summary: 123") → click Coverages once → wait 2s → click Optional Coverages → wait 2s → click Detailed Coverages. Runs once per Policy Summary visibility. STOP is session-only; reload re-arms.
+// @version      1.0.4
+// @description  MANUAL helper. When started and header starts with "Policy Summary" (ex: "Policy Summary: 123") → click Coverages once → wait 2s → click Optional Coverages → wait 2s → click Detailed Coverages. Kept manual so it does not race the extraction chain.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-3.farmersinsurance.com/pc/PolicyCenter.do*
@@ -358,7 +358,7 @@
     if (armed) return;
     setArmedUI(true);
     UI.setStatus("ARMED");
-    UI.log("Loaded. Double-click title to collapse. Auto-arming...");
+    UI.log("Loaded. Double-click title to collapse.");
     UI.log('ARMED. Rule: header starts with "Policy Summary" → run once → wait until not visible.');
 
     pollTimer = window.setInterval(() => {
@@ -383,12 +383,13 @@
     pollTimer = null;
     setArmedUI(false);
     UI.setStatus("IDLE");
-    UI.log("Stopped (session-only). Reload will re-arm.");
+    UI.log("Stopped.");
   }
 
   UI.btnStart.addEventListener("click", () => startPolling());
   UI.btnStop.addEventListener("click", () => stopPolling());
   UI.btnForce.addEventListener("click", () => runOnce("FORCE_RUN"));
 
-  startPolling();
+  UI.setStatus("IDLE");
+  UI.log("Manual helper is idle. Press START only when you want Policy Summary → Coverages navigation.");
 })();
