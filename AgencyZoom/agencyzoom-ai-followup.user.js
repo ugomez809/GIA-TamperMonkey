@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom AI Follow-Up Composer
 // @namespace    local.agencyzoom.ai-followup
-// @version      3.0
+// @version      3.1
 // @description  Generates first-quote and follow-up email/SMS options from AgencyZoom Activities using OpenAI and prompt templates from a published Sheet CSV.
 // @match        https://app.agencyzoom.com/referral/pipeline*
 // @exclude      https://app.agencyzoom.com/login*
@@ -24,7 +24,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.0';
+  const VERSION = '3.1';
   const WORKFLOW = 'first_quote_followup';
   const STEP_OPTIONS = [
     { id: 'first_quote', label: 'First Quote', sheetDay: 'first_quote', kind: 'first_quote', followupDay: '' },
@@ -38,6 +38,7 @@
   const BOX_ID = 'tm-az-ai-followup-box';
   const DEBUG_PANEL_ID = 'tm-az-ai-debug-panel';
   const DEFAULT_MODEL = 'gpt-4o-mini';
+  const DEFAULT_PROMPT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1I7S3qpilMvAm0NXwYkAJNM-WWv4uozsL6bXLEdaxj9k/edit?gid=0#gid=0';
   const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
   const MAX_ACTIVITY_CHARS = 18000;
   const MAX_ACTIVITY_ITEMS = 30;
@@ -1338,14 +1339,15 @@
   }
 
   async function loadPromptFor(channel, step) {
-    const rawSheetUrl = clean(storageGet(STORAGE_KEYS.sheetUrl, ''));
+    const storedSheetUrl = clean(storageGet(STORAGE_KEYS.sheetUrl, ''));
+    const rawSheetUrl = storedSheetUrl || DEFAULT_PROMPT_SHEET_URL;
     if (!rawSheetUrl) {
       debugLog('prompt_sheet_missing', {});
       throw new Error('Set the published Google Sheet CSV URL from the Tampermonkey menu first.');
     }
 
     const sheetUrl = toGoogleSheetCsvUrl(rawSheetUrl);
-    debugLog('prompt_sheet_fetch_start', { configuredUrl: rawSheetUrl, fetchUrl: sheetUrl });
+    debugLog('prompt_sheet_fetch_start', { configuredUrl: rawSheetUrl, usingDefault: !storedSheetUrl, fetchUrl: sheetUrl });
     const response = await httpRequest({ method: 'GET', url: sheetUrl });
     const status = Number(response.status || 0);
     const csv = String(response.responseText || response.response || '');
@@ -2068,12 +2070,12 @@
   }
 
   function promptSetSheetUrl() {
-    const current = clean(storageGet(STORAGE_KEYS.sheetUrl, ''));
-    const value = prompt('Published Google Sheet CSV URL for prompt templates:', current);
+    const current = clean(storageGet(STORAGE_KEYS.sheetUrl, '')) || DEFAULT_PROMPT_SHEET_URL;
+    const value = prompt('Published Google Sheet CSV URL for prompt templates. Leave blank to use the built-in default:', current);
     if (value == null) return;
     const normalized = clean(value) ? toGoogleSheetCsvUrl(value) : '';
     storageSet(STORAGE_KEYS.sheetUrl, normalized);
-    alert(normalized ? `Prompt Sheet CSV URL saved:\n${normalized}` : 'Prompt Sheet CSV URL cleared.');
+    alert(normalized ? `Prompt Sheet CSV URL saved:\n${normalized}` : 'Prompt Sheet URL override cleared; built-in default will be used.');
   }
 
   function ensureApiKey() {
