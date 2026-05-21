@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom AI Follow-Up Composer
 // @namespace    local.agencyzoom.ai-followup
-// @version      3.1
+// @version      3.2
 // @description  Generates first-quote and follow-up email/SMS options from AgencyZoom Activities using OpenAI and prompt templates from a published Sheet CSV.
 // @match        https://app.agencyzoom.com/referral/pipeline*
 // @exclude      https://app.agencyzoom.com/login*
@@ -24,7 +24,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.1';
+  const VERSION = '3.2';
   const WORKFLOW = 'first_quote_followup';
   const STEP_OPTIONS = [
     { id: 'first_quote', label: 'First Quote', sheetDay: 'first_quote', kind: 'first_quote', followupDay: '' },
@@ -46,7 +46,6 @@
   const STORAGE_KEYS = {
     apiKey: 'tmAzAiFollowupOpenAiApiKey',
     model: 'tmAzAiFollowupModel',
-    sheetUrl: 'tmAzAiFollowupSheetCsvUrl',
     selectedDay: 'tmAzAiFollowupSelectedDay',
     selectedStep: 'tmAzAiFollowupSelectedStep',
     debugVisible: 'tmAzAiFollowupDebugVisible',
@@ -99,7 +98,6 @@
   function registerMenuCommands() {
     if (typeof GM_registerMenuCommand !== 'function') return;
 
-    GM_registerMenuCommand('AZ AI: Set prompt Sheet CSV URL', promptSetSheetUrl);
     GM_registerMenuCommand('AZ AI: Toggle debug log', toggleDebugPanel);
     GM_registerMenuCommand('AZ AI: Set/Clear OpenAI API key', promptSetOrClearApiKey);
     GM_registerMenuCommand('AZ AI: Set model', promptSetModel);
@@ -1339,15 +1337,14 @@
   }
 
   async function loadPromptFor(channel, step) {
-    const storedSheetUrl = clean(storageGet(STORAGE_KEYS.sheetUrl, ''));
-    const rawSheetUrl = storedSheetUrl || DEFAULT_PROMPT_SHEET_URL;
+    const rawSheetUrl = DEFAULT_PROMPT_SHEET_URL;
     if (!rawSheetUrl) {
       debugLog('prompt_sheet_missing', {});
-      throw new Error('Set the published Google Sheet CSV URL from the Tampermonkey menu first.');
+      throw new Error('Prompt Sheet URL is not configured in the script.');
     }
 
     const sheetUrl = toGoogleSheetCsvUrl(rawSheetUrl);
-    debugLog('prompt_sheet_fetch_start', { configuredUrl: rawSheetUrl, usingDefault: !storedSheetUrl, fetchUrl: sheetUrl });
+    debugLog('prompt_sheet_fetch_start', { configuredUrl: rawSheetUrl, fetchUrl: sheetUrl });
     const response = await httpRequest({ method: 'GET', url: sheetUrl });
     const status = Number(response.status || 0);
     const csv = String(response.responseText || response.response || '');
@@ -2067,15 +2064,6 @@
     temp.select();
     document.execCommand('copy');
     temp.remove();
-  }
-
-  function promptSetSheetUrl() {
-    const current = clean(storageGet(STORAGE_KEYS.sheetUrl, '')) || DEFAULT_PROMPT_SHEET_URL;
-    const value = prompt('Published Google Sheet CSV URL for prompt templates. Leave blank to use the built-in default:', current);
-    if (value == null) return;
-    const normalized = clean(value) ? toGoogleSheetCsvUrl(value) : '';
-    storageSet(STORAGE_KEYS.sheetUrl, normalized);
-    alert(normalized ? `Prompt Sheet CSV URL saved:\n${normalized}` : 'Prompt Sheet URL override cleared; built-in default will be used.');
   }
 
   function ensureApiKey() {
