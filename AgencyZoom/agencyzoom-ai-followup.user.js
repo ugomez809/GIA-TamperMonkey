@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom AI Follow-Up Composer
 // @namespace    local.agencyzoom.ai-followup
-// @version      2.9
+// @version      3.0
 // @description  Generates first-quote and follow-up email/SMS options from AgencyZoom Activities using OpenAI and prompt templates from a published Sheet CSV.
 // @match        https://app.agencyzoom.com/referral/pipeline*
 // @exclude      https://app.agencyzoom.com/login*
@@ -24,7 +24,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.9';
+  const VERSION = '3.0';
   const WORKFLOW = 'first_quote_followup';
   const STEP_OPTIONS = [
     { id: 'first_quote', label: 'First Quote', sheetDay: 'first_quote', kind: 'first_quote', followupDay: '' },
@@ -41,7 +41,7 @@
   const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
   const MAX_ACTIVITY_CHARS = 18000;
   const MAX_ACTIVITY_ITEMS = 30;
-  const OPTION_COUNT = 3;
+  const OPTION_COUNT = 2;
   const STORAGE_KEYS = {
     apiKey: 'tmAzAiFollowupOpenAiApiKey',
     model: 'tmAzAiFollowupModel',
@@ -220,7 +220,7 @@
     const generate = document.createElement('button');
     generate.type = 'button';
     generate.className = 'tm-az-ai-generate';
-    generate.textContent = 'Generate 3 Drafts';
+    generate.textContent = 'Generate 2 Drafts';
     generate.addEventListener('click', () => {
       generateOptionsFromCurrentComposer().catch((err) => handleGenerationError(err));
     });
@@ -284,7 +284,8 @@
       ? context.root
       : context.root.closest?.('#emailForm');
     if (emailForm) {
-      return emailForm.querySelector('#emailEditorPart') ||
+      return getSendButtonAnchor(emailForm) ||
+        emailForm.querySelector('#emailEditorPart') ||
         emailForm.querySelector('#emailContactArea') ||
         emailForm.querySelector('.cke')?.closest?.('.az-form-group, .form-group') ||
         emailForm.querySelector('.cke') ||
@@ -295,13 +296,36 @@
       ? context.root
       : context.root.closest?.('#smsForm, form[action*="sms"], form[action*="SMS"]');
     if (smsForm) {
-      return context.bodyField?.wrapper ||
+      return getSendButtonAnchor(smsForm) ||
+        context.bodyField?.wrapper ||
         smsForm.querySelector('textarea')?.closest?.('.az-form-group, .form-group') ||
         smsForm.querySelector('textarea') ||
         null;
     }
 
     return null;
+  }
+
+  function getSendButtonAnchor(root) {
+    const send = findSendActionElement(root);
+    if (!send) return null;
+
+    const container = send.closest?.([
+      '.modal-footer',
+      '.az-form-actions',
+      '.form-actions',
+      '.text-right',
+      '.text-center',
+      '.btn-toolbar',
+      '.button-group',
+      '.actions',
+      '.d-flex'
+    ].join(','));
+
+    if (container && container !== root && !isAiElement(container)) return container;
+    const parent = send.parentElement;
+    if (parent && parent !== root && parent.tagName !== 'FORM' && !isAiElement(parent)) return parent;
+    return send;
   }
 
   function updateSelectedStep(box = document.getElementById(BOX_ID)) {
@@ -383,7 +407,7 @@
     debugLog('api_payload_clean', readablePayload);
     debugLog('api_payload', redactSecrets(payload));
 
-    showBoxStatus('Asking OpenAI for 3 options...', 'loading');
+    showBoxStatus(`Asking OpenAI for ${OPTION_COUNT} options...`, 'loading');
     const draft = await requestFollowUpDraft(payload);
     lastOptions = normalizeOptions(draft.options);
     lastOptionsChannel = composer.channel;
@@ -547,6 +571,28 @@
     if (!target?.closest) return null;
     return target.closest('button, a, input[type="button"], input[type="submit"], [role="button"]') ||
       target.closest('i');
+  }
+
+  function findSendActionElement(root) {
+    const preferred = safeQueryAll(root, [
+      '#sendEmail',
+      '#sendSms',
+      '#sendSMS',
+      '#sendText',
+      'button[id*="send"]',
+      'a[id*="send"]',
+      'input[id*="send"]',
+      'button[class*="send"]',
+      'a[class*="send"]',
+      'input[class*="send"]',
+      'button',
+      'a',
+      'input[type="button"]',
+      'input[type="submit"]',
+      '[role="button"]'
+    ].join(','));
+
+    return preferred.find((el) => !isAiElement(el) && isVisible(el) && isSendActionElement(el)) || null;
   }
 
   function isSendActionElement(el) {
@@ -1485,7 +1531,7 @@
           content: [
             userPrompt,
             '',
-            'Return exactly 3 options as JSON that matches the schema.',
+            `Return exactly ${OPTION_COUNT} options as JSON that matches the schema.`,
             '',
             'Gathered AgencyZoom context JSON:',
             JSON.stringify({
