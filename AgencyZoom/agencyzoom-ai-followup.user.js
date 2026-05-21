@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom AI Follow-Up Composer
 // @namespace    local.agencyzoom.ai-followup
-// @version      2.8
+// @version      2.9
 // @description  Generates first-quote and follow-up email/SMS options from AgencyZoom Activities using OpenAI and prompt templates from a published Sheet CSV.
-// @match        https://app.agencyzoom.com/*
+// @match        https://app.agencyzoom.com/referral/pipeline*
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
@@ -17,9 +17,6 @@
 // @connect      docs.google.com
 // @connect      spreadsheets.google.com
 // @connect      googleusercontent.com
-// @connect      localhost
-// @connect      127.0.0.1
-// @connect      *
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-ai-followup.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-ai-followup.user.js
 // ==/UserScript==
@@ -27,7 +24,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.8';
+  const VERSION = '2.9';
   const WORKFLOW = 'first_quote_followup';
   const STEP_OPTIONS = [
     { id: 'first_quote', label: 'First Quote', sheetDay: 'first_quote', kind: 'first_quote', followupDay: '' },
@@ -40,7 +37,6 @@
   const STYLE_ID = 'tm-az-ai-followup-style';
   const BOX_ID = 'tm-az-ai-followup-box';
   const DEBUG_PANEL_ID = 'tm-az-ai-debug-panel';
-  const DEBUG_TOGGLE_ID = 'tm-az-ai-debug-toggle';
   const DEFAULT_MODEL = 'gpt-4o-mini';
   const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
   const MAX_ACTIVITY_CHARS = 18000;
@@ -49,11 +45,11 @@
   const STORAGE_KEYS = {
     apiKey: 'tmAzAiFollowupOpenAiApiKey',
     model: 'tmAzAiFollowupModel',
-    proxyUrl: 'tmAzAiFollowupProxyUrl',
     sheetUrl: 'tmAzAiFollowupSheetCsvUrl',
     selectedDay: 'tmAzAiFollowupSelectedDay',
     selectedStep: 'tmAzAiFollowupSelectedStep',
-    debugVisible: 'tmAzAiFollowupDebugVisible'
+    debugVisible: 'tmAzAiFollowupDebugVisible',
+    sentMemory: 'tmAzAiFollowupSentMemoryV1'
   };
 
   let selectedStepId = normalizeStepId(storageGet(STORAGE_KEYS.selectedStep, storageGet(STORAGE_KEYS.selectedDay, 'first_quote')));
@@ -63,25 +59,25 @@
   let lastOptions = [];
   let lastOptionsChannel = '';
   let lastGeneratedComposer = null;
-  let preserveDraftLogKey = '';
+  let lastGeneratedStepId = '';
+  let lastGeneratedTicketId = '';
+  let pendingSendMemory = null;
   let debugEntries = [];
 
   boot();
 
   function boot() {
-    if (!/(^|\.)app\.agencyzoom\.com$/i.test(String(location.hostname || ''))) return;
+    if (!isLeadPipelinePage()) return;
     onReady(() => {
       try {
         injectStyle();
-        mountDebugToggle();
         registerMenuCommands();
-        if (storageGet(STORAGE_KEYS.debugVisible, '') === '1') renderDebugPanel();
+        document.addEventListener('click', handleDocumentClickForSendMemory, true);
         startComposerObserver();
         scheduleComposerScan(50);
         debugLog('script_started', { version: VERSION, url: location.href });
       } catch (err) {
         console.error('[AZ AI Follow-Up] Startup failed:', err);
-        mountDebugToggleBare();
       }
     });
   }
@@ -94,48 +90,18 @@
     document.addEventListener('DOMContentLoaded', callback, { once: true });
   }
 
+  function isLeadPipelinePage() {
+    return /(^|\.)app\.agencyzoom\.com$/i.test(String(location.hostname || '')) &&
+      location.pathname.replace(/\/+$/, '') === '/referral/pipeline';
+  }
+
   function registerMenuCommands() {
     if (typeof GM_registerMenuCommand !== 'function') return;
 
     GM_registerMenuCommand('AZ AI: Set prompt Sheet CSV URL', promptSetSheetUrl);
-    GM_registerMenuCommand('AZ AI: Generate for current composer', () => {
-      generateOptionsFromCurrentComposer().catch((err) => handleGenerationError(err));
-    });
-    GM_registerMenuCommand('AZ AI: Preview captured Activities', () => {
-      previewCapturedActivities().catch((err) => showBoxStatus(errorMessage(err), 'error'));
-    });
     GM_registerMenuCommand('AZ AI: Toggle debug log', toggleDebugPanel);
-    GM_registerMenuCommand('AZ AI: Set OpenAI API key', promptSetApiKey);
+    GM_registerMenuCommand('AZ AI: Set/Clear OpenAI API key', promptSetOrClearApiKey);
     GM_registerMenuCommand('AZ AI: Set model', promptSetModel);
-    GM_registerMenuCommand('AZ AI: Set proxy URL', promptSetProxyUrl);
-    GM_registerMenuCommand('AZ AI: Clear stored API key', () => {
-      storageDelete(STORAGE_KEYS.apiKey);
-      alert('Stored OpenAI API key cleared.');
-    });
-  }
-
-  function mountDebugToggle() {
-    if (document.getElementById(DEBUG_TOGGLE_ID)) return;
-
-    const button = document.createElement('button');
-    button.id = DEBUG_TOGGLE_ID;
-    button.type = 'button';
-    button.textContent = 'AZ AI LIVE';
-    button.setAttribute('aria-label', 'Open or close AgencyZoom AI debug log');
-    button.title = 'AZ AI loaded. Click for debug log.';
-    button.addEventListener('click', toggleDebugPanel);
-    document.body.appendChild(button);
-  }
-
-  function mountDebugToggleBare() {
-    if (!document.body || document.getElementById(DEBUG_TOGGLE_ID)) return;
-    const button = document.createElement('button');
-    button.id = DEBUG_TOGGLE_ID;
-    button.type = 'button';
-    button.textContent = 'AZ AI LIVE';
-    button.title = 'AZ AI loaded with a startup error. Open browser console for details.';
-    button.style.cssText = 'position:fixed;left:0;bottom:18px;z-index:2147483647;background:#b91c1c;color:#fff;border:0;border-radius:0 6px 6px 0;padding:8px 10px;font:700 12px sans-serif;';
-    document.body.appendChild(button);
   }
 
   function startComposerObserver() {
@@ -157,25 +123,22 @@
   }
 
   function syncComposerBox() {
+    if (!isLeadPipelinePage()) {
+      document.getElementById(BOX_ID)?.remove();
+      activeComposer = null;
+      return;
+    }
+
     const context = findComposerContext();
     const existing = document.getElementById(BOX_ID);
 
     if (!context) {
       activeComposer = null;
-      if (existing && hasRenderedOptions(existing) && isVisible(existing)) {
-        logPreserveDraftsOnce('composer_temporarily_missing_preserving_drafts', {
-          channel: existing.dataset.channel || '',
-          optionCount: lastOptions.length
-        });
-        return;
-      }
-      preserveDraftLogKey = '';
       if (existing) existing.remove();
       return;
     }
 
     activeComposer = context;
-    preserveDraftLogKey = '';
     if (!existing) {
       mountComposerBox(context);
       restoreOptionsForContext(context);
@@ -184,16 +147,6 @@
     }
 
     if (existing.dataset.channel !== context.channel) {
-      if (hasRenderedOptions(existing) && isVisible(existing)) {
-        logPreserveDraftsOnce('composer_channel_changed_preserving_visible_drafts', {
-          boxChannel: existing.dataset.channel || '',
-          detectedChannel: context.channel,
-          boxComposerId: existing.dataset.composerId || '',
-          detectedComposerId: context.id
-        });
-        return;
-      }
-
       existing.remove();
       mountComposerBox(context);
       restoreOptionsForContext(context);
@@ -203,6 +156,7 @@
 
     existing.dataset.composerId = context.id;
     updateComposerBoxHeader(existing, context);
+    updateBoxTicketContext(existing, context);
     ensureBoxPlacement(existing, context);
   }
 
@@ -213,6 +167,7 @@
     box.dataset.composerId = context.id;
     box.dataset.channel = context.channel;
     box.setAttribute('aria-label', 'First Quote and Follow-up AI helper');
+    updateBoxTicketContext(box, context);
 
     const header = document.createElement('div');
     header.className = 'tm-az-ai-box-header';
@@ -236,11 +191,25 @@
       button.dataset.day = step.sheetDay;
       button.textContent = step.label;
       button.addEventListener('click', () => {
+        if (isDayButtonSent(box, button)) {
+          showBoxStatus('That day is already marked sent for this ticket. Right-click it to reset.', 'error');
+          return;
+        }
         selectedStepId = step.id;
         storageSet(STORAGE_KEYS.selectedStep, step.id);
         storageSet(STORAGE_KEYS.selectedDay, step.sheetDay);
         updateSelectedStep(box);
         debugLog('selected_step_changed', step);
+      });
+      button.addEventListener('contextmenu', (event) => {
+        if (!isDayButtonSent(box, button)) return;
+        event.preventDefault();
+        const stepName = step.label;
+        const channelName = String(box.dataset.channel || '').toUpperCase();
+        if (!confirm(`Clear sent memory for ${stepName} ${channelName} on this ticket?`)) return;
+        clearSentStep(box.dataset.ticketId, box.dataset.channel, step.id);
+        updateSelectedStep(box);
+        showBoxStatus(`${stepName} ${channelName} was reset for this ticket.`, 'ready');
       });
       days.appendChild(button);
     }
@@ -256,13 +225,6 @@
       generateOptionsFromCurrentComposer().catch((err) => handleGenerationError(err));
     });
     controls.appendChild(generate);
-
-    const debug = document.createElement('button');
-    debug.type = 'button';
-    debug.className = 'tm-az-ai-secondary';
-    debug.textContent = 'Debug';
-    debug.addEventListener('click', toggleDebugPanel);
-    controls.appendChild(debug);
 
     const status = document.createElement('div');
     status.className = 'tm-az-ai-status';
@@ -284,6 +246,13 @@
   function updateComposerBoxHeader(box, context) {
     const channel = box.querySelector('.tm-az-ai-channel');
     if (channel) channel.textContent = context.channel.toUpperCase();
+  }
+
+  function updateBoxTicketContext(box, context) {
+    if (!box || !context) return;
+    const ticket = getTicketDetailsForComposer(context);
+    box.dataset.ticketId = ticket.ticketId || '';
+    updateSelectedStep(box);
   }
 
   function insertBoxNearComposer(box, context) {
@@ -337,24 +306,36 @@
 
   function updateSelectedStep(box = document.getElementById(BOX_ID)) {
     if (!box) return;
+    const selectedSent = isStepSent(box.dataset.ticketId, box.dataset.channel, selectedStepId);
+    if (selectedSent) {
+      const available = STEP_OPTIONS.find((step) => !isStepSent(box.dataset.ticketId, box.dataset.channel, step.id));
+      if (available) {
+        selectedStepId = available.id;
+        storageSet(STORAGE_KEYS.selectedStep, available.id);
+        storageSet(STORAGE_KEYS.selectedDay, available.sheetDay);
+      }
+    }
+
     for (const button of Array.from(box.querySelectorAll('.tm-az-ai-day'))) {
-      button.classList.toggle('tm-az-ai-day-active', button.dataset.stepId === selectedStepId);
+      const sent = isDayButtonSent(box, button);
+      button.classList.toggle('tm-az-ai-day-sent', sent);
+      button.classList.toggle('tm-az-ai-day-active', !sent && button.dataset.stepId === selectedStepId);
+      button.setAttribute('aria-disabled', sent ? 'true' : 'false');
+      button.title = sent ? 'Already sent. Right-click to reset.' : '';
     }
   }
 
-  function hasRenderedOptions(box = document.getElementById(BOX_ID)) {
-    return !!(box && box.querySelector('.tm-az-ai-option'));
-  }
-
-  function logPreserveDraftsOnce(event, data) {
-    const key = `${event}:${JSON.stringify(data)}`;
-    if (preserveDraftLogKey === key) return;
-    preserveDraftLogKey = key;
-    debugLog(event, data);
+  function isDayButtonSent(box, button) {
+    return !!(box && button && isStepSent(box.dataset.ticketId, box.dataset.channel, button.dataset.stepId));
   }
 
   function restoreOptionsForContext(context) {
     if (!lastOptions.length || lastOptionsChannel !== context.channel) return;
+    const box = document.getElementById(BOX_ID);
+    if (box) {
+      box.dataset.generatedStepId = lastGeneratedStepId || '';
+      box.dataset.ticketId = lastGeneratedTicketId || box.dataset.ticketId || '';
+    }
     renderOptions(lastOptions, context.channel);
     showBoxStatus(`Ready: ${lastOptions.length} ${context.channel.toUpperCase()} options.`, 'ready');
     debugLog('options_restored_after_box_remount', {
@@ -375,6 +356,10 @@
 
     const selectedStep = getSelectedStep();
     const context = await collectTicketContext(composer);
+    if (isStepSent(context.ticket.ticketId, composer.channel, selectedStep.id)) {
+      throw new Error(`${selectedStep.label} is already marked sent for this ${composer.channel.toUpperCase()} ticket. Right-click the gray day to reset it.`);
+    }
+
     const promptConfig = await loadPromptFor(composer.channel, selectedStep);
     const placeholders = buildPlaceholders(context, composer, selectedStep);
     const resolvedSystemPrompt = applyPlaceholders(promptConfig.system_prompt, placeholders);
@@ -399,7 +384,7 @@
     debugLog('api_payload', redactSecrets(payload));
 
     showBoxStatus('Asking OpenAI for 3 options...', 'loading');
-    const draft = await requestFollowUpDraft(payload, context);
+    const draft = await requestFollowUpDraft(payload);
     lastOptions = normalizeOptions(draft.options);
     lastOptionsChannel = composer.channel;
     lastGeneratedComposer = composer;
@@ -409,18 +394,16 @@
 
     renderOptions(lastOptions, composer.channel);
     showBoxStatus(`Ready: ${lastOptions.length} ${composer.channel.toUpperCase()} options.`, 'ready');
+    lastGeneratedStepId = selectedStep.id;
+    lastGeneratedTicketId = context.ticket.ticketId || '';
 
     if (box) {
       box.dataset.composerId = composer.id;
       box.dataset.channel = composer.channel;
+      box.dataset.generatedStepId = selectedStep.id;
+      box.dataset.ticketId = context.ticket.ticketId || box.dataset.ticketId || '';
+      updateSelectedStep(box);
     }
-  }
-
-  async function previewCapturedActivities() {
-    const composer = findComposerContext();
-    const context = await collectTicketContext(composer);
-    debugLog('activity_preview', context);
-    showDebugPanel();
   }
 
   function renderOptions(options, channel) {
@@ -496,7 +479,89 @@
       title: option.title,
       subject: composer.channel === 'email' ? option.subject : ''
     });
+    rememberPendingSend(composer);
     showBoxStatus('Inserted into the current composer.', 'ready');
+  }
+
+  function rememberPendingSend(composer) {
+    const box = document.getElementById(BOX_ID);
+    const stepId = box?.dataset.generatedStepId || lastGeneratedStepId || selectedStepId;
+    const ticketId = box?.dataset.ticketId || lastGeneratedTicketId || getTicketDetailsForComposer(composer).ticketId || '';
+    if (!ticketId || !composer?.channel || !stepId) {
+      pendingSendMemory = null;
+      debugLog('pending_sent_memory_skipped', { ticketId, channel: composer?.channel || '', stepId });
+      return;
+    }
+
+    pendingSendMemory = {
+      ticketId,
+      channel: composer.channel,
+      stepId,
+      composerId: composer.id,
+      insertedAt: new Date().toISOString()
+    };
+    debugLog('pending_sent_memory_ready', pendingSendMemory);
+  }
+
+  function handleDocumentClickForSendMemory(event) {
+    if (!isLeadPipelinePage()) return;
+
+    const target = event.target;
+    if (!target || isAiElement(target)) return;
+
+    const control = findClickedActionControl(target);
+    if (!control || isAiElement(control) || !isSendActionElement(control)) return;
+
+    const composer = findComposerContext();
+    if (!composer || !composer.root || !composer.root.contains(control)) return;
+
+    const pending = pendingSendMemory && pendingSendMemory.channel === composer.channel
+      ? pendingSendMemory
+      : null;
+    const ticket = getTicketDetailsForComposer(composer);
+    const ticketId = pending?.ticketId || ticket.ticketId || '';
+    const stepId = pending?.stepId || selectedStepId;
+
+    if (!ticketId || !stepId) {
+      debugLog('sent_memory_not_marked_missing_context', {
+        ticketId,
+        stepId,
+        channel: composer.channel,
+        control: summarizeElement(control)
+      });
+      return;
+    }
+
+    markSentStep(ticketId, composer.channel, stepId);
+    pendingSendMemory = null;
+    updateSelectedStep(document.getElementById(BOX_ID));
+    debugLog('sent_memory_marked_from_send_click', {
+      ticketId,
+      channel: composer.channel,
+      stepId,
+      control: summarizeElement(control)
+    });
+  }
+
+  function findClickedActionControl(target) {
+    if (!target?.closest) return null;
+    return target.closest('button, a, input[type="button"], input[type="submit"], [role="button"]') ||
+      target.closest('i');
+  }
+
+  function isSendActionElement(el) {
+    const signature = lower([
+      el.id,
+      el.className,
+      el.getAttribute?.('aria-label'),
+      el.getAttribute?.('title'),
+      el.getAttribute?.('data-original-title'),
+      el.getAttribute?.('data-action'),
+      el.value,
+      el.textContent
+    ].filter(Boolean).join(' '));
+
+    return /\bsend\b|sendemail|sendsms|btn-send|paper-plane|fa-paper-plane/.test(signature);
   }
 
   function isComposerUsable(composer) {
@@ -564,9 +629,8 @@
   function findOpenTicketRoot(composer = null) {
     const candidates = uniqueElements([
       document.querySelector('.az-dock__container'),
-      document.querySelector('#serviceDetailDock'),
       document.querySelector('.az-dock'),
-      document.querySelector('#detailDockform')?.closest?.('.az-dock__container, #serviceDetailDock, .az-dock'),
+      document.querySelector('#detailDockform')?.closest?.('.az-dock__container, .az-dock'),
       document.querySelector('#detailDockform'),
       findElementByAttrContains('id', 'activit')?.closest?.('.az-dock__container, .az-dock, main, .content-wrapper, .page-content, .container-fluid'),
       findElementByAttrContains('class', 'activit')?.closest?.('.az-dock__container, .az-dock, main, .content-wrapper, .page-content, .container-fluid'),
@@ -593,7 +657,7 @@
     const text = lower(getVisibleText(root)).slice(0, 5000);
 
     let score = 0;
-    if (root.matches && root.matches('.az-dock__container, #serviceDetailDock, .az-dock')) score += 30;
+    if (root.matches && root.matches('.az-dock__container, .az-dock')) score += 30;
     if (attrs.includes('lead') || attrs.includes('ticket') || attrs.includes('detail')) score += 12;
     if (attrs.includes('activit') || text.includes('activities')) score += 20;
     if (attrs.includes('timeline') || text.includes('timeline')) score += 10;
@@ -734,12 +798,89 @@
     ].map((selector) => root.querySelector(selector)).find(Boolean);
 
     return {
-      ticketId: clean(readValue(root, 'input[name="id"], input[name="leadId"], input[name="CustomerReferral[id]"]')),
+      ticketId: clean(readValue(root, 'input[name="id"], input[name="leadId"], input[name="CustomerReferral[id]"]')) || extractTicketIdFromRoot(root),
       name: clean(titleEl?.textContent || ''),
       email: extractFirstEmail(text),
       phone: extractFirstPhone(text),
       visibleSummary: limitText(text, 3500)
     };
+  }
+
+  function getTicketDetailsForComposer(composer) {
+    const root = findOpenTicketRoot(composer);
+    return root ? extractTicketDetails(root) : {
+      ticketId: '',
+      name: '',
+      email: '',
+      phone: '',
+      visibleSummary: ''
+    };
+  }
+
+  function extractTicketIdFromRoot(root) {
+    const html = String(root?.innerHTML || '');
+    const patterns = [
+      /TaskModel\.init\(\{leadId:\s*(\d{5,})/i,
+      /data-referralid=["'](\d{5,})["']/i,
+      /data-sourceleadid=["'](\d{5,})["']/i,
+      /CustomerReferral\[id\][^>]*value=["'](\d{5,})["']/i,
+      /"id"\s*:\s*(\d{5,})/i,
+      /\bleadId\s*[:=]\s*(\d{5,})/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match) return clean(match[1]);
+    }
+    return '';
+  }
+
+  function getSentMemory() {
+    const parsed = parseJson(storageGet(STORAGE_KEYS.sentMemory, '{}'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  }
+
+  function saveSentMemory(memory) {
+    storageSet(STORAGE_KEYS.sentMemory, JSON.stringify(memory || {}));
+  }
+
+  function sentMemoryKey(ticketId, channel, stepId) {
+    const cleanTicketId = clean(ticketId);
+    const cleanChannel = lower(channel);
+    const cleanStepId = normalizeStepId(stepId);
+    if (!cleanTicketId || !cleanChannel || !cleanStepId) return '';
+    return `${cleanTicketId}|${cleanChannel}|${cleanStepId}`;
+  }
+
+  function isStepSent(ticketId, channel, stepId) {
+    const key = sentMemoryKey(ticketId, channel, stepId);
+    if (!key) return false;
+    return !!getSentMemory()[key];
+  }
+
+  function markSentStep(ticketId, channel, stepId) {
+    const key = sentMemoryKey(ticketId, channel, stepId);
+    if (!key) return false;
+
+    const memory = getSentMemory();
+    memory[key] = {
+      ticketId: clean(ticketId),
+      channel: lower(channel),
+      stepId: normalizeStepId(stepId),
+      sentAt: new Date().toISOString()
+    };
+    saveSentMemory(memory);
+    return true;
+  }
+
+  function clearSentStep(ticketId, channel, stepId) {
+    const key = sentMemoryKey(ticketId, channel, stepId);
+    if (!key) return false;
+
+    const memory = getSentMemory();
+    delete memory[key];
+    saveSentMemory(memory);
+    return true;
   }
 
   function findComposerContext() {
@@ -755,7 +896,7 @@
     const candidates = [];
     const active = document.activeElement;
     if (active && !isAiElement(active)) {
-      const activeRoot = active.closest?.('.modal, .az-dock__container, .az-dock, .popover, .panel, .card, form, [class*="compose"], [id*="compose"]');
+      const activeRoot = active.closest?.('#emailForm, #smsForm, form[action*="/common/email/send"], form[action*="email/send"], form[action*="sms"], form[action*="SMS"], .modal, .popover, form, [class*="compose"], [id*="compose"]');
       if (activeRoot) candidates.push({ root: activeRoot, field: null, sourceScore: 15 });
     }
 
@@ -778,11 +919,8 @@
 
     for (const root of safeQueryAll(document, [
       '.modal',
-      '.az-dock__container',
-      '.az-dock',
       '.popover',
       '.panel',
-      '.card',
       'form',
       '#emailForm',
       '[id*="dockEmail"]',
@@ -827,11 +965,8 @@
       'form[action*="sms"]',
       'form[action*="SMS"]',
       '.modal',
-      '.az-dock__container',
-      '.az-dock',
       '.popover',
       '.panel',
-      '.card',
       'form',
       '[id*="email"]',
       '[id*="Email"]',
@@ -1007,6 +1142,12 @@
       const body = doc?.body;
       if (!body) return null;
       const cke = iframe.closest('.cke');
+      const editable = body.isContentEditable ||
+        body.getAttribute?.('contenteditable') === 'true' ||
+        lower(doc.designMode) === 'on' ||
+        !!body.querySelector?.('[contenteditable="true"]');
+      if (!editable && !cke) return null;
+
       const editorGroup = cke?.closest?.('.az-form-group, .form-group') || cke;
       return {
         type: 'iframe',
@@ -1454,13 +1595,8 @@
     ].join('\n');
   }
 
-  async function requestFollowUpDraft(payload, context) {
-    const proxyUrl = clean(storageGet(STORAGE_KEYS.proxyUrl, ''));
-    const response = proxyUrl
-      ? await requestViaProxy(proxyUrl, payload, context)
-      : await requestOpenAiDirect(payload);
-
-    return response;
+  async function requestFollowUpDraft(payload) {
+    return requestOpenAiDirect(payload);
   }
 
   async function requestOpenAiDirect(payload) {
@@ -1478,23 +1614,6 @@
     });
 
     debugLog('raw_api_response', {
-      status: response.status,
-      body: safeParseForDebug(response.responseText || response.response || '')
-    });
-    return parseResponseBody(response);
-  }
-
-  async function requestViaProxy(proxyUrl, payload, context) {
-    const response = await httpRequest({
-      method: 'POST',
-      url: proxyUrl,
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      data: JSON.stringify({ payload, context })
-    });
-
-    debugLog('raw_proxy_response', {
       status: response.status,
       body: safeParseForDebug(response.responseText || response.response || '')
     });
@@ -1923,11 +2042,17 @@
     return apiKey;
   }
 
-  function promptSetApiKey() {
+  function promptSetOrClearApiKey() {
     const current = clean(storageGet(STORAGE_KEYS.apiKey, ''));
     const masked = current ? `${current.slice(0, 7)}...${current.slice(-4)}` : 'not set';
-    const value = prompt(`OpenAI API key (${masked}). Paste a new key or leave blank to keep current:`, '');
-    if (value == null || !clean(value)) return;
+    const value = prompt(`OpenAI API key (${masked}). Paste a new key, leave blank to clear, or Cancel to keep current:`, '');
+    if (value == null) return;
+    if (!clean(value)) {
+      storageDelete(STORAGE_KEYS.apiKey);
+      alert('Stored OpenAI API key cleared.');
+      return;
+    }
+
     storageSet(STORAGE_KEYS.apiKey, clean(value));
     alert('OpenAI API key saved in Tampermonkey storage.');
   }
@@ -1938,14 +2063,6 @@
     if (value == null) return;
     storageSet(STORAGE_KEYS.model, clean(value) || DEFAULT_MODEL);
     alert(`OpenAI model set to ${clean(value) || DEFAULT_MODEL}.`);
-  }
-
-  function promptSetProxyUrl() {
-    const current = clean(storageGet(STORAGE_KEYS.proxyUrl, ''));
-    const value = prompt('Optional proxy URL. Leave blank to call OpenAI directly from Tampermonkey:', current);
-    if (value == null) return;
-    storageSet(STORAGE_KEYS.proxyUrl, clean(value));
-    alert(clean(value) ? 'Proxy URL saved.' : 'Proxy URL cleared; direct OpenAI calls will be used.');
   }
 
   function storageGet(key, fallback = '') {
@@ -2036,15 +2153,15 @@
   }
 
   function isAiElement(el) {
-    return !!(el && el.closest && el.closest(`#${BOX_ID}, #${DEBUG_PANEL_ID}, #${DEBUG_TOGGLE_ID}, [class*="tm-az-ai"]`));
+    return !!(el && el.closest && el.closest(`#${BOX_ID}, #${DEBUG_PANEL_ID}, [class*="tm-az-ai"]`));
   }
 
   function getVisibleText(el) {
     if (!el) return '';
     let target = el;
-    if (el.querySelector && el.querySelector(`#${BOX_ID}, #${DEBUG_PANEL_ID}, #${DEBUG_TOGGLE_ID}, [class*="tm-az-ai"]`)) {
+    if (el.querySelector && el.querySelector(`#${BOX_ID}, #${DEBUG_PANEL_ID}, [class*="tm-az-ai"]`)) {
       target = el.cloneNode(true);
-      target.querySelectorAll(`#${BOX_ID}, #${DEBUG_PANEL_ID}, #${DEBUG_TOGGLE_ID}, [class*="tm-az-ai"]`).forEach((node) => node.remove());
+      target.querySelectorAll(`#${BOX_ID}, #${DEBUG_PANEL_ID}, [class*="tm-az-ai"]`).forEach((node) => node.remove());
     }
     return normalizeMultiline(target.innerText || target.textContent || '');
   }
@@ -2172,25 +2289,6 @@
         box-shadow: 0 8px 22px rgba(15, 23, 42, .12);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-      #${DEBUG_TOGGLE_ID} {
-        position: fixed;
-        left: 0;
-        bottom: 18px;
-        z-index: 2147483646;
-        min-height: 34px;
-        padding: 7px 9px;
-        border: 1px solid rgba(15, 23, 42, .18);
-        border-left: 0;
-        border-radius: 0 7px 7px 0;
-        background: #0f766e;
-        color: #ffffff;
-        box-shadow: 0 10px 24px rgba(15, 23, 42, .22);
-        font: 800 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        cursor: pointer;
-      }
-      #${DEBUG_TOGGLE_ID}:hover {
-        background: #115e59;
-      }
       .tm-az-ai-box-header,
       .tm-az-ai-controls,
       .tm-az-ai-debug-header {
@@ -2219,7 +2317,6 @@
       }
       .tm-az-ai-day,
       .tm-az-ai-generate,
-      .tm-az-ai-secondary,
       .tm-az-ai-use,
       .tm-az-ai-debug button {
         min-height: 28px;
@@ -2231,13 +2328,21 @@
         cursor: pointer;
       }
       .tm-az-ai-day:hover,
-      .tm-az-ai-secondary:hover,
       .tm-az-ai-debug button:hover {
         background: #e2e8f0;
       }
       .tm-az-ai-day-active {
         background: #0f766e;
         color: #ffffff;
+      }
+      .tm-az-ai-day-sent,
+      .tm-az-ai-day-sent:hover {
+        border-color: rgba(100, 116, 139, .3);
+        background: #e5e7eb;
+        color: #64748b;
+        cursor: not-allowed;
+        opacity: .72;
+        text-decoration: line-through;
       }
       .tm-az-ai-generate,
       .tm-az-ai-use {
@@ -2248,9 +2353,6 @@
       .tm-az-ai-generate:hover,
       .tm-az-ai-use:hover {
         background: #1d4ed8;
-      }
-      .tm-az-ai-secondary {
-        padding: 0 9px;
       }
       .tm-az-ai-status {
         margin-top: 8px;
