@@ -6,6 +6,10 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 
 - `agencyzoom-hidden-tag-manager.user.js`: manager Tampermonkey script for selecting tags.
 - `agencyzoom-producer-hide-tags.user.js`: producer Tampermonkey script that hides selected tags.
+- `agencyzoom-hidden-tag-manager-updater.user.js`: per-script updater that loads only the manager script.
+- `agencyzoom-producer-hide-tags-updater.user.js`: per-script updater that loads only the producer script.
+- `agencyzoom-phone-click-to-call-updater.user.js`: per-script updater that loads only Click-to-Call.
+- `agencyzoom-ai-followup-updater.user.js`: per-script updater that loads only AI Follow-Up.
 - `google-apps-script/agencyzoom-hidden-tags.gs`: Google Apps Script backend for the Google Sheet.
 
 ## Google Sheet Setup
@@ -25,34 +29,35 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 
 ## Tampermonkey Setup
 
-Install only the script each PC actually needs. Each installed script has its own Tampermonkey updater through its own `@updateURL` and `@downloadURL`, so updates happen per script without a master runner.
+Install only the updater for the script each PC actually needs. Each updater is a tiny Tampermonkey script that fetches, caches, and runs one target script from GitHub. This does not depend on Tampermonkey's native update timing for normal script changes.
 
-- Managers install Hidden Tag Manager:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-hidden-tag-manager.user.js`
-- Producers install Producer Hide Tags:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags.user.js`
-- Optional helper, Click-to-Call:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-phone-click-to-call.user.js`
-- Optional helper, AI Follow-Up:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup.user.js`
+- Managers install Hidden Tag Manager Updater:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-hidden-tag-manager-updater.user.js`
+- Producers install Producer Hide Tags Updater:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags-updater.user.js`
+- Optional helper, Click-to-Call Updater:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-phone-click-to-call-updater.user.js`
+- Optional helper, AI Follow-Up Updater:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup-updater.user.js`
 
 Do not install or enable `LOCAL AgencyZoom Master Updater` on office PCs. It is retired and kept only as a no-op safety stub for any browser that already has it installed.
 
 Migration from the master updater:
 
 1. Disable or delete `LOCAL AgencyZoom Master Updater`.
-2. Install the direct script links needed for that PC.
-3. Refresh AgencyZoom.
-4. Leave unrelated AgencyZoom scripts disabled unless that PC actually uses them.
+2. Disable or delete the direct non-updater AgencyZoom scripts on that PC.
+3. Install the per-script updater links needed for that PC.
+4. Refresh AgencyZoom.
+5. Leave unrelated AgencyZoom scripts disabled unless that PC actually uses them.
 
 `master-uploader.ps1` is still useful in the repo. It is the local publishing tool that bumps versions, checks update URLs, commits, and pushes AgencyZoom scripts to GitHub.
 
 Per-script update model:
 
-- Updating Hidden Tag Manager only updates PCs that installed Hidden Tag Manager.
-- Updating Producer Hide Tags only updates PCs that installed Producer Hide Tags.
-- No script downloads or runs another script.
-- The browser relies on Tampermonkey's normal update check for each installed script.
+- Updating Hidden Tag Manager only updates PCs that installed Hidden Tag Manager Updater.
+- Updating Producer Hide Tags only updates PCs that installed Producer Hide Tags Updater.
+- Each updater downloads and runs only one target script.
+- Each updater checks GitHub every 5 minutes while AgencyZoom is open, caches the newest target script, and reloads once when it finds a change.
 
 In AgencyZoom, use the Tampermonkey menu:
 
