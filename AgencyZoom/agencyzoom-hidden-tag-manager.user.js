@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Hidden Tag Manager
 // @namespace    local.agencyzoom.hidden-tags.manager
-// @version      1.0
+// @version      1.1
 // @description  Manager tool for selecting AgencyZoom card tags that should be hidden from producer views.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -20,7 +20,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.0';
+  const VERSION = '1.1';
   const SCRIPT = 'AZ Hidden Tag Manager';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_MANAGER_TOKEN = '';
@@ -115,15 +115,13 @@
   function startObserver() {
     if (observer) observer.disconnect();
     observer = new MutationObserver(() => {
-      ensureVersionBadge();
-      scheduleCandidateScan(150);
+      if (picking) scheduleCandidateScan(150);
     });
     observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
     window.setInterval(() => {
       ensureVersionBadge();
-      scheduleCandidateScan(0);
-    }, 2500);
-    window.addEventListener('scroll', lockPanelToViewport, { capture: true, passive: true });
+      if (picking) scheduleCandidateScan(0);
+    }, 5000);
     window.addEventListener('resize', lockPanelToViewport, { passive: true });
   }
 
@@ -189,13 +187,22 @@
     const panel = document.getElementById(PANEL_ID);
     if (!panel) return;
 
-    panel.style.setProperty('position', 'fixed', 'important');
-    panel.style.setProperty('right', '18px', 'important');
-    panel.style.setProperty('bottom', '18px', 'important');
-    panel.style.setProperty('left', 'auto', 'important');
-    panel.style.setProperty('top', 'auto', 'important');
-    panel.style.setProperty('transform', 'none', 'important');
-    panel.style.setProperty('z-index', '2147483647', 'important');
+    setImportantStyle(panel, 'position', 'fixed');
+    setImportantStyle(panel, 'right', '18px');
+    setImportantStyle(panel, 'bottom', '18px');
+    setImportantStyle(panel, 'left', 'auto');
+    setImportantStyle(panel, 'top', 'auto');
+    setImportantStyle(panel, 'transform', 'none');
+    setImportantStyle(panel, 'z-index', '2147483647');
+  }
+
+  function setImportantStyle(el, property, value) {
+    if (el.style.getPropertyValue(property) === value &&
+        el.style.getPropertyPriority(property) === 'important') {
+      return;
+    }
+
+    el.style.setProperty(property, value, 'important');
   }
 
   function ensureVersionBadge() {
@@ -217,7 +224,8 @@
       panel.appendChild(badge);
     }
 
-    badge.textContent = `Current version v${VERSION}`;
+    const badgeText = `Current version v${VERSION}`;
+    if (badge.textContent !== badgeText) badge.textContent = badgeText;
   }
 
   function handlePanelClick(event) {

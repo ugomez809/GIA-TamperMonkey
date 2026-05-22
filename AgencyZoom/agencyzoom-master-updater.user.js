@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.9
+// @version      0.10
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -27,15 +27,17 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.9';
+  const VERSION = '0.10';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 60 * 1000;
   const RELOAD_DELAY_MS = 2000;
   const DEFAULT_ROLE = 'producer';
+  const DEFAULT_TOOL_MODE = 'core';
   const STORAGE_KEYS = {
     role: 'tmAzMasterUpdaterRole',
+    toolMode: 'tmAzMasterUpdaterToolMode',
     lastCheck: 'tmAzMasterUpdaterLastCheck',
     lastStatus: 'tmAzMasterUpdaterLastStatus'
   };
@@ -47,7 +49,8 @@
       label: 'Producer Hide Tags',
       file: 'agencyzoom-producer-hide-tags.user.js',
       roles: ['producer', 'all'],
-      runAt: 'start'
+      runAt: 'start',
+      defaultEnabled: true
     },
     {
       id: 'phone-click-to-call',
@@ -55,7 +58,8 @@
       file: 'agencyzoom-phone-click-to-call.user.js',
       roles: ['producer', 'manager', 'all'],
       runAt: 'idle',
-      delayMs: 1200
+      delayMs: 1200,
+      defaultEnabled: false
     },
     {
       id: 'ai-followup',
@@ -63,7 +67,8 @@
       file: 'agencyzoom-ai-followup.user.js',
       roles: ['producer', 'manager', 'all'],
       runAt: 'idle',
-      delayMs: 1500
+      delayMs: 1500,
+      defaultEnabled: false
     },
     {
       id: 'hidden-tag-manager',
@@ -71,7 +76,8 @@
       file: 'agencyzoom-hidden-tag-manager.user.js',
       roles: ['manager', 'all'],
       runAt: 'idle',
-      delayMs: 1800
+      delayMs: 1800,
+      defaultEnabled: true
     }
   ];
 
@@ -297,11 +303,20 @@
 
   function getScriptsForRole(role) {
     const normalized = normalizeRole(role);
-    return SCRIPT_CATALOG.filter((script) => script.roles.includes(normalized));
+    const toolMode = getToolMode();
+    return SCRIPT_CATALOG.filter((script) =>
+      script.roles.includes(normalized) &&
+      (toolMode === 'all' || script.defaultEnabled !== false)
+    );
   }
 
   function getRole() {
     return normalizeRole(storageGet(STORAGE_KEYS.role, DEFAULT_ROLE));
+  }
+
+  function getToolMode() {
+    const mode = clean(storageGet(STORAGE_KEYS.toolMode, DEFAULT_TOOL_MODE)).toLowerCase();
+    return mode === 'all' ? 'all' : 'core';
   }
 
   function applyOptionsFromUrl() {
@@ -313,6 +328,7 @@
     }
 
     const requestedRole = clean(url.searchParams.get('azUpdaterRole'));
+    const requestedToolMode = clean(url.searchParams.get('azUpdaterTools'));
     const requestedDebug = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterDebug')).toLowerCase());
     forceCheckRequested = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterForce')).toLowerCase());
 
@@ -330,7 +346,14 @@
       setStatus(`Role set from URL: ${nextRole}`);
     }
 
+    if (requestedToolMode) {
+      const nextToolMode = requestedToolMode.toLowerCase() === 'all' ? 'all' : 'core';
+      storageSet(STORAGE_KEYS.toolMode, nextToolMode);
+      setStatus(`Tool mode set from URL: ${nextToolMode}`);
+    }
+
     url.searchParams.delete('azUpdaterRole');
+    url.searchParams.delete('azUpdaterTools');
     url.searchParams.delete('azUpdaterDebug');
     url.searchParams.delete('azUpdaterForce');
     history.replaceState(history.state, document.title, url.toString());
@@ -343,6 +366,7 @@
       `${prefix}`,
       `Updater: v${VERSION}`,
       `Role: ${role}`,
+      `Tools: ${getToolMode()}`,
       `Checked: ${formatTimestamp(storageGet(STORAGE_KEYS.lastCheck, ''))}`,
       `Last status: ${storageGet(STORAGE_KEYS.lastStatus, 'none')}`
     ];

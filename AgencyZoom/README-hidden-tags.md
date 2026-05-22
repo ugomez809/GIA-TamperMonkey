@@ -31,6 +31,8 @@ For many PCs, install the master updater once:
 
 The updater checks GitHub for AgencyZoom script changes in the background, caches the newest versions locally, reloads AgencyZoom once when it finds updates, and then runs the updated scripts. Producer PCs default to the `producer` role, so they do not load the manager hidden-tags panel. The updater is silent and does not add Tampermonkey menu commands on producer PCs.
 
+By default, the updater runs only the hidden-tags tools for stability. To test every AgencyZoom helper from the updater, open AgencyZoom once with `azUpdaterTools=all`. To return to the safer default, open it once with `azUpdaterTools=core`.
+
 To set a manager PC without menu commands, open AgencyZoom once with:
 
 `https://app.agencyzoom.com/referral/pipeline?azUpdaterRole=manager`
