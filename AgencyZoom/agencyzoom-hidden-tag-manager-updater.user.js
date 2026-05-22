@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Hidden Tag Manager Updater
 // @namespace    local.agencyzoom.hidden-tags.manager.updater
-// @version      0.2
+// @version      0.3
 // @description  Loads and auto-updates only the AgencyZoom Hidden Tag Manager script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.1';
+  const LOADER_VERSION = '0.3';
   const TARGET_ID = 'hidden-tag-manager';
   const TARGET_LABEL = 'Hidden Tag Manager';
   const TARGET_FILE = 'agencyzoom-hidden-tag-manager.user.js';

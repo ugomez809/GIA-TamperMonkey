@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Producer Hide Tags Updater
 // @namespace    local.agencyzoom.hidden-tags.producer.updater
-// @version      0.2
+// @version      0.3
 // @description  Loads and auto-updates only the AgencyZoom Producer Hide Tags script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.1';
+  const LOADER_VERSION = '0.3';
   const TARGET_ID = 'producer-hide-tags';
   const TARGET_LABEL = 'Producer Hide Tags';
   const TARGET_FILE = 'agencyzoom-producer-hide-tags.user.js';

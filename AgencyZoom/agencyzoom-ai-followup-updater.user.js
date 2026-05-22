@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom AI Follow-Up Updater
 // @namespace    local.agencyzoom.ai-followup.updater
-// @version      0.2
+// @version      0.3
 // @description  Loads and auto-updates only the AgencyZoom AI Follow-Up script from GitHub.
 // @match        https://app.agencyzoom.com/referral/pipeline*
 // @exclude      https://app.agencyzoom.com/login*
@@ -25,7 +25,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.1';
+  const LOADER_VERSION = '0.3';
   const TARGET_ID = 'ai-followup';
   const TARGET_LABEL = 'AI Follow-Up';
   const TARGET_FILE = 'agencyzoom-ai-followup.user.js';

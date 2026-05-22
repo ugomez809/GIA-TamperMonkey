@@ -145,6 +145,12 @@ function Set-UserScriptVersion {
     "const VERSION = `${1}$NewVersion`${1};",
     1
   )
+  $content = [regex]::Replace(
+    $content,
+    "const\s+LOADER_VERSION\s*=\s*(['""])" + [regex]::Escape($OldVersion) + "\1\s*;",
+    "const LOADER_VERSION = `${1}$NewVersion`${1};",
+    1
+  )
 
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllText($Path, $content, $utf8NoBom)
