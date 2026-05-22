@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.12
-// @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
+// @version      0.13
+// @description  Retired safety stub. AgencyZoom scripts now install and auto-update individually through Tampermonkey.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-start
@@ -27,8 +27,9 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.12';
+  const VERSION = '0.13';
   const SCRIPT = 'AZ Master Updater';
+  const RETIRED = true;
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 60 * 1000;
@@ -97,6 +98,14 @@
     booted = true;
 
     applyOptionsFromUrl();
+
+    if (RETIRED) {
+      clearScriptCache();
+      storageSet(STORAGE_KEYS.enabled, '0');
+      setStatus('Retired: install AgencyZoom scripts individually.');
+      if (debugEnabled) showDebugStatus('Master updater retired.');
+      return;
+    }
 
     if (!isUpdaterEnabled()) {
       setStatus('Safe mode: child scripts are disabled.');

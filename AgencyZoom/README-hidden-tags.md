@@ -25,36 +25,27 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 
 ## Tampermonkey Setup
 
-For many PCs, install the master updater once:
+Install only the script each PC actually needs. Tampermonkey will auto-update each installed script from its own `@updateURL`, so the scripts still update from the repo without a master runner.
 
-- `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-master-updater.user.js`
+- Managers install Hidden Tag Manager:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-hidden-tag-manager.user.js`
+- Producers install Producer Hide Tags:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags.user.js`
+- Optional helper, Click-to-Call:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-phone-click-to-call.user.js`
+- Optional helper, AI Follow-Up:
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup.user.js`
 
-The updater checks GitHub for AgencyZoom script changes in the background, caches the newest versions locally, reloads AgencyZoom once when it finds updates, and then runs the updated scripts. Producer PCs default to the `producer` role, so they do not load the manager hidden-tags panel. The updater is silent and does not add Tampermonkey menu commands on producer PCs.
+Do not install or enable `LOCAL AgencyZoom Master Updater` on office PCs. It is retired and kept only as a no-op safety stub for any browser that already has it installed.
 
-For safety while testing, the updater installs with child scripts disabled. Open AgencyZoom once with `azUpdaterEnabled=1` to turn the updater on for that PC. Open it once with `azUpdaterOff=1` to turn child scripts back off.
+Migration from the master updater:
 
-By default, the updater runs only the hidden-tags tools for stability. To test every AgencyZoom helper from the updater, open AgencyZoom once with `azUpdaterTools=all`. To return to the safer default, open it once with `azUpdaterTools=core`.
+1. Disable or delete `LOCAL AgencyZoom Master Updater`.
+2. Install the direct script links needed for that PC.
+3. Refresh AgencyZoom.
+4. Leave unrelated AgencyZoom scripts disabled unless that PC actually uses them.
 
-To set a manager PC without menu commands, open AgencyZoom once with:
-
-`https://app.agencyzoom.com/referral/pipeline?azUpdaterRole=manager`
-
-The updater stores the manager role and removes the URL parameter automatically.
-
-To test the updater after a GitHub change, open AgencyZoom once with:
-
-`https://app.agencyzoom.com/referral/pipeline?azUpdaterForce=1&azUpdaterDebug=1`
-
-This forces the one-time reload guard to reset and shows a one-time status box with the cached script versions. Normal daily use stays silent.
-
-If a PC is stuck on an old cached child script version, add `azUpdaterClear=1` once to delete the updater's local script cache and force a fresh download.
-
-When using the master updater on a PC, keep only `LOCAL AgencyZoom Master Updater` enabled in Tampermonkey. Disable the individual AgencyZoom scripts on that PC, or the old installed copies can run beside the updater and make it look like the updater did not change anything.
-
-Install individual scripts only if you do not want to use the updater:
-
-- Managers install `agencyzoom-hidden-tag-manager.user.js`.
-- Producers install `agencyzoom-producer-hide-tags.user.js`.
+`master-uploader.ps1` is still useful in the repo. It is the local publishing tool that bumps versions, checks update URLs, commits, and pushes AgencyZoom scripts to GitHub.
 
 In AgencyZoom, use the Tampermonkey menu:
 
