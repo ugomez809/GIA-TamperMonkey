@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Hidden Tag Manager
 // @namespace    local.agencyzoom.hidden-tags.manager
-// @version      0.4
+// @version      0.5
 // @description  Manager tool for selecting AgencyZoom card tags that should be hidden from producer views.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -20,7 +20,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.4';
+  const VERSION = '0.5';
   const SCRIPT = 'AZ Hidden Tag Manager';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_MANAGER_TOKEN = '';
@@ -152,7 +152,7 @@
 
     panel.innerHTML = `
       <div class="tm-az-hidden-tag-head">
-        <strong>Hidden Tags</strong>
+        <strong>Hidden Tags <span class="tm-az-hidden-tag-version">v${escapeHtml(VERSION)}</span></strong>
         <button type="button" data-action="close" aria-label="Close">x</button>
       </div>
       <div class="tm-az-hidden-tag-actions">
@@ -796,6 +796,12 @@
         border-bottom: 1px solid rgba(15, 23, 42, .1);
         background: #f8fafc;
         font-size: 13px;
+      }
+      .tm-az-hidden-tag-version {
+        margin-left: 4px;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
       }
       .tm-az-hidden-tag-head button,
       .tm-az-hidden-tag-row button {
