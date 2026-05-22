@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom AI Follow-Up Composer
 // @namespace    local.agencyzoom.ai-followup
-// @version      3.3${3}
+// @version      3.3
 // @description  Generates first-quote and follow-up email/SMS options from AgencyZoom Activities using OpenAI and prompt templates from a published Sheet CSV.
 // @match        https://app.agencyzoom.com/referral/pipeline*
 // @exclude      https://app.agencyzoom.com/login*

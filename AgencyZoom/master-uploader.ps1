@@ -103,6 +103,15 @@ function Get-HeadContent {
   return ($output -join "`n")
 }
 
+function Normalize-ContentForCompare {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Content
+  )
+
+  return ($Content -replace "\r\n?", "`n").TrimEnd()
+}
+
 function Set-UserScriptVersion {
   param(
     [Parameter(Mandatory = $true)]
@@ -116,8 +125,8 @@ function Set-UserScriptVersion {
   $content = Get-Content -Raw -LiteralPath $Path
   $content = [regex]::Replace(
     $content,
-    "(?m)^(//\s*@version\s+)$([regex]::Escape($OldVersion))(\s*)$",
-    "`${1}$NewVersion`${3}",
+    "(?m)^//\s*@version\s+[^\s]+.*$",
+    "// @version      $NewVersion",
     1
   )
   $content = [regex]::Replace(
@@ -154,7 +163,7 @@ function Update-ChangedAgencyZoomUserScriptVersions {
       continue
     }
 
-    if ($headContent -eq $content) {
+    if ((Normalize-ContentForCompare -Content $headContent) -eq (Normalize-ContentForCompare -Content $content)) {
       continue
     }
 
