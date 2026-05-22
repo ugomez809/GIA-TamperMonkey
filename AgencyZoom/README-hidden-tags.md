@@ -37,6 +37,14 @@ To set a manager PC without menu commands, open AgencyZoom once with:
 
 The updater stores the manager role and removes the URL parameter automatically.
 
+To test the updater after a GitHub change, open AgencyZoom once with:
+
+`https://app.agencyzoom.com/referral/pipeline?azUpdaterForce=1&azUpdaterDebug=1`
+
+This forces the one-time reload guard to reset and shows a one-time status box with the cached script versions. Normal daily use stays silent.
+
+When using the master updater on a PC, keep only `LOCAL AgencyZoom Master Updater` enabled in Tampermonkey. Disable the individual AgencyZoom scripts on that PC, or the old installed copies can run beside the updater and make it look like the updater did not change anything.
+
 Install individual scripts only if you do not want to use the updater:
 
 - Managers install `agencyzoom-hidden-tag-manager.user.js`.

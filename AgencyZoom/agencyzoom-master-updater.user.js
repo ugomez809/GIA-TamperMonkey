@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.5
+// @version      0.6
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.5';
+  const VERSION = '0.6';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom';
   const CHECK_INTERVAL_MS = 60 * 1000;
@@ -38,6 +38,7 @@
     lastStatus: 'tmAzMasterUpdaterLastStatus'
   };
   const SESSION_RELOAD_KEY = 'tmAzMasterUpdaterReloadSignature';
+  const SESSION_DEBUG_ONCE_KEY = 'tmAzMasterUpdaterDebugOnce';
   const SCRIPT_CATALOG = [
     {
       id: 'producer-hide-tags',
@@ -65,9 +66,10 @@
     }
   ];
 
-  let executedAnyCachedScript = false;
   let booted = false;
   let updateTimer = 0;
+  let debugEnabled = false;
+  let forceCheckRequested = false;
 
   boot();
 
@@ -75,7 +77,7 @@
     if (booted || !isAgencyZoom()) return;
     booted = true;
 
-    applyRoleFromUrl();
+    applyOptionsFromUrl();
 
     const role = getRole();
     const scripts = getScriptsForRole(role);
@@ -86,7 +88,7 @@
 
     loadScripts(scripts)
       .then(() => {
-        maybeCheckForUpdates(scripts);
+        checkForUpdates(scripts);
         startUpdateTimer(scripts);
       })
       .catch((err) => {
@@ -101,39 +103,37 @@
 
   async function loadScripts(scripts) {
     for (const script of scripts) {
-      const cached = storageGet(scriptCacheKey(script.id), '');
-      if (cached) {
-        executedAnyCachedScript = true;
-        executeScript(script, cached, 'cache');
-        continue;
-      }
+      try {
+        const cached = storageGet(scriptCacheKey(script.id), '');
+        if (cached) {
+          executeScript(script, cached, 'cache');
+          continue;
+        }
 
-      const remote = await fetchScript(script);
-      storageSet(scriptCacheKey(script.id), remote);
-      storageSet(scriptVersionKey(script.id), extractVersion(remote));
-      executeScript(script, remote, 'remote');
+        const remote = await fetchScript(script);
+        storageSet(scriptCacheKey(script.id), remote);
+        storageSet(scriptVersionKey(script.id), extractVersion(remote));
+        executeScript(script, remote, 'remote');
+      } catch (err) {
+        console.warn(`[${SCRIPT}] Could not load ${script.label}`, err);
+        setStatus(`Load failed for ${script.label}: ${errorMessage(err)}`);
+      }
     }
 
     setStatus(`Loaded ${scripts.length} AgencyZoom scripts for role "${getRole()}".`);
   }
 
-  async function maybeCheckForUpdates(scripts) {
-    const lastCheck = Number(storageGet(STORAGE_KEYS.lastCheck, 0)) || 0;
-    if (Date.now() - lastCheck < CHECK_INTERVAL_MS) return;
-    await checkForUpdates(scripts, { forceReload: false, forceFetch: true });
-  }
-
   function startUpdateTimer(scripts) {
     if (updateTimer) window.clearInterval(updateTimer);
     updateTimer = window.setInterval(() => {
-      maybeCheckForUpdates(scripts).catch((err) => {
+      checkForUpdates(scripts).catch((err) => {
         console.warn(`[${SCRIPT}] background update check failed`, err);
         setStatus(`Background check failed: ${errorMessage(err)}`);
       });
     }, CHECK_INTERVAL_MS);
   }
 
-  async function checkForUpdates(scripts, options = {}) {
+  async function checkForUpdates(scripts) {
     const changed = [];
 
     for (const script of scripts) {
@@ -154,16 +154,13 @@
 
     if (!changed.length) {
       setStatus(`No AgencyZoom updates found. Role: ${getRole()}.`);
-      if (options.forceReload) alert('AgencyZoom scripts are already up to date.');
+      if (debugEnabled) showDebugStatus('No updates found.');
       return;
     }
 
     const signature = changed.map((script) => `${script.id}:${storageGet(scriptVersionKey(script.id), '')}`).join('|');
     setStatus(`Updated: ${changed.map((script) => script.label).join(', ')}`);
-
-    if (options.forceReload || executedAnyCachedScript) {
-      reloadOnce(signature);
-    }
+    reloadOnce(signature);
   }
 
   function executeScript(script, code, source) {
@@ -224,7 +221,7 @@
     return normalizeRole(storageGet(STORAGE_KEYS.role, DEFAULT_ROLE));
   }
 
-  function applyRoleFromUrl() {
+  function applyOptionsFromUrl() {
     let url = null;
     try {
       url = new URL(location.href);
@@ -233,14 +230,47 @@
     }
 
     const requestedRole = clean(url.searchParams.get('azUpdaterRole'));
-    if (!requestedRole) return;
+    const requestedDebug = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterDebug')).toLowerCase());
+    forceCheckRequested = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterForce')).toLowerCase());
 
-    const nextRole = normalizeRole(requestedRole);
-    storageSet(STORAGE_KEYS.role, nextRole);
-    setStatus(`Role set from URL: ${nextRole}`);
+    if (requestedDebug) {
+      try { sessionStorage.setItem(SESSION_DEBUG_ONCE_KEY, '1'); } catch {}
+    }
+    if (forceCheckRequested) {
+      try { sessionStorage.removeItem(SESSION_RELOAD_KEY); } catch {}
+    }
+    debugEnabled = requestedDebug || sessionStorage.getItem(SESSION_DEBUG_ONCE_KEY) === '1';
+
+    if (requestedRole) {
+      const nextRole = normalizeRole(requestedRole);
+      storageSet(STORAGE_KEYS.role, nextRole);
+      setStatus(`Role set from URL: ${nextRole}`);
+    }
 
     url.searchParams.delete('azUpdaterRole');
+    url.searchParams.delete('azUpdaterDebug');
+    url.searchParams.delete('azUpdaterForce');
     history.replaceState(history.state, document.title, url.toString());
+  }
+
+  function showDebugStatus(prefix) {
+    const role = getRole();
+    const scripts = getScriptsForRole(role);
+    const lines = [
+      `${prefix}`,
+      `Updater: v${VERSION}`,
+      `Role: ${role}`,
+      `Checked: ${formatTimestamp(storageGet(STORAGE_KEYS.lastCheck, ''))}`,
+      `Last status: ${storageGet(STORAGE_KEYS.lastStatus, 'none')}`
+    ];
+
+    for (const script of scripts) {
+      lines.push(`${script.label}: ${storageGet(scriptVersionKey(script.id), 'not cached')}`);
+    }
+
+    try { sessionStorage.removeItem(SESSION_DEBUG_ONCE_KEY); } catch {}
+    debugEnabled = false;
+    alert(lines.join('\n'));
   }
 
   function normalizeRole(value) {
@@ -265,6 +295,16 @@
 
   function sameCode(left, right) {
     return normalizeCode(left) === normalizeCode(right);
+  }
+
+  function formatTimestamp(value) {
+    const timestamp = Number(value) || 0;
+    if (!timestamp) return 'never';
+    try {
+      return new Date(timestamp).toLocaleString();
+    } catch {
+      return String(timestamp);
+    }
   }
 
   function normalizeCode(value) {
