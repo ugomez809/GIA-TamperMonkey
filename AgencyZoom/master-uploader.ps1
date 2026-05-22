@@ -95,9 +95,19 @@ function Get-HeadContent {
     [string]$RepoPath
   )
 
-  $output = & git show "HEAD:$RepoPath" 2>$null
-  if ($LASTEXITCODE -ne 0) {
+  $oldErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $output = & git show "HEAD:$RepoPath" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+      return ""
+    }
+  }
+  catch {
     return ""
+  }
+  finally {
+    $ErrorActionPreference = $oldErrorActionPreference
   }
 
   return ($output -join "`n")
