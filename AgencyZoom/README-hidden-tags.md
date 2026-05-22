@@ -25,13 +25,13 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 
 ## Tampermonkey Setup
 
-For many PCs, install the master loader once:
+For many PCs, install the master updater once:
 
-- `agencyzoom-master-loader.user.js`
+- `agencyzoom-master-updater.user.js`
 
-The loader fetches and runs the latest AgencyZoom scripts from GitHub, caches them locally, and checks for repo changes. Producer PCs default to the `producer` role, so they do not load the manager hidden-tags panel.
+The updater checks GitHub for AgencyZoom script changes, caches the newest versions locally, reloads AgencyZoom once when it finds updates, and then runs the updated scripts. Producer PCs default to the `producer` role, so they do not load the manager hidden-tags panel.
 
-Install individual scripts only if you do not want to use the loader:
+Install individual scripts only if you do not want to use the updater:
 
 - Managers install `agencyzoom-hidden-tag-manager.user.js`.
 - Producers install `agencyzoom-producer-hide-tags.user.js`.

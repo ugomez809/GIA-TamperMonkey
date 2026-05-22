@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         LOCAL AgencyZoom Master Loader
-// @namespace    local.agencyzoom.master-loader
-// @version      0.1
-// @description  Loads the latest AgencyZoom Tampermonkey scripts from GitHub and refreshes them automatically.
+// @name         LOCAL AgencyZoom Master Updater
+// @namespace    local.agencyzoom.master-updater
+// @version      0.2
+// @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-start
@@ -20,25 +20,25 @@
 // @connect      googleusercontent.com
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-master-loader.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-master-loader.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-master-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-master-updater.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const VERSION = '0.1';
-  const SCRIPT = 'AZ Master Loader';
+  const VERSION = '0.2';
+  const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom';
   const CHECK_INTERVAL_MS = 5 * 60 * 1000;
   const RELOAD_DELAY_MS = 900;
   const DEFAULT_ROLE = 'producer';
   const STORAGE_KEYS = {
-    role: 'tmAzMasterLoaderRole',
-    lastCheck: 'tmAzMasterLoaderLastCheck',
-    lastStatus: 'tmAzMasterLoaderLastStatus'
+    role: 'tmAzMasterUpdaterRole',
+    lastCheck: 'tmAzMasterUpdaterLastCheck',
+    lastStatus: 'tmAzMasterUpdaterLastStatus'
   };
-  const SESSION_RELOAD_KEY = 'tmAzMasterLoaderReloadSignature';
+  const SESSION_RELOAD_KEY = 'tmAzMasterUpdaterReloadSignature';
   const SCRIPT_CATALOG = [
     {
       id: 'producer-hide-tags',
@@ -99,13 +99,13 @@
   function registerMenuCommands() {
     if (typeof GM_registerMenuCommand !== 'function') return;
 
-    GM_registerMenuCommand('AZ Loader: Force update and reload', () => {
+    GM_registerMenuCommand('AZ Updater: Force update and reload', () => {
       checkForUpdates(getScriptsForRole(getRole()), { forceReload: true, forceFetch: true })
-        .catch((err) => alert(`AgencyZoom loader update failed: ${errorMessage(err)}`));
+        .catch((err) => alert(`AgencyZoom updater failed: ${errorMessage(err)}`));
     });
-    GM_registerMenuCommand('AZ Loader: Set role', promptRole);
-    GM_registerMenuCommand('AZ Loader: Show status', showStatus);
-    GM_registerMenuCommand('AZ Loader: Clear script cache', clearScriptCache);
+    GM_registerMenuCommand('AZ Updater: Set role', promptRole);
+    GM_registerMenuCommand('AZ Updater: Show status', showStatus);
+    GM_registerMenuCommand('AZ Updater: Clear script cache', clearScriptCache);
   }
 
   async function loadScripts(scripts) {
@@ -178,7 +178,7 @@
 
   function fetchScript(script) {
     return new Promise((resolve, reject) => {
-      const url = `${BASE_URL}/${script.file}?tmAzLoader=${Date.now()}`;
+      const url = `${BASE_URL}/${script.file}?tmAzUpdater=${Date.now()}`;
       GM_xmlhttpRequest({
         method: 'GET',
         url,
@@ -215,12 +215,12 @@
 
   function promptRole() {
     const current = getRole();
-    const value = prompt('AgencyZoom loader role: producer, manager, or all', current);
+    const value = prompt('AgencyZoom updater role: producer, manager, or all', current);
     if (value == null) return;
 
     const next = normalizeRole(value);
     storageSet(STORAGE_KEYS.role, next);
-    alert(`AgencyZoom loader role set to "${next}". The page will reload.`);
+    alert(`AgencyZoom updater role set to "${next}". The page will reload.`);
     location.reload();
   }
 
@@ -228,7 +228,7 @@
     const role = getRole();
     const scripts = getScriptsForRole(role);
     const lines = [
-      `AgencyZoom Master Loader ${VERSION}`,
+      `AgencyZoom Master Updater ${VERSION}`,
       `Role: ${role}`,
       `Last check: ${formatTimestamp(storageGet(STORAGE_KEYS.lastCheck, ''))}`,
       `Last status: ${storageGet(STORAGE_KEYS.lastStatus, 'none')}`,
@@ -249,7 +249,7 @@
       storageDelete(scriptVersionKey(script.id));
     }
     storageDelete(STORAGE_KEYS.lastCheck);
-    alert('AgencyZoom loader cache cleared. The page will reload and fetch fresh scripts.');
+    alert('AgencyZoom updater cache cleared. The page will reload and fetch fresh scripts.');
     location.reload();
   }
 
@@ -270,11 +270,11 @@
   }
 
   function scriptCacheKey(id) {
-    return `tmAzMasterLoaderScript:${id}`;
+    return `tmAzMasterUpdaterScript:${id}`;
   }
 
   function scriptVersionKey(id) {
-    return `tmAzMasterLoaderVersion:${id}`;
+    return `tmAzMasterUpdaterVersion:${id}`;
   }
 
   function extractVersion(code) {
