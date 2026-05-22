@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom AI Follow-Up Composer
 // @namespace    local.agencyzoom.ai-followup
-// @version      3.3
+// @version      3.4
 // @description  Generates first-quote and follow-up email/SMS options from AgencyZoom Activities using OpenAI and prompt templates from a published Sheet CSV.
 // @match        https://app.agencyzoom.com/referral/pipeline*
 // @exclude      https://app.agencyzoom.com/login*
@@ -17,14 +17,14 @@
 // @connect      docs.google.com
 // @connect      spreadsheets.google.com
 // @connect      googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-ai-followup.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-ai-followup.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const VERSION = '3.3';
+  const VERSION = '3.4';
   const WORKFLOW = 'first_quote_followup';
   const STEP_OPTIONS = [
     { id: 'first_quote', label: 'First Quote', sheetDay: 'first_quote', kind: 'first_quote', followupDay: '' },

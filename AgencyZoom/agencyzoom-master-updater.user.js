@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.6
+// @version      0.7
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -19,16 +19,16 @@
 // @connect      googleusercontent.com
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-master-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-master-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-master-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-master-updater.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const VERSION = '0.6';
+  const VERSION = '0.7';
   const SCRIPT = 'AZ Master Updater';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
   const CHECK_INTERVAL_MS = 60 * 1000;
   const RELOAD_DELAY_MS = 900;
   const DEFAULT_ROLE = 'producer';

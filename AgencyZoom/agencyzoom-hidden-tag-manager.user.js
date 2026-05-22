@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Hidden Tag Manager
 // @namespace    local.agencyzoom.hidden-tags.manager
-// @version      0.6
+// @version      0.7
 // @description  Manager tool for selecting AgencyZoom card tags that should be hidden from producer views.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -13,14 +13,14 @@
 // @grant        GM_registerMenuCommand
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-hidden-tag-manager.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-hidden-tag-manager.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-hidden-tag-manager.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-hidden-tag-manager.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const VERSION = '0.6';
+  const VERSION = '0.7';
   const SCRIPT = 'AZ Hidden Tag Manager';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_MANAGER_TOKEN = '';

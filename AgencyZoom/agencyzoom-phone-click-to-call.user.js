@@ -1,20 +1,20 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.7
+// @version      2.8
 // @description  Adds small AgencyZoom-style action icons under each pipeline card producer area. Phone click-to-call works; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-idle
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-phone-click-to-call.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-phone-click-to-call.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-phone-click-to-call.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-phone-click-to-call.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const VERSION = '2.7';
+  const VERSION = '2.8';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const CARD_SELECTOR = '.dd-card.referral-container[data-id]';

@@ -27,7 +27,7 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 
 For many PCs, install the master updater once:
 
-- `agencyzoom-master-updater.user.js`
+- `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-master-updater.user.js`
 
 The updater checks GitHub for AgencyZoom script changes in the background, caches the newest versions locally, reloads AgencyZoom once when it finds updates, and then runs the updated scripts. Producer PCs default to the `producer` role, so they do not load the manager hidden-tags panel. The updater is silent and does not add Tampermonkey menu commands on producer PCs.
 

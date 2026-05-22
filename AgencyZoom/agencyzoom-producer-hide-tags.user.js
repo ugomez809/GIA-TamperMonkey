@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Producer Hide Tags
 // @namespace    local.agencyzoom.hidden-tags.producer
-// @version      0.7
+// @version      0.8
 // @description  Hides manager-selected AgencyZoom card tags from producer views, syncing the hidden list at most once per day.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -12,14 +12,14 @@
 // @grant        GM_registerMenuCommand
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-producer-hide-tags.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/agencyzoom-producer-hide-tags.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const VERSION = '0.7';
+  const VERSION = '0.8';
   const SCRIPT = 'AZ Producer Hide Tags';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_READ_TOKEN = '';

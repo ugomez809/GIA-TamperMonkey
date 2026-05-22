@@ -30,7 +30,7 @@ function Test-AgencyZoomUserScriptUrls {
   $userScripts = Get-ChildItem -LiteralPath $AgencyZoomPath -File -Filter "*.user.js"
   foreach ($script in $userScripts) {
     $name = $script.Name
-    $rawUrl = "https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/$name"
+    $rawUrl = "https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/$name"
     $content = Get-Content -Raw -LiteralPath $script.FullName
 
     if ($content -notmatch [regex]::Escape("// @updateURL    $rawUrl") -or
