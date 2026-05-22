@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.3
+// @version      0.4
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -26,10 +26,10 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.3';
+  const VERSION = '0.4';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom';
-  const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+  const CHECK_INTERVAL_MS = 60 * 1000;
   const RELOAD_DELAY_MS = 900;
   const DEFAULT_ROLE = 'producer';
   const STORAGE_KEYS = {
