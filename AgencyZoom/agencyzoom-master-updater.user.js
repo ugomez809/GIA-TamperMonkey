@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.8
+// @version      0.9
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -27,12 +27,12 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.8';
+  const VERSION = '0.9';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 60 * 1000;
-  const RELOAD_DELAY_MS = 900;
+  const RELOAD_DELAY_MS = 2000;
   const DEFAULT_ROLE = 'producer';
   const STORAGE_KEYS = {
     role: 'tmAzMasterUpdaterRole',
@@ -46,25 +46,32 @@
       id: 'producer-hide-tags',
       label: 'Producer Hide Tags',
       file: 'agencyzoom-producer-hide-tags.user.js',
-      roles: ['producer', 'manager', 'all']
+      roles: ['producer', 'all'],
+      runAt: 'start'
     },
     {
       id: 'phone-click-to-call',
       label: 'Click-to-Call',
       file: 'agencyzoom-phone-click-to-call.user.js',
-      roles: ['producer', 'manager', 'all']
+      roles: ['producer', 'manager', 'all'],
+      runAt: 'idle',
+      delayMs: 1200
     },
     {
       id: 'ai-followup',
       label: 'AI Follow-Up',
       file: 'agencyzoom-ai-followup.user.js',
-      roles: ['producer', 'manager', 'all']
+      roles: ['producer', 'manager', 'all'],
+      runAt: 'idle',
+      delayMs: 1500
     },
     {
       id: 'hidden-tag-manager',
       label: 'Hidden Tag Manager',
       file: 'agencyzoom-hidden-tag-manager.user.js',
-      roles: ['manager', 'all']
+      roles: ['manager', 'all'],
+      runAt: 'idle',
+      delayMs: 1800
     }
   ];
 
@@ -91,7 +98,7 @@
 
     loadScripts(scripts)
       .then(() => {
-        checkForUpdates(scripts);
+        runAfterPageReady(() => checkForUpdates(scripts), 2500);
         startUpdateTimer(scripts);
       })
       .catch((err) => {
@@ -111,7 +118,7 @@
       try {
         const cached = storageGet(scriptCacheKey(script.id), '');
         if (cached) {
-          executeScript(script, cached, 'cache');
+          executeScriptWhenReady(script, cached, 'cache');
           continue;
         }
 
@@ -119,7 +126,7 @@
         const remote = await fetchScript(script, remoteBaseUrl);
         storageSet(scriptCacheKey(script.id), remote);
         storageSet(scriptVersionKey(script.id), extractVersion(remote));
-        executeScript(script, remote, 'remote');
+        executeScriptWhenReady(script, remote, 'remote');
       } catch (err) {
         console.warn(`[${SCRIPT}] Could not load ${script.label}`, err);
         setStatus(`Load failed for ${script.label}: ${errorMessage(err)}`);
@@ -168,6 +175,15 @@
     const signature = changed.map((script) => `${script.id}:${storageGet(scriptVersionKey(script.id), '')}`).join('|');
     setStatus(`Updated: ${changed.map((script) => script.label).join(', ')}`);
     reloadOnce(signature);
+  }
+
+  function executeScriptWhenReady(script, code, source) {
+    if (script.runAt === 'idle') {
+      runAfterPageReady(() => executeScript(script, code, source), script.delayMs || 1000);
+      return;
+    }
+
+    executeScript(script, code, source);
   }
 
   function executeScript(script, code, source) {
@@ -259,7 +275,24 @@
 
     sessionStorage.setItem(SESSION_RELOAD_KEY, signature);
     setStatus('AgencyZoom scripts updated. Reloading once...');
-    window.setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+    runAfterPageReady(() => location.reload(), RELOAD_DELAY_MS);
+  }
+
+  function runAfterPageReady(callback, delayMs = 0) {
+    let ran = false;
+    const run = () => {
+      if (ran) return;
+      ran = true;
+      window.setTimeout(callback, delayMs);
+    };
+
+    if (document.readyState === 'complete') {
+      run();
+      return;
+    }
+
+    window.addEventListener('load', run, { once: true });
+    window.setTimeout(run, 10000);
   }
 
   function getScriptsForRole(role) {
