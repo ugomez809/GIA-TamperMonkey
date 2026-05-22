@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.4
+// @version      0.5
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.4';
+  const VERSION = '0.5';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom';
   const CHECK_INTERVAL_MS = 60 * 1000;
@@ -67,12 +67,15 @@
 
   let executedAnyCachedScript = false;
   let booted = false;
+  let updateTimer = 0;
 
   boot();
 
   function boot() {
     if (booted || !isAgencyZoom()) return;
     booted = true;
+
+    applyRoleFromUrl();
 
     const role = getRole();
     const scripts = getScriptsForRole(role);
@@ -82,7 +85,10 @@
     }
 
     loadScripts(scripts)
-      .then(() => maybeCheckForUpdates(scripts))
+      .then(() => {
+        maybeCheckForUpdates(scripts);
+        startUpdateTimer(scripts);
+      })
       .catch((err) => {
         console.error(`[${SCRIPT}] boot failed`, err);
         setStatus(`Boot failed: ${errorMessage(err)}`);
@@ -115,6 +121,16 @@
     const lastCheck = Number(storageGet(STORAGE_KEYS.lastCheck, 0)) || 0;
     if (Date.now() - lastCheck < CHECK_INTERVAL_MS) return;
     await checkForUpdates(scripts, { forceReload: false, forceFetch: true });
+  }
+
+  function startUpdateTimer(scripts) {
+    if (updateTimer) window.clearInterval(updateTimer);
+    updateTimer = window.setInterval(() => {
+      maybeCheckForUpdates(scripts).catch((err) => {
+        console.warn(`[${SCRIPT}] background update check failed`, err);
+        setStatus(`Background check failed: ${errorMessage(err)}`);
+      });
+    }, CHECK_INTERVAL_MS);
   }
 
   async function checkForUpdates(scripts, options = {}) {
@@ -206,6 +222,25 @@
 
   function getRole() {
     return normalizeRole(storageGet(STORAGE_KEYS.role, DEFAULT_ROLE));
+  }
+
+  function applyRoleFromUrl() {
+    let url = null;
+    try {
+      url = new URL(location.href);
+    } catch {
+      return;
+    }
+
+    const requestedRole = clean(url.searchParams.get('azUpdaterRole'));
+    if (!requestedRole) return;
+
+    const nextRole = normalizeRole(requestedRole);
+    storageSet(STORAGE_KEYS.role, nextRole);
+    setStatus(`Role set from URL: ${nextRole}`);
+
+    url.searchParams.delete('azUpdaterRole');
+    history.replaceState(history.state, document.title, url.toString());
   }
 
   function normalizeRole(value) {
