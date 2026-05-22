@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Hidden Tag Manager
 // @namespace    local.agencyzoom.hidden-tags.manager
-// @version      0.7
+// @version      0.8
 // @description  Manager tool for selecting AgencyZoom card tags that should be hidden from producer views.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -20,7 +20,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.7';
+  const VERSION = '0.8';
   const SCRIPT = 'AZ Hidden Tag Manager';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_MANAGER_TOKEN = '';
@@ -166,6 +166,7 @@
       </form>
       <div class="tm-az-hidden-tag-status ${lastStatus ? '' : 'tm-az-hidden-tag-muted'}">${escapeHtml(lastStatus || `${hiddenTags.length} selected`)}</div>
       <ul class="tm-az-hidden-tag-list">${rows || '<li class="tm-az-hidden-tag-empty">No tags selected</li>'}</ul>
+      <div class="tm-az-hidden-tag-meta">Current version v${escapeHtml(VERSION)}</div>
     `;
 
   }
@@ -869,10 +870,21 @@
         color: #64748b;
       }
       .tm-az-hidden-tag-list {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow: auto;
         margin: 0;
         padding: 0 10px 10px;
         list-style: none;
+      }
+      .tm-az-hidden-tag-meta {
+        flex: 0 0 auto;
+        padding: 7px 10px;
+        border-top: 1px solid rgba(15, 23, 42, .1);
+        background: #f8fafc;
+        color: #475569;
+        font: 700 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        text-align: right;
       }
       .tm-az-hidden-tag-row,
       .tm-az-hidden-tag-empty {
