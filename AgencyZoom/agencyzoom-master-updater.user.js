@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.10
+// @version      0.11
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -27,7 +27,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.10';
+  const VERSION = '0.11';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
@@ -85,6 +85,7 @@
   let updateTimer = 0;
   let debugEnabled = false;
   let forceCheckRequested = false;
+  let clearCacheRequested = false;
   let latestScriptBaseUrl = '';
 
   boot();
@@ -331,14 +332,20 @@
     const requestedToolMode = clean(url.searchParams.get('azUpdaterTools'));
     const requestedDebug = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterDebug')).toLowerCase());
     forceCheckRequested = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterForce')).toLowerCase());
+    clearCacheRequested = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterClear')).toLowerCase());
 
     if (requestedDebug) {
       try { sessionStorage.setItem(SESSION_DEBUG_ONCE_KEY, '1'); } catch {}
     }
-    if (forceCheckRequested) {
+    if (forceCheckRequested || clearCacheRequested) {
       try { sessionStorage.removeItem(SESSION_RELOAD_KEY); } catch {}
     }
     debugEnabled = requestedDebug || sessionStorage.getItem(SESSION_DEBUG_ONCE_KEY) === '1';
+
+    if (clearCacheRequested) {
+      clearScriptCache();
+      setStatus('Script cache cleared from URL.');
+    }
 
     if (requestedRole) {
       const nextRole = normalizeRole(requestedRole);
@@ -356,7 +363,18 @@
     url.searchParams.delete('azUpdaterTools');
     url.searchParams.delete('azUpdaterDebug');
     url.searchParams.delete('azUpdaterForce');
+    url.searchParams.delete('azUpdaterClear');
     history.replaceState(history.state, document.title, url.toString());
+  }
+
+  function clearScriptCache() {
+    for (const script of SCRIPT_CATALOG) {
+      storageDelete(scriptCacheKey(script.id));
+      storageDelete(scriptVersionKey(script.id));
+    }
+
+    storageDelete(STORAGE_KEYS.lastCheck);
+    latestScriptBaseUrl = '';
   }
 
   function showDebugStatus(prefix) {
@@ -458,6 +476,15 @@
       }
     } catch {}
     try { localStorage.setItem(key, value); } catch {}
+  }
+
+  function storageDelete(key) {
+    try {
+      if (typeof GM_deleteValue === 'function') {
+        GM_deleteValue(key);
+      }
+    } catch {}
+    try { localStorage.removeItem(key); } catch {}
   }
 
 })();

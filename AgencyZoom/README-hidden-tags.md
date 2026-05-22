@@ -45,6 +45,8 @@ To test the updater after a GitHub change, open AgencyZoom once with:
 
 This forces the one-time reload guard to reset and shows a one-time status box with the cached script versions. Normal daily use stays silent.
 
+If a PC is stuck on an old cached child script version, add `azUpdaterClear=1` once to delete the updater's local script cache and force a fresh download.
+
 When using the master updater on a PC, keep only `LOCAL AgencyZoom Master Updater` enabled in Tampermonkey. Disable the individual AgencyZoom scripts on that PC, or the old installed copies can run beside the updater and make it look like the updater did not change anything.
 
 Install individual scripts only if you do not want to use the updater:
