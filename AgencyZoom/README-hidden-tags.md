@@ -25,7 +25,7 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 
 ## Tampermonkey Setup
 
-Install only the script each PC actually needs. Tampermonkey will auto-update each installed script from its own `@updateURL`, so the scripts still update from the repo without a master runner.
+Install only the script each PC actually needs. Each installed script has its own Tampermonkey updater through its own `@updateURL` and `@downloadURL`, so updates happen per script without a master runner.
 
 - Managers install Hidden Tag Manager:
   `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-hidden-tag-manager.user.js`
@@ -46,6 +46,13 @@ Migration from the master updater:
 4. Leave unrelated AgencyZoom scripts disabled unless that PC actually uses them.
 
 `master-uploader.ps1` is still useful in the repo. It is the local publishing tool that bumps versions, checks update URLs, commits, and pushes AgencyZoom scripts to GitHub.
+
+Per-script update model:
+
+- Updating Hidden Tag Manager only updates PCs that installed Hidden Tag Manager.
+- Updating Producer Hide Tags only updates PCs that installed Producer Hide Tags.
+- No script downloads or runs another script.
+- The browser relies on Tampermonkey's normal update check for each installed script.
 
 In AgencyZoom, use the Tampermonkey menu:
 
