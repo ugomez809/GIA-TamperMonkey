@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.11
+// @version      0.12
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -27,7 +27,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.11';
+  const VERSION = '0.12';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
@@ -35,7 +35,9 @@
   const RELOAD_DELAY_MS = 2000;
   const DEFAULT_ROLE = 'producer';
   const DEFAULT_TOOL_MODE = 'core';
+  const DEFAULT_ENABLED = false;
   const STORAGE_KEYS = {
+    enabled: 'tmAzMasterUpdaterEnabled',
     role: 'tmAzMasterUpdaterRole',
     toolMode: 'tmAzMasterUpdaterToolMode',
     lastCheck: 'tmAzMasterUpdaterLastCheck',
@@ -95,6 +97,12 @@
     booted = true;
 
     applyOptionsFromUrl();
+
+    if (!isUpdaterEnabled()) {
+      setStatus('Safe mode: child scripts are disabled.');
+      if (debugEnabled) showDebugStatus('Safe mode enabled.');
+      return;
+    }
 
     const role = getRole();
     const scripts = getScriptsForRole(role);
@@ -320,6 +328,11 @@
     return mode === 'all' ? 'all' : 'core';
   }
 
+  function isUpdaterEnabled() {
+    const value = clean(storageGet(STORAGE_KEYS.enabled, DEFAULT_ENABLED ? '1' : '0')).toLowerCase();
+    return ['1', 'true', 'yes', 'on'].includes(value);
+  }
+
   function applyOptionsFromUrl() {
     let url = null;
     try {
@@ -330,6 +343,8 @@
 
     const requestedRole = clean(url.searchParams.get('azUpdaterRole'));
     const requestedToolMode = clean(url.searchParams.get('azUpdaterTools'));
+    const requestedEnabled = clean(url.searchParams.get('azUpdaterEnabled'));
+    const requestedOff = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterOff')).toLowerCase());
     const requestedDebug = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterDebug')).toLowerCase());
     forceCheckRequested = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterForce')).toLowerCase());
     clearCacheRequested = ['1', 'true', 'yes'].includes(clean(url.searchParams.get('azUpdaterClear')).toLowerCase());
@@ -341,6 +356,15 @@
       try { sessionStorage.removeItem(SESSION_RELOAD_KEY); } catch {}
     }
     debugEnabled = requestedDebug || sessionStorage.getItem(SESSION_DEBUG_ONCE_KEY) === '1';
+
+    if (requestedOff) {
+      storageSet(STORAGE_KEYS.enabled, '0');
+      setStatus('Updater disabled from URL.');
+    } else if (requestedEnabled) {
+      const enabled = ['1', 'true', 'yes', 'on'].includes(requestedEnabled.toLowerCase());
+      storageSet(STORAGE_KEYS.enabled, enabled ? '1' : '0');
+      setStatus(`Updater ${enabled ? 'enabled' : 'disabled'} from URL.`);
+    }
 
     if (clearCacheRequested) {
       clearScriptCache();
@@ -361,6 +385,8 @@
 
     url.searchParams.delete('azUpdaterRole');
     url.searchParams.delete('azUpdaterTools');
+    url.searchParams.delete('azUpdaterEnabled');
+    url.searchParams.delete('azUpdaterOff');
     url.searchParams.delete('azUpdaterDebug');
     url.searchParams.delete('azUpdaterForce');
     url.searchParams.delete('azUpdaterClear');
@@ -383,6 +409,7 @@
     const lines = [
       `${prefix}`,
       `Updater: v${VERSION}`,
+      `Enabled: ${isUpdaterEnabled() ? 'yes' : 'no'}`,
       `Role: ${role}`,
       `Tools: ${getToolMode()}`,
       `Checked: ${formatTimestamp(storageGet(STORAGE_KEYS.lastCheck, ''))}`,
