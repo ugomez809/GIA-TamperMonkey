@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call Updater
 // @namespace    local.agencyzoom.pipeline-click-to-call.updater
-// @version      0.1
+// @version      0.2
 // @description  Loads and auto-updates only the AgencyZoom Pipeline Click-to-Call script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -23,7 +23,7 @@
   const TARGET_LABEL = 'Pipeline Click-to-Call';
   const TARGET_FILE = 'agencyzoom-phone-click-to-call.user.js';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
-  const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+  const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;
   const CACHE_KEY = `tmAzPerScriptUpdater:${TARGET_ID}:code`;
   const VERSION_KEY = `tmAzPerScriptUpdater:${TARGET_ID}:version`;

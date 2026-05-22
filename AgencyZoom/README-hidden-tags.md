@@ -57,7 +57,7 @@ Per-script update model:
 - Updating Hidden Tag Manager only updates PCs that installed Hidden Tag Manager Updater.
 - Updating Producer Hide Tags only updates PCs that installed Producer Hide Tags Updater.
 - Each updater downloads and runs only one target script.
-- Each updater checks GitHub every 5 minutes while AgencyZoom is open, caches the newest target script, and reloads once when it finds a change.
+- Each updater checks GitHub every 30 seconds while AgencyZoom is open, caches the newest target script, and reloads once when it finds a change.
 
 In AgencyZoom, use the Tampermonkey menu:
 
