@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Hidden Tag Manager
 // @namespace    local.agencyzoom.hidden-tags.manager
-// @version      0.9
+// @version      1.0
 // @description  Manager tool for selecting AgencyZoom card tags that should be hidden from producer views.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -20,7 +20,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.9';
+  const VERSION = '1.0';
   const SCRIPT = 'AZ Hidden Tag Manager';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_MANAGER_TOKEN = '';
@@ -123,6 +123,8 @@
       ensureVersionBadge();
       scheduleCandidateScan(0);
     }, 2500);
+    window.addEventListener('scroll', lockPanelToViewport, { capture: true, passive: true });
+    window.addEventListener('resize', lockPanelToViewport, { passive: true });
   }
 
   function scheduleCandidateScan(delay) {
@@ -142,7 +144,8 @@
     panel.dataset.tmAzHiddenTagManagerVersion = VERSION;
     panel.addEventListener('click', handlePanelClick);
     panel.addEventListener('submit', handlePanelSubmit);
-    document.body.appendChild(panel);
+    (document.documentElement || document.body).appendChild(panel);
+    lockPanelToViewport();
     ensureVersionBadge();
   }
 
@@ -177,13 +180,29 @@
       <ul class="tm-az-hidden-tag-list">${rows || '<li class="tm-az-hidden-tag-empty">No tags selected</li>'}</ul>
     `;
     panel.dataset.tmAzHiddenTagManagerVersion = VERSION;
+    lockPanelToViewport();
     ensureVersionBadge();
 
+  }
+
+  function lockPanelToViewport() {
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) return;
+
+    panel.style.setProperty('position', 'fixed', 'important');
+    panel.style.setProperty('right', '18px', 'important');
+    panel.style.setProperty('bottom', '18px', 'important');
+    panel.style.setProperty('left', 'auto', 'important');
+    panel.style.setProperty('top', 'auto', 'important');
+    panel.style.setProperty('transform', 'none', 'important');
+    panel.style.setProperty('z-index', '2147483647', 'important');
   }
 
   function ensureVersionBadge() {
     const panel = document.getElementById(PANEL_ID);
     if (!panel) return;
+
+    lockPanelToViewport();
 
     for (const legacy of Array.from(panel.querySelectorAll(`.tm-az-hidden-tag-meta:not(#${VERSION_BADGE_ID})`))) {
       legacy.remove();
@@ -800,10 +819,13 @@
 
     style.textContent = `
       .tm-az-hidden-tag-panel {
-        position: fixed;
-        right: 18px;
-        bottom: 18px;
-        z-index: 2147483647;
+        position: fixed !important;
+        right: 18px !important;
+        bottom: 18px !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
+        z-index: 2147483647 !important;
         box-sizing: border-box;
         width: 310px;
         max-width: calc(100vw - 24px);
