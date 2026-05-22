@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Hidden Tag Manager
 // @namespace    local.agencyzoom.hidden-tags.manager
-// @version      0.8
+// @version      0.9
 // @description  Manager tool for selecting AgencyZoom card tags that should be hidden from producer views.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -20,13 +20,14 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.8';
+  const VERSION = '0.9';
   const SCRIPT = 'AZ Hidden Tag Manager';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_MANAGER_TOKEN = '';
   const DEFAULT_READ_TOKEN = '';
   const STYLE_ID = 'tm-az-hidden-tag-manager-style';
   const PANEL_ID = 'tm-az-hidden-tag-manager-panel';
+  const VERSION_BADGE_ID = 'tm-az-hidden-tag-manager-version';
   const PICKING_CLASS = 'tm-az-tag-picking-active';
   const CANDIDATE_CLASS = 'tm-az-tag-pick-candidate';
   const SELECTED_CLASS = 'tm-az-tag-pick-selected';
@@ -113,9 +114,15 @@
 
   function startObserver() {
     if (observer) observer.disconnect();
-    observer = new MutationObserver(() => scheduleCandidateScan(150));
+    observer = new MutationObserver(() => {
+      ensureVersionBadge();
+      scheduleCandidateScan(150);
+    });
     observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
-    window.setInterval(() => scheduleCandidateScan(0), 2500);
+    window.setInterval(() => {
+      ensureVersionBadge();
+      scheduleCandidateScan(0);
+    }, 2500);
   }
 
   function scheduleCandidateScan(delay) {
@@ -132,9 +139,11 @@
     panel.id = PANEL_ID;
     panel.className = 'tm-az-hidden-tag-panel';
     panel.setAttribute('aria-label', 'AgencyZoom hidden tag manager');
+    panel.dataset.tmAzHiddenTagManagerVersion = VERSION;
     panel.addEventListener('click', handlePanelClick);
     panel.addEventListener('submit', handlePanelSubmit);
     document.body.appendChild(panel);
+    ensureVersionBadge();
   }
 
   function renderPanel() {
@@ -166,9 +175,30 @@
       </form>
       <div class="tm-az-hidden-tag-status ${lastStatus ? '' : 'tm-az-hidden-tag-muted'}">${escapeHtml(lastStatus || `${hiddenTags.length} selected`)}</div>
       <ul class="tm-az-hidden-tag-list">${rows || '<li class="tm-az-hidden-tag-empty">No tags selected</li>'}</ul>
-      <div class="tm-az-hidden-tag-meta">Current version v${escapeHtml(VERSION)}</div>
     `;
+    panel.dataset.tmAzHiddenTagManagerVersion = VERSION;
+    ensureVersionBadge();
 
+  }
+
+  function ensureVersionBadge() {
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) return;
+
+    for (const legacy of Array.from(panel.querySelectorAll(`.tm-az-hidden-tag-meta:not(#${VERSION_BADGE_ID})`))) {
+      legacy.remove();
+    }
+
+    let badge = document.getElementById(VERSION_BADGE_ID);
+    if (!badge || badge.parentElement !== panel) {
+      if (badge) badge.remove();
+      badge = document.createElement('div');
+      badge.id = VERSION_BADGE_ID;
+      badge.className = 'tm-az-hidden-tag-meta';
+      panel.appendChild(badge);
+    }
+
+    badge.textContent = `Current version v${VERSION}`;
   }
 
   function handlePanelClick(event) {
@@ -761,9 +791,13 @@
   }
 
   function injectStyle() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
+    let style = document.getElementById(STYLE_ID);
+    if (!style) {
+      style = document.createElement('style');
+      style.id = STYLE_ID;
+      document.head.appendChild(style);
+    }
+
     style.textContent = `
       .tm-az-hidden-tag-panel {
         position: fixed;
@@ -916,7 +950,6 @@
         box-shadow: 0 0 0 3px rgba(254, 202, 202, .72) !important;
       }
     `;
-    document.head.appendChild(style);
   }
 
   console.debug(`[${SCRIPT}] loaded v${VERSION}`);
