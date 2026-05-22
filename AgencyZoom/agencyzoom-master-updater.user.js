@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.7
+// @version      0.8
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -12,6 +12,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_setClipboard
 // @grant        unsafeWindow
+// @connect      api.github.com
 // @connect      raw.githubusercontent.com
 // @connect      api.openai.com
 // @connect      docs.google.com
@@ -26,9 +27,10 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.7';
+  const VERSION = '0.8';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
+  const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 60 * 1000;
   const RELOAD_DELAY_MS = 900;
   const DEFAULT_ROLE = 'producer';
@@ -70,6 +72,7 @@
   let updateTimer = 0;
   let debugEnabled = false;
   let forceCheckRequested = false;
+  let latestScriptBaseUrl = '';
 
   boot();
 
@@ -102,6 +105,8 @@
   }
 
   async function loadScripts(scripts) {
+    let remoteBaseUrl = '';
+
     for (const script of scripts) {
       try {
         const cached = storageGet(scriptCacheKey(script.id), '');
@@ -110,7 +115,8 @@
           continue;
         }
 
-        const remote = await fetchScript(script);
+        if (!remoteBaseUrl) remoteBaseUrl = await getScriptBaseUrl();
+        const remote = await fetchScript(script, remoteBaseUrl);
         storageSet(scriptCacheKey(script.id), remote);
         storageSet(scriptVersionKey(script.id), extractVersion(remote));
         executeScript(script, remote, 'remote');
@@ -135,10 +141,11 @@
 
   async function checkForUpdates(scripts) {
     const changed = [];
+    const remoteBaseUrl = await getScriptBaseUrl({ force: true });
 
     for (const script of scripts) {
       try {
-        const remote = await fetchScript(script);
+        const remote = await fetchScript(script, remoteBaseUrl);
         const cached = storageGet(scriptCacheKey(script.id), '');
         if (!sameCode(remote, cached)) {
           storageSet(scriptCacheKey(script.id), remote);
@@ -165,7 +172,7 @@
 
   function executeScript(script, code, source) {
     try {
-      const sourceUrl = `${BASE_URL}/${script.file}`;
+      const sourceUrl = `${latestScriptBaseUrl || BASE_URL}/${script.file}`;
       console.info(`[${SCRIPT}] Running ${script.label} from ${source}.`);
       const GM_registerMenuCommand = function () { return null; };
       eval(`${code}\n//# sourceURL=${sourceUrl}`);
@@ -175,9 +182,9 @@
     }
   }
 
-  function fetchScript(script) {
+  function fetchScript(script, baseUrl) {
     return new Promise((resolve, reject) => {
-      const url = `${BASE_URL}/${script.file}?tmAzUpdater=${Date.now()}`;
+      const url = `${baseUrl || BASE_URL}/${script.file}?tmAzUpdater=${Date.now()}`;
       GM_xmlhttpRequest({
         method: 'GET',
         url,
@@ -196,6 +203,49 @@
         },
         onerror: () => reject(new Error(`${script.label} network request failed`)),
         ontimeout: () => reject(new Error(`${script.label} request timed out`))
+      });
+    });
+  }
+
+  async function getScriptBaseUrl(options = {}) {
+    if (latestScriptBaseUrl && !options.force) return latestScriptBaseUrl;
+
+    try {
+      const sha = await fetchLatestCommitSha();
+      latestScriptBaseUrl = `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/${sha}/AgencyZoom`;
+      return latestScriptBaseUrl;
+    } catch (err) {
+      console.warn(`[${SCRIPT}] Could not resolve latest commit; using branch URL`, err);
+      latestScriptBaseUrl = BASE_URL;
+      return latestScriptBaseUrl;
+    }
+  }
+
+  function fetchLatestCommitSha() {
+    return new Promise((resolve, reject) => {
+      const url = `${COMMIT_API_URL}?tmAzUpdater=${Date.now()}`;
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url,
+        headers: { Accept: 'application/vnd.github+json' },
+        timeout: 20000,
+        onload: (response) => {
+          if (response.status < 200 || response.status >= 300) {
+            reject(new Error(`GitHub commit lookup returned HTTP ${response.status}`));
+            return;
+          }
+
+          const data = parseJson(response.responseText);
+          const sha = clean(data && data.sha);
+          if (!/^[a-f0-9]{40}$/i.test(sha)) {
+            reject(new Error('GitHub commit lookup did not return a valid SHA'));
+            return;
+          }
+
+          resolve(sha);
+        },
+        onerror: () => reject(new Error('GitHub commit lookup network request failed')),
+        ontimeout: () => reject(new Error('GitHub commit lookup timed out'))
       });
     });
   }
@@ -319,6 +369,14 @@
 
   function clean(value) {
     return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+  }
+
+  function parseJson(text) {
+    try {
+      return JSON.parse(String(text || '').trim());
+    } catch {
+      return null;
+    }
   }
 
   function errorMessage(err) {
