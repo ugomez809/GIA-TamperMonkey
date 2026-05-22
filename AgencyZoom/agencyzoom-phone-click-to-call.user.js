@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.6
+// @version      2.7${3}
 // @description  Adds small AgencyZoom-style action icons under each pipeline card producer area. Phone click-to-call works; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.6';
+  const VERSION = '2.7';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const CARD_SELECTOR = '.dd-card.referral-container[data-id]';

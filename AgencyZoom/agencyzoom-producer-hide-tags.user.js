@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Producer Hide Tags
 // @namespace    local.agencyzoom.hidden-tags.producer
-// @version      0.6
+// @version      0.7
 // @description  Hides manager-selected AgencyZoom card tags from producer views, syncing the hidden list at most once per day.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.6';
+  const VERSION = '0.7';
   const SCRIPT = 'AZ Producer Hide Tags';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_READ_TOKEN = '';
