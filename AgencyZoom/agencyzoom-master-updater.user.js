@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Master Updater
 // @namespace    local.agencyzoom.master-updater
-// @version      0.2
+// @version      0.3
 // @description  Checks GitHub for AgencyZoom script updates, caches the newest scripts, and runs the latest versions.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -10,7 +10,6 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
-// @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
@@ -27,7 +26,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.2';
+  const VERSION = '0.3';
   const SCRIPT = 'AZ Master Updater';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom';
   const CHECK_INTERVAL_MS = 5 * 60 * 1000;
@@ -75,8 +74,6 @@
     if (booted || !isAgencyZoom()) return;
     booted = true;
 
-    registerMenuCommands();
-
     const role = getRole();
     const scripts = getScriptsForRole(role);
     if (!scripts.length) {
@@ -94,18 +91,6 @@
 
   function isAgencyZoom() {
     return /(^|\.)app\.agencyzoom\.com$/i.test(String(location.hostname || ''));
-  }
-
-  function registerMenuCommands() {
-    if (typeof GM_registerMenuCommand !== 'function') return;
-
-    GM_registerMenuCommand('AZ Updater: Force update and reload', () => {
-      checkForUpdates(getScriptsForRole(getRole()), { forceReload: true, forceFetch: true })
-        .catch((err) => alert(`AgencyZoom updater failed: ${errorMessage(err)}`));
-    });
-    GM_registerMenuCommand('AZ Updater: Set role', promptRole);
-    GM_registerMenuCommand('AZ Updater: Show status', showStatus);
-    GM_registerMenuCommand('AZ Updater: Clear script cache', clearScriptCache);
   }
 
   async function loadScripts(scripts) {
@@ -169,6 +154,7 @@
     try {
       const sourceUrl = `${BASE_URL}/${script.file}`;
       console.info(`[${SCRIPT}] Running ${script.label} from ${source}.`);
+      const GM_registerMenuCommand = function () { return null; };
       eval(`${code}\n//# sourceURL=${sourceUrl}`);
     } catch (err) {
       console.error(`[${SCRIPT}] ${script.label} failed`, err);
@@ -211,46 +197,6 @@
     sessionStorage.setItem(SESSION_RELOAD_KEY, signature);
     setStatus('AgencyZoom scripts updated. Reloading once...');
     window.setTimeout(() => location.reload(), RELOAD_DELAY_MS);
-  }
-
-  function promptRole() {
-    const current = getRole();
-    const value = prompt('AgencyZoom updater role: producer, manager, or all', current);
-    if (value == null) return;
-
-    const next = normalizeRole(value);
-    storageSet(STORAGE_KEYS.role, next);
-    alert(`AgencyZoom updater role set to "${next}". The page will reload.`);
-    location.reload();
-  }
-
-  function showStatus() {
-    const role = getRole();
-    const scripts = getScriptsForRole(role);
-    const lines = [
-      `AgencyZoom Master Updater ${VERSION}`,
-      `Role: ${role}`,
-      `Last check: ${formatTimestamp(storageGet(STORAGE_KEYS.lastCheck, ''))}`,
-      `Last status: ${storageGet(STORAGE_KEYS.lastStatus, 'none')}`,
-      '',
-      'Loaded scripts:'
-    ];
-
-    for (const script of scripts) {
-      lines.push(`- ${script.label}: ${storageGet(scriptVersionKey(script.id), 'not cached')}`);
-    }
-
-    alert(lines.join('\n'));
-  }
-
-  function clearScriptCache() {
-    for (const script of SCRIPT_CATALOG) {
-      storageDelete(scriptCacheKey(script.id));
-      storageDelete(scriptVersionKey(script.id));
-    }
-    storageDelete(STORAGE_KEYS.lastCheck);
-    alert('AgencyZoom updater cache cleared. The page will reload and fetch fresh scripts.');
-    location.reload();
   }
 
   function getScriptsForRole(role) {
@@ -296,11 +242,6 @@
     console.info(`[${SCRIPT}] ${status}`);
   }
 
-  function formatTimestamp(value) {
-    const ms = Number(value) || 0;
-    return ms ? new Date(ms).toLocaleString() : 'never';
-  }
-
   function clean(value) {
     return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
   }
@@ -329,13 +270,4 @@
     try { localStorage.setItem(key, value); } catch {}
   }
 
-  function storageDelete(key) {
-    try {
-      if (typeof GM_deleteValue === 'function') {
-        GM_deleteValue(key);
-        return;
-      }
-    } catch {}
-    try { localStorage.removeItem(key); } catch {}
-  }
 })();
