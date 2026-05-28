@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PDF Webhook Settings</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="options">
+    <main class="settings-shell">
+      <header class="settings-header">
+        <p class="eyebrow">Extension Settings</p>
+        <h1>Browser PDF Webhook Sender</h1>
+      </header>
+
+      <form id="settingsForm" class="settings-form">
+        <section class="settings-section">
+          <h2>Delivery</h2>
+          <label>
+            <span>Send target</span>
+            <select id="deliveryMode" name="deliveryMode">
+              <option value="webApp">Quote-to-Email web app</option>
+              <option value="webhook">Webhook only</option>
+              <option value="both">Quote-to-Email and webhook</option>
+            </select>
+          </label>
+          <p class="hint">Quote-to-Email opens https://quote-to-email.giatools.com/dashboard and hands the PDF to the logged-in dashboard.</p>
+        </section>
+
+        <section class="settings-section">
+          <h2>Webhook</h2>
+          <label>
+            <span>Webhook URL</span>
+            <input id="webhookUrl" name="webhookUrl" type="url" placeholder="https://example.com/webhook">
+          </label>
+          <label>
+            <span>Send mode</span>
+            <select id="sendMode" name="sendMode">
+              <option value="multipart">Multipart PDF upload</option>
+              <option value="rawPdf">Raw PDF body</option>
+              <option value="jsonBase64">JSON with base64 PDF</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="settings-section">
+          <h2>Remote Admin Config</h2>
+          <label>
+            <span>Config URL</span>
+            <input id="remoteConfigUrl" name="remoteConfigUrl" type="url" placeholder="https://example.com/pdf-extension-config.json">
+          </label>
+          <label>
+            <span>Bearer token</span>
+            <input id="remoteAuthToken" name="remoteAuthToken" type="password" autocomplete="off">
+          </label>
+          <p class="hint">Remote config can provide deliveryMode, webhookUrl, sendMode, and enabled fields.</p>
+        </section>
+
+        <p id="statusMessage" class="message"></p>
+
+        <div class="settings-actions">
+          <button class="primary" type="submit">Save</button>
+          <button id="syncButton" class="secondary" type="button">Sync remote</button>
+        </div>
+      </form>
+
+      <section class="settings-section">
+        <h2>Diagnostics</h2>
+        <p class="hint">Use this after testing Aegis or GWPC if the badge does not show PDF or the send fails.</p>
+        <div class="settings-actions">
+          <button id="refreshDiagnosticsButton" class="secondary" type="button">Refresh diagnostics</button>
+          <button id="copyDiagnosticsButton" class="secondary" type="button">Copy diagnostics</button>
+        </div>
+        <pre id="diagnosticsLog" class="diagnostics-log diagnostics-log-large">No events loaded.</pre>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

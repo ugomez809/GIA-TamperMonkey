@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PDF Webhook Sender</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="popup">
+    <main class="surface">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">PDF Webhook</p>
+          <h1>PDF webhook</h1>
+        </div>
+        <span id="pdfStatus" class="status neutral">Checking</span>
+      </header>
+
+      <section class="tab-summary" aria-live="polite">
+        <div class="file-badge" aria-hidden="true">PDF</div>
+        <div class="file-copy">
+          <p id="tabTitle" class="file-title">Checking current tab</p>
+          <p id="tabUrl" class="file-url"></p>
+        </div>
+      </section>
+
+      <p id="message" class="message"></p>
+
+      <section class="latest-pdf" aria-label="Latest PDF">
+        <div class="latest-row">
+          <span>Latest PDF found</span>
+          <strong id="latestFound">No</strong>
+        </div>
+        <div class="latest-grid">
+          <span>Filename</span>
+          <strong id="latestFileName">-</strong>
+          <span>Size</span>
+          <strong id="latestSize">-</strong>
+          <span>Captured</span>
+          <strong id="latestCapturedAt">-</strong>
+          <span>Source mode</span>
+          <strong id="latestSourceMode">-</strong>
+          <span>Source URL</span>
+          <strong id="latestSourceUrl">-</strong>
+        </div>
+      </section>
+
+      <div class="action-stack">
+        <button id="sendLatestButton" class="primary" type="button" disabled>Send Latest PDF</button>
+        <button id="sendCurrentButton" class="secondary" type="button" disabled>Send Current PDF</button>
+        <button id="stopWatchingButton" class="secondary" type="button" disabled>Stop Watching</button>
+        <button id="clearLatestButton" class="secondary" type="button">Clear Latest PDF</button>
+      </div>
+
+      <div class="actions">
+        <button id="settingsButton" class="secondary" type="button">Settings</button>
+        <button id="copyDiagnosticsButton" class="secondary" type="button">Copy Diagnostic Log</button>
+      </div>
+
+      <section class="diagnostics" aria-label="Diagnostic log">
+        <p class="diagnostics-title">Last events</p>
+        <pre id="diagnosticsLog" class="diagnostics-log">No events yet.</pre>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

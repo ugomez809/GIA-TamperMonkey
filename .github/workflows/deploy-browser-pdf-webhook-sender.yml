@@ -1,0 +1,81 @@
+name: Deploy Browser PDF Webhook Sender
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "Extentions/Browser-PDF-Webhook-Sender/**"
+      - ".github/workflows/deploy-browser-pdf-webhook-sender.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate signing key secret
+        shell: pwsh
+        env:
+          EXTENSION_PEM_BASE64: ${{ secrets.BROWSER_PDF_WEBHOOK_EXTENSION_PEM_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:EXTENSION_PEM_BASE64)) {
+            throw "Missing GitHub secret: BROWSER_PDF_WEBHOOK_EXTENSION_PEM_BASE64"
+          }
+
+      - name: Decode signing key
+        shell: pwsh
+        env:
+          EXTENSION_PEM_BASE64: ${{ secrets.BROWSER_PDF_WEBHOOK_EXTENSION_PEM_BASE64 }}
+        run: |
+          $pemPath = Join-Path $env:RUNNER_TEMP "browser-pdf-webhook-sender.pem"
+          [IO.File]::WriteAllBytes($pemPath, [Convert]::FromBase64String($env:EXTENSION_PEM_BASE64))
+          "EXTENSION_PEM_PATH=$pemPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build CRX and GitHub Pages files
+        shell: pwsh
+        env:
+          PAGES_BASE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          .\Extentions\Browser-PDF-Webhook-Sender\deployment\build-pages.ps1 `
+            -ExtensionDir "$PWD\Extentions\Browser-PDF-Webhook-Sender" `
+            -PemPath "$env:EXTENSION_PEM_PATH" `
+            -OutputDir "$PWD\dist-pages" `
+            -PagesBaseUrl "$env:PAGES_BASE_URL"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

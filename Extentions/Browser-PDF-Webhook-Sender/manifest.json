@@ -1,0 +1,89 @@
+{
+  "manifest_version": 3,
+  "name": "Browser PDF Webhook Sender",
+  "description": "Finds original PDFs in the current browser tab and sends them to Quote-to-Email or a configured webhook.",
+  "version": "0.25.0",
+  "minimum_chrome_version": "109",
+  "permissions": [
+    "alarms",
+    "downloads",
+    "scripting",
+    "storage",
+    "tabs",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://quote-to-email.giatools.com/*"
+  ],
+  "action": {
+    "default_title": "Click to send PDF",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "src/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://policycenter.farmersinsurance.com/*",
+        "https://policycenter-2.farmersinsurance.com/*",
+        "https://policycenter-3.farmersinsurance.com/*"
+      ],
+      "js": [
+        "src/gwpc-download-trigger.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "https://prod.aegisinsurance.com/*"
+      ],
+      "js": [
+        "src/aegis-quote-trigger.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://quote-to-email.giatools.com/*"
+      ],
+      "js": [
+        "src/qte-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/gwpc-page-hook.js"
+      ],
+      "matches": [
+        "https://policycenter.farmersinsurance.com/*",
+        "https://policycenter-2.farmersinsurance.com/*",
+        "https://policycenter-3.farmersinsurance.com/*"
+      ]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

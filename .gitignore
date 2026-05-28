@@ -1,0 +1,6 @@
+# Browser extension signing keys and local package artifacts
+*.pem
+*.crx
+*.rar
+*.zip
+dist-pages/
