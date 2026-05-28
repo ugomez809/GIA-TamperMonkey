@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.14
+// @version      2.15
 // @description  Adds AgencyZoom-style action icons to pipeline cards and task modals. Phone click-to-call works; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.14';
+  const VERSION = '2.15';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const CARD_SELECTOR = [
@@ -28,8 +28,10 @@
   const PRODUCER_ANCHOR_SELECTOR = '.badge, span.badge, .cardes-template-item-content, .ctr';
   const ACTION_GROUP_CLASS = 'tm-az-ticket-action-strip';
   const BUTTON_CLASS = 'tm-az-click-call-btn';
-  const TASK_NAME_ROW_CLASS = 'tm-az-task-name-call-row';
-  const TASK_CALL_BUTTON_CLASS = 'tm-az-task-name-call';
+  const TASK_PHONE_ROW_CLASS = 'tm-az-task-phone-call-row';
+  const TASK_CALL_BUTTON_CLASS = 'tm-az-task-phone-call';
+  const LEGACY_TASK_NAME_ROW_CLASS = 'tm-az-task-name-call-row';
+  const LEGACY_TASK_CALL_BUTTON_CLASS = 'tm-az-task-name-call';
   const ATTACHED_ATTR = 'data-tm-az-click-call';
   const TASK_ATTACHED_ATTR = 'data-tm-az-task-click-call-phone';
   const NOTE_SEPARATOR = '--------------------------------';
@@ -111,12 +113,12 @@
     const contactBlocks = Array.from(document.querySelectorAll('#taskContactInfo'));
     for (const contact of contactBlocks) {
       if (!isTaskModalContactBlock(contact)) continue;
+      cleanupLegacyTaskNameCall(contact);
 
-      const name = contact.querySelector('h2.name, .name');
       const phoneLabel = contact.querySelector('.label.phone, .phone');
       const rawPhone = clean(phoneLabel && phoneLabel.textContent);
       const digits = normalizePhone(rawPhone);
-      if (!name || !digits) {
+      if (!phoneLabel || !digits) {
         removeOldTaskCallButtons(contact);
         contact.removeAttribute(TASK_ATTACHED_ATTR);
         continue;
@@ -130,7 +132,7 @@
 
       removeOldTaskCallButtons(contact);
 
-      const row = ensureTaskNameRow(contact, name);
+      const row = ensureTaskPhoneRow(contact, phoneLabel);
       if (!row) continue;
 
       row.appendChild(createTaskCallButton(rawPhone, digits));
@@ -147,16 +149,15 @@
     return /\btask\b/i.test(title);
   }
 
-  function ensureTaskNameRow(contact, name) {
-    const currentRow = name.closest(`.${TASK_NAME_ROW_CLASS}`);
+  function ensureTaskPhoneRow(contact, phoneLabel) {
+    const currentRow = phoneLabel.closest(`.${TASK_PHONE_ROW_CLASS}`);
     if (currentRow && contact.contains(currentRow)) return currentRow;
 
-    const nameLink = name.closest('a');
-    const nodeToMove = nameLink && contact.contains(nameLink) ? nameLink : name;
+    const nodeToMove = phoneLabel;
     if (!nodeToMove || !nodeToMove.parentNode) return null;
 
-    const row = document.createElement('div');
-    row.className = TASK_NAME_ROW_CLASS;
+    const row = document.createElement('span');
+    row.className = TASK_PHONE_ROW_CLASS;
     nodeToMove.parentNode.insertBefore(row, nodeToMove);
     row.appendChild(nodeToMove);
     return row;
@@ -182,8 +183,18 @@
   }
 
   function removeOldTaskCallButtons(contact) {
-    for (const old of Array.from(contact.querySelectorAll(`.${TASK_CALL_BUTTON_CLASS}`))) {
+    for (const old of Array.from(contact.querySelectorAll(`.${TASK_CALL_BUTTON_CLASS},.${LEGACY_TASK_CALL_BUTTON_CLASS}`))) {
       old.remove();
+    }
+  }
+
+  function cleanupLegacyTaskNameCall(contact) {
+    for (const row of Array.from(contact.querySelectorAll(`.${LEGACY_TASK_NAME_ROW_CLASS}`))) {
+      const child = row.firstElementChild;
+      if (child && row.parentNode) {
+        row.parentNode.insertBefore(child, row);
+      }
+      row.remove();
     }
   }
 
@@ -1487,20 +1498,12 @@
         position: relative !important;
         overflow: visible !important;
       }
-      .${TASK_NAME_ROW_CLASS} {
+      .${TASK_PHONE_ROW_CLASS} {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 6px;
         max-width: 100%;
-      }
-      .${TASK_NAME_ROW_CLASS} > a {
-        display: inline-flex;
-        align-items: center;
-        min-width: 0;
-      }
-      .${TASK_NAME_ROW_CLASS} .name {
-        margin-bottom: 0;
       }
       .${BUTTON_CLASS}.${TASK_CALL_BUTTON_CLASS} {
         flex: 0 0 22px;
