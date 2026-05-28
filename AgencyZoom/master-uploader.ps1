@@ -27,15 +27,16 @@ function Test-AgencyZoomUserScriptUrls {
   )
 
   $missing = @()
-  $userScripts = Get-ChildItem -LiteralPath $AgencyZoomPath -File -Filter "*.user.js"
+  $repoRoot = Split-Path -Parent $AgencyZoomPath
+  $userScripts = Get-ChildItem -LiteralPath $AgencyZoomPath -File -Filter "*.user.js" -Recurse
   foreach ($script in $userScripts) {
-    $name = $script.Name
-    $rawUrl = "https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/$name"
+    $repoPath = Convert-ToRepoPath -Root $repoRoot -Path $script.FullName
+    $rawUrl = "https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/$repoPath"
     $content = Get-Content -Raw -LiteralPath $script.FullName
 
     if ($content -notmatch [regex]::Escape("// @updateURL    $rawUrl") -or
         $content -notmatch [regex]::Escape("// @downloadURL  $rawUrl")) {
-      $missing += $name
+      $missing += $repoPath
     }
   }
 
@@ -164,7 +165,7 @@ function Update-ChangedAgencyZoomUserScriptVersions {
     [string]$AgencyZoomPath
   )
 
-  $userScripts = Get-ChildItem -LiteralPath $AgencyZoomPath -File -Filter "*.user.js"
+  $userScripts = Get-ChildItem -LiteralPath $AgencyZoomPath -File -Filter "*.user.js" -Recurse
   foreach ($script in $userScripts) {
     $repoPath = Convert-ToRepoPath -Root $RepoRoot -Path $script.FullName
     $content = Get-Content -Raw -LiteralPath $script.FullName

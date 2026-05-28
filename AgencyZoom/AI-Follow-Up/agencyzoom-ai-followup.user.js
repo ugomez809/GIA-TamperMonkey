@@ -17,8 +17,8 @@
 // @connect      docs.google.com
 // @connect      spreadsheets.google.com
 // @connect      googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup.user.js
 // ==/UserScript==
 
 (function () {

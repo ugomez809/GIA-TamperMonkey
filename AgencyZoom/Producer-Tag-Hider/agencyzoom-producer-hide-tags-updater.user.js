@@ -1,35 +1,31 @@
 // ==UserScript==
-// @name         LOCAL AgencyZoom AI Follow-Up Updater
-// @namespace    local.agencyzoom.ai-followup.updater
+// @name         LOCAL AgencyZoom Producer Hide Tags Updater
+// @namespace    local.agencyzoom.hidden-tags.producer.updater
 // @version      0.3
-// @description  Loads and auto-updates only the AgencyZoom AI Follow-Up script from GitHub.
-// @match        https://app.agencyzoom.com/referral/pipeline*
+// @description  Loads and auto-updates only the AgencyZoom Producer Hide Tags script from GitHub.
+// @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
-// @run-at       document-idle
+// @run-at       document-start
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
 // @grant        GM_registerMenuCommand
-// @grant        GM_setClipboard
-// @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
-// @connect      api.openai.com
-// @connect      docs.google.com
-// @connect      spreadsheets.google.com
-// @connect      googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup-updater.user.js
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
   const LOADER_VERSION = '0.3';
-  const TARGET_ID = 'ai-followup';
-  const TARGET_LABEL = 'AI Follow-Up';
-  const TARGET_FILE = 'agencyzoom-ai-followup.user.js';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
+  const TARGET_ID = 'producer-hide-tags';
+  const TARGET_LABEL = 'Producer Hide Tags';
+  const TARGET_FILE = 'agencyzoom-producer-hide-tags.user.js';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider';
   const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;
   const CACHE_KEY = `tmAzPerScriptUpdater:${TARGET_ID}:code`;
@@ -135,15 +131,15 @@
       return;
     }
 
-    debugEnabled = isTruthy(url.searchParams.get('azUpdaterDebug')) || isTruthy(url.searchParams.get('azAiDebug'));
-    forceRequested = isTruthy(url.searchParams.get('azUpdaterForce')) || isTruthy(url.searchParams.get('azAiForce'));
-    clearRequested = isTruthy(url.searchParams.get('azUpdaterClear')) || isTruthy(url.searchParams.get('azAiClear'));
+    debugEnabled = isTruthy(url.searchParams.get('azUpdaterDebug')) || isTruthy(url.searchParams.get('azProducerTagsDebug'));
+    forceRequested = isTruthy(url.searchParams.get('azUpdaterForce')) || isTruthy(url.searchParams.get('azProducerTagsForce'));
+    clearRequested = isTruthy(url.searchParams.get('azUpdaterClear')) || isTruthy(url.searchParams.get('azProducerTagsClear'));
 
     if (forceRequested || clearRequested) sessionStorage.removeItem(RELOAD_KEY);
 
-    url.searchParams.delete('azAiDebug');
-    url.searchParams.delete('azAiForce');
-    url.searchParams.delete('azAiClear');
+    url.searchParams.delete('azProducerTagsDebug');
+    url.searchParams.delete('azProducerTagsForce');
+    url.searchParams.delete('azProducerTagsClear');
     history.replaceState(history.state, document.title, url.toString());
   }
 

@@ -1,31 +1,28 @@
 // ==UserScript==
-// @name         LOCAL AgencyZoom Producer Hide Tags Updater
-// @namespace    local.agencyzoom.hidden-tags.producer.updater
+// @name         LOCAL AgencyZoom Pipeline Click-to-Call Updater
+// @namespace    local.agencyzoom.pipeline-click-to-call.updater
 // @version      0.3
-// @description  Loads and auto-updates only the AgencyZoom Producer Hide Tags script from GitHub.
+// @description  Loads and auto-updates only the AgencyZoom Pipeline Click-to-Call script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
-// @run-at       document-start
+// @run-at       document-idle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
-// @grant        GM_registerMenuCommand
 // @connect      raw.githubusercontent.com
-// @connect      script.google.com
-// @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
   const LOADER_VERSION = '0.3';
-  const TARGET_ID = 'producer-hide-tags';
-  const TARGET_LABEL = 'Producer Hide Tags';
-  const TARGET_FILE = 'agencyzoom-producer-hide-tags.user.js';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom';
+  const TARGET_ID = 'phone-click-to-call';
+  const TARGET_LABEL = 'Pipeline Click-to-Call';
+  const TARGET_FILE = 'agencyzoom-phone-click-to-call.user.js';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Click-to-Call';
   const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;
   const CACHE_KEY = `tmAzPerScriptUpdater:${TARGET_ID}:code`;
@@ -131,15 +128,15 @@
       return;
     }
 
-    debugEnabled = isTruthy(url.searchParams.get('azUpdaterDebug')) || isTruthy(url.searchParams.get('azProducerTagsDebug'));
-    forceRequested = isTruthy(url.searchParams.get('azUpdaterForce')) || isTruthy(url.searchParams.get('azProducerTagsForce'));
-    clearRequested = isTruthy(url.searchParams.get('azUpdaterClear')) || isTruthy(url.searchParams.get('azProducerTagsClear'));
+    debugEnabled = isTruthy(url.searchParams.get('azUpdaterDebug')) || isTruthy(url.searchParams.get('azClickToCallDebug'));
+    forceRequested = isTruthy(url.searchParams.get('azUpdaterForce')) || isTruthy(url.searchParams.get('azClickToCallForce'));
+    clearRequested = isTruthy(url.searchParams.get('azUpdaterClear')) || isTruthy(url.searchParams.get('azClickToCallClear'));
 
     if (forceRequested || clearRequested) sessionStorage.removeItem(RELOAD_KEY);
 
-    url.searchParams.delete('azProducerTagsDebug');
-    url.searchParams.delete('azProducerTagsForce');
-    url.searchParams.delete('azProducerTagsClear');
+    url.searchParams.delete('azClickToCallDebug');
+    url.searchParams.delete('azClickToCallForce');
+    url.searchParams.delete('azClickToCallClear');
     history.replaceState(history.state, document.title, url.toString());
   }
 

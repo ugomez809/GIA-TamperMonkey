@@ -2,15 +2,13 @@
 
 This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 
-## Files
+## Folders
 
-- `agencyzoom-hidden-tag-manager.user.js`: manager Tampermonkey script for selecting tags.
-- `agencyzoom-producer-hide-tags.user.js`: producer Tampermonkey script that hides selected tags.
-- `agencyzoom-hidden-tag-manager-updater.user.js`: per-script updater that loads only the manager script.
-- `agencyzoom-producer-hide-tags-updater.user.js`: per-script updater that loads only the producer script.
-- `agencyzoom-phone-click-to-call-updater.user.js`: per-script updater that loads only Click-to-Call.
-- `agencyzoom-ai-followup-updater.user.js`: per-script updater that loads only AI Follow-Up.
-- `google-apps-script/agencyzoom-hidden-tags.gs`: Google Apps Script backend for the Google Sheet.
+- `Hidden-Tag-Manager/`: manager Tampermonkey script and updater for selecting tags.
+- `Producer-Tag-Hider/`: producer Tampermonkey script and updater that hides selected tags.
+- `Click-to-Call/`: click-to-call, SMS, email, and note helper script and updater.
+- `AI-Follow-Up/`: AI follow-up composer script and updater.
+- `google-apps-script/`: Google Apps Script backend for the Google Sheet.
 
 ## Google Sheet Setup
 
@@ -32,15 +30,15 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 Install only the updater for the script each PC actually needs. Each updater is a tiny Tampermonkey script that fetches, caches, and runs one target script from GitHub. This does not depend on Tampermonkey's native update timing for normal script changes.
 
 - Managers install Hidden Tag Manager Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-hidden-tag-manager-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js`
 - Producers install Producer Hide Tags Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-producer-hide-tags-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js`
 - Optional helper, Click-to-Call Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-phone-click-to-call-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js`
 - Optional helper, AI Follow-Up Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/agencyzoom-ai-followup-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js`
 
-Do not install or enable `LOCAL AgencyZoom Master Updater` on office PCs. It is retired and kept only as a no-op safety stub for any browser that already has it installed.
+Do not install or enable `LOCAL AgencyZoom Master Updater` on office PCs. It is retired and removed from this folder.
 
 Migration from the master updater:
 
@@ -50,7 +48,7 @@ Migration from the master updater:
 4. Refresh AgencyZoom.
 5. Leave unrelated AgencyZoom scripts disabled unless that PC actually uses them.
 
-`master-uploader.ps1` is still useful in the repo. It is the local publishing tool that bumps versions, checks update URLs, commits, and pushes AgencyZoom scripts to GitHub.
+`master-uploader.ps1` is still useful in the repo. It is the local publishing tool that bumps versions, checks update URLs in the subfolders, commits, and pushes AgencyZoom scripts to GitHub.
 
 Per-script update model:
 
