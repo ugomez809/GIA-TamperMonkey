@@ -34,7 +34,7 @@ Install only the updater for the script each PC actually needs. Each updater is 
 - Producers install Producer Hide Tags Updater:
   `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js`
 - Optional helper, Click-to-Call Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js`
 - Optional helper, AI Follow-Up Updater:
   `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js`
 

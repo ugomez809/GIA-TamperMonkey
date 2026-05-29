@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call Updater
 // @namespace    local.agencyzoom.pipeline-click-to-call.updater
-// @version      0.4
+// @version      0.5
 // @description  Loads and auto-updates only the AgencyZoom Pipeline Click-to-Call script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -11,18 +11,18 @@
 // @grant        GM_setValue
 // @grant        GM_deleteValue
 // @connect      raw.githubusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.4';
+  const LOADER_VERSION = '0.5';
   const TARGET_ID = 'phone-click-to-call';
   const TARGET_LABEL = 'Pipeline Click-to-Call';
   const TARGET_FILE = 'agencyzoom-phone-click-to-call.user.js';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call';
   const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;
   const CACHE_KEY = `tmAzPerScriptUpdater:${TARGET_ID}:code`;
