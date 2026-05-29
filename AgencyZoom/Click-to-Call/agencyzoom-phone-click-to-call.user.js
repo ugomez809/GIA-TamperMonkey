@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.16
-// @description  Adds AgencyZoom-style action icons to pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
+// @version      2.17
+// @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-idle
@@ -14,9 +14,10 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.16';
+  const VERSION = '2.17';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
+  const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
   const CARD_SELECTOR = [
     '.dd-card.referral-container[data-id]',
     '.dd-card.service-container[data-id]',
@@ -63,6 +64,11 @@
 
   function isAgencyZoom() {
     return /(^|\.)app\.agencyzoom\.com$/i.test(String(location.hostname || ''));
+  }
+
+  function isServicePipelinePage() {
+    const path = String(location.pathname || '').replace(/\/+$/, '') || '/';
+    return path === SERVICE_PIPELINE_PATH || path.startsWith(`${SERVICE_PIPELINE_PATH}/`);
   }
 
   function startObserver() {
@@ -159,6 +165,11 @@
   }
 
   function attachButtons() {
+    if (isServicePipelinePage()) {
+      removeManagedActionUi();
+      return;
+    }
+
     attachTaskModalCallButtons();
 
     const cards = Array.from(document.querySelectorAll(CARD_SELECTOR));
@@ -317,6 +328,24 @@
     }
     for (const old of Array.from(card.querySelectorAll(`.${BUTTON_CLASS}`))) {
       old.remove();
+    }
+  }
+
+  function removeManagedActionUi() {
+    for (const card of Array.from(document.querySelectorAll(CARD_SELECTOR))) {
+      removeOldCardButtons(card);
+      if (card.getAttribute(ATTACHED_ATTR)) card.removeAttribute(ATTACHED_ATTR);
+    }
+
+    for (const host of Array.from(document.querySelectorAll(`[${ATTACHED_ATTR}]`))) {
+      host.removeAttribute(ATTACHED_ATTR);
+      host.classList.remove('tm-az-click-call-host');
+    }
+
+    for (const contact of Array.from(document.querySelectorAll('#taskContactInfo'))) {
+      removeOldTaskCallButtons(contact);
+      cleanupLegacyTaskNameCall(contact);
+      contact.removeAttribute(TASK_ATTACHED_ATTR);
     }
   }
 
