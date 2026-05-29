@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.18
+// @version      2.19
 // @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,10 +14,12 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.18';
+  const VERSION = '2.19';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
+  const PENDING_ACTION_KEY = 'tmAzClickToCall.pendingAction.v1';
+  const PENDING_ACTION_TTL_MS = 30000;
   const CARD_SELECTOR = [
     '.dd-card.referral-container[data-id]',
     '.dd-card.service-container[data-id]',
@@ -60,6 +62,7 @@
     installRingCentralDialerHooks();
     scheduleScan(50);
     startObserver();
+    setTimeout(resumePendingAction, 250);
   }
 
   function isAgencyZoom() {
@@ -160,6 +163,57 @@
   function promptForManualPhone() {
     const value = window.prompt('No phone number found. Enter phone manually:');
     return normalizePhone(value);
+  }
+
+  async function resumePendingAction() {
+    const pending = getPendingAction();
+    if (!pending) return;
+
+    const currentTicketId = getCurrentDetailTicketId();
+    if (!currentTicketId || currentTicketId !== pending.ticketId) return;
+
+    clearPendingAction();
+
+    if (pending.kind === 'sms' || pending.kind === 'email') {
+      await openDockComposer(pending.kind);
+      return;
+    }
+
+    if (pending.kind === 'note') {
+      await openOrPreparePinnedNote();
+    }
+  }
+
+  function savePendingAction(kind, ticketId) {
+    if (!kind || !ticketId) return;
+    try {
+      sessionStorage.setItem(PENDING_ACTION_KEY, JSON.stringify({
+        kind,
+        ticketId: String(ticketId),
+        createdAt: Date.now()
+      }));
+    } catch {}
+  }
+
+  function getPendingAction() {
+    let pending = null;
+    try {
+      pending = JSON.parse(sessionStorage.getItem(PENDING_ACTION_KEY) || 'null');
+    } catch {
+      clearPendingAction();
+      return null;
+    }
+
+    if (!pending || !pending.kind || !pending.ticketId || Date.now() - Number(pending.createdAt || 0) > PENDING_ACTION_TTL_MS) {
+      clearPendingAction();
+      return null;
+    }
+
+    return pending;
+  }
+
+  function clearPendingAction() {
+    try { sessionStorage.removeItem(PENDING_ACTION_KEY); } catch {}
   }
 
   function scheduleScan(delay) {
@@ -373,24 +427,29 @@
     const ticketId = clean(btn.dataset.ticketId || closestTicketId(btn));
     if (!card || !ticketId || btn.dataset.busy === '1') return;
 
+    savePendingAction(kind, ticketId);
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', kind === 'sms' ? 'Opening SMS...' : 'Opening email...');
 
     try {
       const opened = await openTicketFromCard(card, ticketId);
       if (!opened) {
+        clearPendingAction();
         flashButton(btn, 'error', 'Could not open ticket');
         return;
       }
 
       const openedComposer = await openDockComposer(kind);
       if (!openedComposer) {
+        clearPendingAction();
         flashButton(btn, 'error', kind === 'sms' ? 'SMS did not open' : 'Email did not open');
         return;
       }
 
+      clearPendingAction();
       flashButton(btn, 'ready', kind === 'sms' ? 'SMS opened' : 'Email opened');
     } catch (err) {
+      clearPendingAction();
       flashButton(btn, 'error', `${kind.toUpperCase()} failed: ${err && err.message ? err.message : String(err)}`);
     } finally {
       delete btn.dataset.busy;
@@ -407,52 +466,22 @@
     const ticketId = clean(btn.dataset.ticketId || closestTicketId(btn));
     if (!card || !ticketId || btn.dataset.busy === '1') return;
 
+    savePendingAction('note', ticketId);
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', 'Opening ticket...');
 
     try {
       const opened = await openTicketFromCard(card, ticketId);
       if (!opened) {
+        clearPendingAction();
         flashButton(btn, 'error', 'Could not open ticket');
         return;
       }
 
-      flashButton(btn, 'loading', 'Finding pinned note...');
-      const note = findFirstPinnedNote() || await waitForPinnedNote(350);
-      if (!note) {
-        flashButton(btn, 'loading', 'Creating pinned note...');
-        const editor = await openNewPinnedNoteEditor(btn);
-        if (!editor) {
-          flashButton(btn, 'error', 'Could not create pinned note');
-          return;
-        }
-        flashButton(btn, 'ready', 'New pinned note ready');
-        return;
-      }
-
-      const edit = note.querySelector('.note-actions a.edit-note, a.edit-note[title="Edit"], a.edit-note');
-      if (!edit) {
-        flashButton(btn, 'error', 'Edit note button not found');
-        return;
-      }
-
-      flashButton(btn, 'loading', 'Opening note editor...');
-      strongClick(edit);
-
-      const editor = await waitForNoteEditor(9000);
-      if (!editor) {
-        flashButton(btn, 'error', 'Note editor not found');
-        return;
-      }
-
-      const stamped = await appendTimestampBlock(editor);
-      if (!stamped) {
-        flashButton(btn, 'error', 'Could not add note divider');
-        return;
-      }
-
-      flashButton(btn, 'ready', 'Note ready for typing');
+      await openOrPreparePinnedNote(btn);
+      clearPendingAction();
     } catch (err) {
+      clearPendingAction();
       flashButton(btn, 'error', `Note failed: ${err && err.message ? err.message : String(err)}`);
     } finally {
       delete btn.dataset.busy;
@@ -514,6 +543,46 @@
 
     flashButton(btn, 'ready', `Calling ${maskPhone(digits)}`);
     callPhone(digits);
+  }
+
+  async function openOrPreparePinnedNote(btn = null) {
+    if (btn) flashButton(btn, 'loading', 'Finding pinned note...');
+
+    const note = findFirstPinnedNote() || await waitForPinnedNote(350);
+    if (!note) {
+      if (btn) flashButton(btn, 'loading', 'Creating pinned note...');
+      const editor = await openNewPinnedNoteEditor(btn);
+      if (!editor) {
+        if (btn) flashButton(btn, 'error', 'Could not create pinned note');
+        return false;
+      }
+      if (btn) flashButton(btn, 'ready', 'New pinned note ready');
+      return true;
+    }
+
+    const edit = note.querySelector('.note-actions a.edit-note, a.edit-note[title="Edit"], a.edit-note');
+    if (!edit) {
+      if (btn) flashButton(btn, 'error', 'Edit note button not found');
+      return false;
+    }
+
+    if (btn) flashButton(btn, 'loading', 'Opening note editor...');
+    strongClick(edit);
+
+    const editor = await waitForNoteEditor(9000);
+    if (!editor) {
+      if (btn) flashButton(btn, 'error', 'Note editor not found');
+      return false;
+    }
+
+    const stamped = await appendTimestampBlock(editor);
+    if (!stamped) {
+      if (btn) flashButton(btn, 'error', 'Could not add note divider');
+      return false;
+    }
+
+    if (btn) flashButton(btn, 'ready', 'Note ready for typing');
+    return true;
   }
 
   async function openTicketFromCard(card, ticketId) {
@@ -621,8 +690,9 @@
       ...Array.from(document.querySelectorAll('.az-dock__side-actions')),
       ...Array.from(document.querySelectorAll('.az-dock__container')),
       ...Array.from(document.querySelectorAll('#serviceDetailDock')),
-      ...Array.from(document.querySelectorAll('.az-dock'))
-    ]).filter((root) => root && isVisible(root));
+      ...Array.from(document.querySelectorAll('.az-dock')),
+      document
+    ]).filter((root) => root === document || (root && isVisible(root)));
   }
 
   function normalizeActionElement(el) {
@@ -1450,6 +1520,18 @@
 
   function closestTicketId(el) {
     return getCardTicketId(closestTicketCard(el));
+  }
+
+  function getCurrentDetailTicketId() {
+    let url = null;
+    try {
+      url = new URL(location.href);
+    } catch {
+      return '';
+    }
+
+    if (!/\/lead\/index$/i.test(url.pathname || '')) return '';
+    return extractTicketId(url.searchParams.get('id') || '');
   }
 
   function getCardTicketId(card) {
