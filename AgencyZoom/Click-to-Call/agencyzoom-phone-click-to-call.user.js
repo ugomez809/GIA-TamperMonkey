@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.22
+// @version      2.23
 // @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.22';
+  const VERSION = '2.23';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
@@ -215,16 +215,6 @@
 
   function clearPendingAction() {
     try { sessionStorage.removeItem(PENDING_ACTION_KEY); } catch {}
-  }
-
-  function navigateToLeadDetail(ticketId) {
-    const id = extractTicketId(ticketId);
-    if (!id) return false;
-
-    const url = new URL(LEAD_DETAIL_PATH, location.origin);
-    url.searchParams.set('id', id);
-    location.assign(url.toString());
-    return true;
   }
 
   function scheduleScan(delay) {
@@ -442,8 +432,6 @@
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', kind === 'sms' ? 'Opening SMS...' : 'Opening email...');
 
-    if (navigateToLeadDetail(ticketId)) return;
-
     try {
       const opened = await openTicketFromCard(card, ticketId);
       if (!opened) {
@@ -482,8 +470,6 @@
     savePendingAction('note', ticketId);
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', 'Opening ticket...');
-
-    if (navigateToLeadDetail(ticketId)) return;
 
     try {
       const opened = await openTicketFromCard(card, ticketId);
@@ -620,25 +606,34 @@
   function findCardOpenTarget(card) {
     if (!card) return null;
 
+    const profileLink = Array.from(card.querySelectorAll('a[href*="/lead/index"]'))
+      .find((el) => isVisible(el) && !el.closest(`.${ACTION_GROUP_CLASS}`));
+    if (profileLink) return card;
+
     const selectors = [
-      'a.customer[rel]',
-      'a.customer',
-      'a[href*="/lead/index"]',
-      'a[href*="/service"]',
-      'a[href*="service"]',
-      'a[rel]',
-      '.cardes-template-item a',
-      '.cardes-template-item-content a',
-      'a'
+      '[data-toggle][data-target]',
+      '[data-target]',
+      '[role="button"]',
+      '[onclick]',
+      'button',
+      '.cardes-template-item-content',
+      '.cardes-template-item'
     ];
 
     for (const selector of selectors) {
       const target = Array.from(card.querySelectorAll(selector))
-        .find((el) => isVisible(el) && !el.closest(`.${ACTION_GROUP_CLASS}`));
+        .find((el) => isVisible(el) && !el.closest(`.${ACTION_GROUP_CLASS}`) && !isProfileLink(el));
       if (target) return target;
     }
 
     return card;
+  }
+
+  function isProfileLink(el) {
+    const link = el?.closest?.('a[href]');
+    if (!link) return false;
+    const href = String(link.getAttribute('href') || '');
+    return /\/lead\/index\b/i.test(href);
   }
 
   async function waitForDockAction(kind, timeoutMs) {
