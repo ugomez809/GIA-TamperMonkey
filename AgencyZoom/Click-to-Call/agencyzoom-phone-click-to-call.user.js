@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.21
+// @version      2.22
 // @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,10 +14,11 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.21';
+  const VERSION = '2.22';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
+  const LEAD_DETAIL_PATH = '/lead/index';
   const PENDING_ACTION_KEY = 'tmAzClickToCall.pendingAction.v1';
   const PENDING_ACTION_TTL_MS = 30000;
   const CARD_SELECTOR = [
@@ -175,7 +176,7 @@
     clearPendingAction();
 
     if (pending.kind === 'sms' || pending.kind === 'email') {
-      await openDockComposer(pending.kind);
+      await openDockComposer(pending.kind, 15000);
       return;
     }
 
@@ -214,6 +215,16 @@
 
   function clearPendingAction() {
     try { sessionStorage.removeItem(PENDING_ACTION_KEY); } catch {}
+  }
+
+  function navigateToLeadDetail(ticketId) {
+    const id = extractTicketId(ticketId);
+    if (!id) return false;
+
+    const url = new URL(LEAD_DETAIL_PATH, location.origin);
+    url.searchParams.set('id', id);
+    location.assign(url.toString());
+    return true;
   }
 
   function scheduleScan(delay) {
@@ -431,6 +442,8 @@
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', kind === 'sms' ? 'Opening SMS...' : 'Opening email...');
 
+    if (navigateToLeadDetail(ticketId)) return;
+
     try {
       const opened = await openTicketFromCard(card, ticketId);
       if (!opened) {
@@ -469,6 +482,8 @@
     savePendingAction('note', ticketId);
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', 'Opening ticket...');
+
+    if (navigateToLeadDetail(ticketId)) return;
 
     try {
       const opened = await openTicketFromCard(card, ticketId);
@@ -547,6 +562,8 @@
 
   async function openOrPreparePinnedNote(btn = null) {
     if (btn) flashButton(btn, 'loading', 'Finding pinned note...');
+
+    await waitFor(() => findFirstPinnedNote() || findNoteOpener(), 10000, 120);
 
     const note = findFirstPinnedNote() || await waitForPinnedNote(350);
     if (!note) {
@@ -628,8 +645,8 @@
     return waitFor(() => findDockAction(kind), timeoutMs, 90);
   }
 
-  async function openDockComposer(kind) {
-    const firstAction = await waitForDockAction(kind, 6000);
+  async function openDockComposer(kind, timeoutMs = 6000) {
+    const firstAction = await waitForDockAction(kind, timeoutMs);
     if (!firstAction) return false;
 
     const tried = new Set();
@@ -883,7 +900,7 @@
   }
 
   async function openNewPinnedNoteEditor(btn = null) {
-    const opener = findNoteOpener();
+    const opener = findNoteOpener() || await waitFor(() => findNoteOpener(), 6000, 120);
     if (!opener) {
       if (btn) flashButton(btn, 'error', 'Note opener not found');
       return null;
@@ -1530,7 +1547,8 @@
       return '';
     }
 
-    if (!/\/lead\/index$/i.test(url.pathname || '')) return '';
+    const path = String(url.pathname || '').replace(/\/+$/, '');
+    if (path !== LEAD_DETAIL_PATH) return '';
     return extractTicketId(url.searchParams.get('id') || '');
   }
 
