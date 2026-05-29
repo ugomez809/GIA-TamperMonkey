@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.15
-// @description  Adds AgencyZoom-style action icons to pipeline cards and task modals. Phone click-to-call works; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
+// @version      2.16
+// @description  Adds AgencyZoom-style action icons to pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-idle
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.15';
+  const VERSION = '2.16';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const CARD_SELECTOR = [
@@ -34,11 +34,13 @@
   const LEGACY_TASK_CALL_BUTTON_CLASS = 'tm-az-task-name-call';
   const ATTACHED_ATTR = 'data-tm-az-click-call';
   const TASK_ATTACHED_ATTR = 'data-tm-az-task-click-call-phone';
+  const NATIVE_DIALER_SELECTOR = '#dockDialer';
   const NOTE_SEPARATOR = '--------------------------------';
   const NOTE_EDITOR_OPEN_DELAY_MS = 800;
   const NOTE_EDITOR_STABLE_MS = 900;
   const NOTE_EDITOR_STABLE_TIMEOUT_MS = 3600;
   const NOTE_INSERT_VERIFY_MS = 650;
+  const DIALER_OVERRIDE_CHECK_MS = 1000;
   const FLASH_RESET_MS = {
     loading: 12000,
     ready: 1800,
@@ -47,12 +49,14 @@
   const phoneCache = new Map();
   let observer = null;
   let scanTimer = 0;
+  let dialerOverrideTimer = 0;
 
   boot();
 
   function boot() {
     if (!isAgencyZoom()) return;
     injectStyle();
+    installRingCentralDialerHooks();
     scheduleScan(50);
     startObserver();
   }
@@ -69,6 +73,84 @@
       subtree: true
     });
     setInterval(() => scheduleScan(0), 2500);
+  }
+
+  function installRingCentralDialerHooks() {
+    document.addEventListener('click', onNativeDialerClick, true);
+    ensureNativeDialerOverride();
+    dialerOverrideTimer = setInterval(ensureNativeDialerOverride, DIALER_OVERRIDE_CHECK_MS);
+  }
+
+  function onNativeDialerClick(event) {
+    const target = event.target && event.target.closest ? event.target.closest(NATIVE_DIALER_SELECTOR) : null;
+    if (!target) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+
+    const found = extractNativeDialerPhone(target);
+    const phone = found.phone || promptForManualPhone();
+    if (phone) callPhone(phone);
+  }
+
+  function ensureNativeDialerOverride() {
+    const dialer = window.Dialer;
+    if (!dialer || typeof dialer.makeCall !== 'function') return false;
+    if (dialer.makeCall.__tmAzRingCentralMakeCall) return true;
+
+    const originalMakeCall = dialer.makeCall.__tmAzOriginalMakeCall || dialer.makeCall;
+    const wrappedMakeCall = function (agentId, linkType, linkId, phoneNumber) {
+      const directPhone = normalizePhone(phoneNumber);
+      const fallbackPhone = directPhone || extractNativeDialerPhone().phone || promptForManualPhone();
+      if (fallbackPhone) callPhone(fallbackPhone);
+      return undefined;
+    };
+
+    wrappedMakeCall.__tmAzRingCentralMakeCall = true;
+    wrappedMakeCall.__tmAzOriginalMakeCall = originalMakeCall;
+    dialer.makeCall = wrappedMakeCall;
+    return true;
+  }
+
+  function extractNativeDialerPhone(dialerEl = null) {
+    const selectorSources = [
+      { selector: '#currentCustomerPhone', source: 'current customer phone' },
+      { selector: '#customerreferral-phone', source: 'customer referral phone' },
+      { selector: '#lc-info-default > div.table-clean > ul > li:nth-child(3) > span:nth-child(2)', source: 'lead profile phone' },
+      { selector: '#lc-info-default > div:nth-child(5) > div', source: 'customer profile phone' }
+    ];
+
+    for (const item of selectorSources) {
+      const value = readValue(document, item.selector);
+      const phone = normalizePhone(value);
+      if (phone) return { phone, source: item.source };
+    }
+
+    const dialerStatePhone = firstPhone(
+      window.Dialer && window.Dialer.to,
+      window.Dialer && window.Dialer.phoneNumber,
+      window.Dialer && window.Dialer.phone,
+      window.Dialer && window.Dialer.number
+    );
+    if (dialerStatePhone) return { phone: normalizePhone(dialerStatePhone), source: 'Dialer state' };
+
+    const dockDialer = dialerEl || document.querySelector(NATIVE_DIALER_SELECTOR);
+    const dockPhone = firstPhone(
+      dockDialer && dockDialer.getAttribute && dockDialer.getAttribute('data-phone'),
+      dockDialer && dockDialer.getAttribute && dockDialer.getAttribute('data-number'),
+      dockDialer && dockDialer.getAttribute && dockDialer.getAttribute('data-to'),
+      dockDialer && dockDialer.getAttribute && dockDialer.getAttribute('href'),
+      dockDialer && dockDialer.textContent
+    );
+    if (dockPhone) return { phone: normalizePhone(dockPhone), source: NATIVE_DIALER_SELECTOR };
+
+    return { phone: '', source: '' };
+  }
+
+  function promptForManualPhone() {
+    const value = window.prompt('No phone number found. Enter phone manually:');
+    return normalizePhone(value);
   }
 
   function scheduleScan(delay) {
@@ -177,7 +259,7 @@
     const label = `Call ${clean(rawPhone) || 'task contact'}`;
     link.dataset.phone = digits;
     link.dataset.label = label;
-    link.href = `tel:+1${digits}`;
+    link.href = buildRingCentralTelUrl(digits);
     link.title = label;
     link.setAttribute('aria-label', label);
   }
@@ -1169,9 +1251,13 @@
     const doc = new DOMParser().parseFromString(raw, 'text/html');
 
     const selectors = [
+      '#currentCustomerPhone',
       '#customerreferral-phone',
       'input[name="CustomerReferral[phone]"]',
       'input[type="tel"]',
+      '#lc-info-default > div.table-clean > ul > li:nth-child(3) > span:nth-child(2)',
+      '#lc-info-default > div:nth-child(5) > div',
+      '#dockDialer',
       '[data-phone]'
     ];
 
@@ -1272,13 +1358,19 @@
     return null;
   }
 
-  function callPhone(phone) {
+  function buildRingCentralTelUrl(phone) {
     const digits = normalizePhone(phone);
-    if (!digits) return;
+    return digits ? `tel://${digits}` : '';
+  }
 
-    const href = `tel:+1${digits}`;
+  function callPhone(phone) {
+    const href = buildRingCentralTelUrl(phone);
+    if (!href) return;
+
     const link = document.createElement('a');
     link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener';
     link.style.position = 'fixed';
     link.style.left = '-9999px';
     link.style.top = '0';
