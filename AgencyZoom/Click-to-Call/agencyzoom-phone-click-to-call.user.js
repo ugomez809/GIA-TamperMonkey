@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.25
+// @version      2.26
 // @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.25';
+  const VERSION = '2.26';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
@@ -106,7 +106,8 @@
   }
 
   function ensureNativeDialerOverride() {
-    const dialer = window.Dialer;
+    const page = getPageWindow();
+    const dialer = page.Dialer;
     if (!dialer || typeof dialer.makeCall !== 'function') return false;
     if (dialer.makeCall.__tmAzRingCentralMakeCall) return true;
 
@@ -141,11 +142,12 @@
       return { phone: normalizePhone(labeledPhone), source: 'lead contact phone label' };
     }
 
+    const pageDialer = getPageWindow().Dialer;
     const dialerStatePhone = firstPhone(
-      window.Dialer && window.Dialer.to,
-      window.Dialer && window.Dialer.phoneNumber,
-      window.Dialer && window.Dialer.phone,
-      window.Dialer && window.Dialer.number
+      pageDialer && pageDialer.to,
+      pageDialer && pageDialer.phoneNumber,
+      pageDialer && pageDialer.phone,
+      pageDialer && pageDialer.number
     );
     if (dialerStatePhone) return { phone: normalizePhone(dialerStatePhone), source: 'Dialer state' };
 
@@ -1149,13 +1151,14 @@
   }
 
   function getQuillInstance(editor) {
+    const page = getPageWindow();
     try {
-      if (window.Quill && typeof window.Quill.find === 'function') {
-        const direct = window.Quill.find(editor);
+      if (page.Quill && typeof page.Quill.find === 'function') {
+        const direct = page.Quill.find(editor);
         if (direct && typeof direct.insertText === 'function') return direct;
 
         const container = editor.closest('.ql-container');
-        const fromContainer = container ? window.Quill.find(container) : null;
+        const fromContainer = container ? page.Quill.find(container) : null;
         if (fromContainer && typeof fromContainer.insertText === 'function') return fromContainer;
       }
     } catch {}
@@ -1206,14 +1209,16 @@
 
   function strongClick(el) {
     if (!el) return;
-    const opts = { bubbles: true, cancelable: true, view: window };
+    const page = getPageWindow();
+    const MouseEventCtor = page.MouseEvent || MouseEvent;
+    const opts = { bubbles: true, cancelable: true, view: page };
     hideAgencyZoomTooltips(el);
-    el.dispatchEvent(new MouseEvent('mouseover', opts));
-    el.dispatchEvent(new MouseEvent('mousedown', opts));
-    el.dispatchEvent(new MouseEvent('mouseup', opts));
-    el.dispatchEvent(new MouseEvent('click', opts));
-    el.dispatchEvent(new MouseEvent('mouseout', opts));
-    el.dispatchEvent(new MouseEvent('mouseleave', opts));
+    el.dispatchEvent(new MouseEventCtor('mouseover', opts));
+    el.dispatchEvent(new MouseEventCtor('mousedown', opts));
+    el.dispatchEvent(new MouseEventCtor('mouseup', opts));
+    el.dispatchEvent(new MouseEventCtor('click', opts));
+    el.dispatchEvent(new MouseEventCtor('mouseout', opts));
+    el.dispatchEvent(new MouseEventCtor('mouseleave', opts));
     hideAgencyZoomTooltips(el);
     setTimeout(() => hideAgencyZoomTooltips(el), 80);
     setTimeout(() => hideAgencyZoomTooltips(el), 350);
@@ -1221,7 +1226,8 @@
 
   function hideAgencyZoomTooltips(sourceEl = null) {
     try {
-      const $ = window.jQuery || window.$;
+      const page = getPageWindow();
+      const $ = page.jQuery || page.$ || window.jQuery || window.$;
       if ($) {
         const targets = [];
         if (sourceEl instanceof Element) targets.push(sourceEl);
@@ -1242,6 +1248,13 @@
     document.querySelectorAll('.tooltipster-base, .tooltipster-sidetip, .tooltipster-box').forEach((el) => {
       try { el.remove(); } catch {}
     });
+  }
+
+  function getPageWindow() {
+    try {
+      if (typeof unsafeWindow !== 'undefined' && unsafeWindow) return unsafeWindow;
+    } catch {}
+    return window;
   }
 
   function waitFor(check, timeoutMs, intervalMs) {

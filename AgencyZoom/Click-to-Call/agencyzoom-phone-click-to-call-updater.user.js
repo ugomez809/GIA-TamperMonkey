@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call Updater
 // @namespace    local.agencyzoom.pipeline-click-to-call.updater
-// @version      0.5
+// @version      0.6
 // @description  Loads and auto-updates only the AgencyZoom Pipeline Click-to-Call script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
+// @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
@@ -18,7 +19,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.5';
+  const LOADER_VERSION = '0.6';
   const TARGET_ID = 'phone-click-to-call';
   const TARGET_LABEL = 'Pipeline Click-to-Call';
   const TARGET_FILE = 'agencyzoom-phone-click-to-call.user.js';
@@ -84,8 +85,30 @@
     executed = true;
     storageSet(VERSION_KEY, extractVersion(code));
     const sourceUrl = `${BASE_URL}/${TARGET_FILE}`;
+    const runnable = `${code}\n//# sourceURL=${sourceUrl}`;
     console.info(`[AZ ${TARGET_LABEL} Updater] Running ${TARGET_LABEL} from ${source}.`);
-    eval(`${code}\n//# sourceURL=${sourceUrl}`);
+    if (runInPageContext(runnable)) return;
+    eval(runnable);
+  }
+
+  function runInPageContext(code) {
+    const page = getUnsafeWindow();
+    if (!page || page === window || typeof page.eval !== 'function') return false;
+
+    try {
+      page.eval(code);
+      return true;
+    } catch (err) {
+      console.warn(`[AZ ${TARGET_LABEL} Updater] page-context execution failed; falling back to sandbox`, err);
+      return false;
+    }
+  }
+
+  function getUnsafeWindow() {
+    try {
+      if (typeof unsafeWindow !== 'undefined' && unsafeWindow) return unsafeWindow;
+    } catch {}
+    return null;
   }
 
   function fetchTarget() {
