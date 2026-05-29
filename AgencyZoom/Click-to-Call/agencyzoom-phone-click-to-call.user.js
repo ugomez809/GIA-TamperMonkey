@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.17
+// @version      2.18
 // @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.17';
+  const VERSION = '2.18';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
@@ -122,15 +122,18 @@
   function extractNativeDialerPhone(dialerEl = null) {
     const selectorSources = [
       { selector: '#currentCustomerPhone', source: 'current customer phone' },
-      { selector: '#customerreferral-phone', source: 'customer referral phone' },
-      { selector: '#lc-info-default > div.table-clean > ul > li:nth-child(3) > span:nth-child(2)', source: 'lead profile phone' },
-      { selector: '#lc-info-default > div:nth-child(5) > div', source: 'customer profile phone' }
+      { selector: '#customerreferral-phone', source: 'customer referral phone' }
     ];
 
     for (const item of selectorSources) {
       const value = readValue(document, item.selector);
       const phone = normalizePhone(value);
       if (phone) return { phone, source: item.source };
+    }
+
+    const labeledPhone = readLabeledValue(document, ['Phone', 'Mobile', 'Cell', 'Telephone']);
+    if (normalizePhone(labeledPhone)) {
+      return { phone: normalizePhone(labeledPhone), source: 'lead contact phone label' };
     }
 
     const dialerStatePhone = firstPhone(
@@ -1279,13 +1282,14 @@
   function extractPhoneFromHtml(raw) {
     const doc = new DOMParser().parseFromString(raw, 'text/html');
 
+    const labeledPhone = readLabeledValue(doc, ['Phone', 'Mobile', 'Cell', 'Telephone']);
+    if (normalizePhone(labeledPhone)) return { phone: labeledPhone, source: 'lead contact phone label' };
+
     const selectors = [
       '#currentCustomerPhone',
       '#customerreferral-phone',
       'input[name="CustomerReferral[phone]"]',
       'input[type="tel"]',
-      '#lc-info-default > div.table-clean > ul > li:nth-child(3) > span:nth-child(2)',
-      '#lc-info-default > div:nth-child(5) > div',
       '#dockDialer',
       '[data-phone]'
     ];
@@ -1549,6 +1553,30 @@
   function readValue(root, selector) {
     const el = root && root.querySelector ? root.querySelector(selector) : null;
     return clean(el && (el.value || el.getAttribute('value') || el.textContent));
+  }
+
+  function readLabeledValue(root, labels) {
+    if (!root || !root.querySelectorAll) return '';
+
+    const wanted = new Set(labels.map((label) => lower(label).replace(/[:\s]+$/g, '')));
+    const rows = Array.from(root.querySelectorAll([
+      '#lc-info-default .table-clean li',
+      '.lead-contact .table-clean li',
+      '.table-clean li'
+    ].join(',')));
+
+    for (const row of rows) {
+      const spans = Array.from(row.querySelectorAll(':scope > span'));
+      if (spans.length < 2) continue;
+
+      const label = lower(clean(spans[0].textContent)).replace(/[:\s]+$/g, '');
+      if (!wanted.has(label)) continue;
+
+      const value = clean(spans.slice(1).map((span) => span.textContent).join(' '));
+      if (normalizePhone(value)) return value;
+    }
+
+    return '';
   }
 
   function firstPhone(...values) {
