@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.23
+// @version      2.24
 // @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.23';
+  const VERSION = '2.24';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
@@ -365,19 +365,26 @@
   function findButtonHost(card) {
     const producerSlot = card.querySelector(PRODUCER_SLOT_SELECTOR);
     if (producerSlot) {
-      const badge = producerSlot.querySelector('.badge');
-      if (badge) return badge;
-
-      const anchor = producerSlot.querySelector(PRODUCER_ANCHOR_SELECTOR);
-      if (anchor) return anchor;
-
-      return producerSlot;
+      for (const candidate of [
+        producerSlot.querySelector('.badge'),
+        producerSlot.querySelector(PRODUCER_ANCHOR_SELECTOR),
+        producerSlot
+      ]) {
+        const safeHost = safeButtonHost(card, candidate);
+        if (safeHost) return safeHost;
+      }
     }
 
-    const anyBadge = card.querySelector('.badge');
+    const anyBadge = safeButtonHost(card, card.querySelector('.badge'));
     if (anyBadge) return anyBadge;
 
     return card;
+  }
+
+  function safeButtonHost(card, candidate) {
+    if (!(candidate instanceof Element) || !card.contains(candidate)) return null;
+    if (candidate.closest('a[href],button,[role="button"],[onclick]')) return null;
+    return candidate;
   }
 
   function removeOldCardButtons(card) {
@@ -592,41 +599,110 @@
     const recordType = getCardRecordType(card);
     if (ticketDockMatches(ticketId, { recordType })) return true;
 
-    const target = findCardOpenTarget(card) || card;
     const previousDockSignature = getDockSignature();
-    strongClick(target);
+    const targets = findCardOpenTargets(card);
+
+    for (const target of targets) {
+      strongClick(target);
+
+      let opened = await waitFor(() => ticketDockMatches(ticketId, {
+        recordType,
+        allowTypeOnly: true,
+        previousDockSignature
+      }), 1600, 90);
+      if (opened) return true;
+
+      if (nativeClick(target)) {
+        opened = await waitFor(() => ticketDockMatches(ticketId, {
+          recordType,
+          allowTypeOnly: true,
+          previousDockSignature
+        }), 1600, 90);
+        if (opened) return true;
+      }
+    }
 
     return waitFor(() => ticketDockMatches(ticketId, {
       recordType,
       allowTypeOnly: true,
       previousDockSignature
-    }), 10000, 120);
+    }), 1200, 120);
   }
 
   function findCardOpenTarget(card) {
-    if (!card) return null;
+    return findCardOpenTargets(card)[0] || null;
+  }
 
-    const profileLink = Array.from(card.querySelectorAll('a[href*="/lead/index"]'))
-      .find((el) => isVisible(el) && !el.closest(`.${ACTION_GROUP_CLASS}`));
-    if (profileLink) return card;
+  function findCardOpenTargets(card) {
+    if (!card) return [];
+
+    const candidates = [];
+    const add = (el) => {
+      if (isSafeCardOpenTarget(card, el)) candidates.push(el);
+    };
+
+    add(findCardPointTarget(card));
+    add(card);
 
     const selectors = [
       '[data-toggle][data-target]',
       '[data-target]',
+      '[data-toggle]',
+      '[data-action*="open" i]',
+      '[data-action*="detail" i]',
       '[role="button"]',
       '[onclick]',
-      'button',
+      'a[href^="javascript:"]',
+      'a[href="#"]',
+      '.dd-card-content',
+      '.dd-card-body',
+      '.card-body',
+      '.cardes-template',
       '.cardes-template-item-content',
       '.cardes-template-item'
     ];
 
     for (const selector of selectors) {
-      const target = Array.from(card.querySelectorAll(selector))
-        .find((el) => isVisible(el) && !el.closest(`.${ACTION_GROUP_CLASS}`) && !isProfileLink(el));
-      if (target) return target;
+      for (const target of Array.from(card.querySelectorAll(selector))) {
+        add(target);
+      }
     }
 
-    return card;
+    return uniqueElements(candidates).slice(0, 6);
+  }
+
+  function findCardPointTarget(card) {
+    if (!card || typeof document.elementFromPoint !== 'function') return null;
+
+    const rect = card.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+
+    const xInset = Math.min(28, Math.max(8, rect.width * 0.18));
+    const yMid = rect.top + rect.height * 0.55;
+    const points = [
+      [rect.left + xInset, yMid],
+      [rect.left + rect.width * 0.5, yMid],
+      [rect.right - xInset, yMid]
+    ];
+
+    for (const [x, y] of points) {
+      const el = document.elementFromPoint(x, y);
+      if (!el || !card.contains(el)) continue;
+      const target = el.closest('[data-toggle],[data-target],[role="button"],[onclick],a,button,.cardes-template-item-content,.cardes-template-item') || el;
+      if (isSafeCardOpenTarget(card, target)) return target;
+    }
+
+    return null;
+  }
+
+  function isSafeCardOpenTarget(card, el) {
+    if (!(el instanceof Element) || !card || (el !== card && !card.contains(el))) return false;
+    if (!isVisible(el)) return false;
+    if (el.closest(`.${ACTION_GROUP_CLASS}`) || el.closest(`.${BUTTON_CLASS}`)) return false;
+    if (el.closest('input,textarea,select,option,[contenteditable="true"]')) return false;
+    if (isProfileLink(el)) return false;
+    if (isNavigatingLink(el)) return false;
+    return true;
   }
 
   function isProfileLink(el) {
@@ -634,6 +710,16 @@
     if (!link) return false;
     const href = String(link.getAttribute('href') || '');
     return /\/lead\/index\b/i.test(href);
+  }
+
+  function isNavigatingLink(el) {
+    const link = el?.closest?.('a[href]');
+    if (!link) return false;
+
+    const href = clean(link.getAttribute('href') || '');
+    if (!href || href === '#' || /^javascript:/i.test(href)) return false;
+
+    return true;
   }
 
   async function waitForDockAction(kind, timeoutMs) {
@@ -1236,17 +1322,76 @@
 
   function strongClick(el) {
     if (!el) return;
-    const opts = { bubbles: true, cancelable: true, view: window };
+    const point = getElementClickPoint(el);
+    const base = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      button: 0,
+      detail: 1,
+      clientX: point.x,
+      clientY: point.y,
+      screenX: window.screenX + point.x,
+      screenY: window.screenY + point.y
+    };
+    const mouse = (type, buttons = 0) => {
+      el.dispatchEvent(new MouseEvent(type, { ...base, buttons }));
+    };
+    const pointer = (type, buttons = 0) => {
+      if (typeof PointerEvent !== 'function') return;
+      el.dispatchEvent(new PointerEvent(type, {
+        ...base,
+        buttons,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true
+      }));
+    };
+
     hideAgencyZoomTooltips(el);
-    el.dispatchEvent(new MouseEvent('mouseover', opts));
-    el.dispatchEvent(new MouseEvent('mousedown', opts));
-    el.dispatchEvent(new MouseEvent('mouseup', opts));
-    el.dispatchEvent(new MouseEvent('click', opts));
-    el.dispatchEvent(new MouseEvent('mouseout', opts));
-    el.dispatchEvent(new MouseEvent('mouseleave', opts));
+    pointer('pointerover');
+    pointer('pointerenter');
+    mouse('mouseover');
+    mouse('mouseenter');
+    pointer('pointermove');
+    mouse('mousemove');
+    pointer('pointerdown', 1);
+    mouse('mousedown', 1);
+    pointer('pointerup');
+    mouse('mouseup');
+    mouse('click');
+    pointer('pointerout');
+    pointer('pointerleave');
+    mouse('mouseout');
+    mouse('mouseleave');
     hideAgencyZoomTooltips(el);
     setTimeout(() => hideAgencyZoomTooltips(el), 80);
     setTimeout(() => hideAgencyZoomTooltips(el), 350);
+  }
+
+  function nativeClick(el) {
+    if (!el || isProfileLink(el) || typeof el.click !== 'function') return false;
+    try {
+      el.click();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function getElementClickPoint(el) {
+    const rect = el && typeof el.getBoundingClientRect === 'function'
+      ? el.getBoundingClientRect()
+      : null;
+
+    if (!rect || !rect.width || !rect.height) {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2)
+    };
   }
 
   function hideAgencyZoomTooltips(sourceEl = null) {
