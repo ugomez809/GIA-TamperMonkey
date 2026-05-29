@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Pipeline Click-to-Call
 // @namespace    local.agencyzoom.pipeline-click-to-call
-// @version      2.24
+// @version      2.25
 // @description  Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; note edits/starts pinned notes; SMS/email open the matching AgencyZoom composer.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
@@ -14,7 +14,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.24';
+  const VERSION = '2.25';
   const SCRIPT = 'AZ Click-to-Call';
   const STYLE_ID = 'tm-az-click-call-style';
   const SERVICE_PIPELINE_PATH = '/pipeline/service-pipeline';
@@ -28,6 +28,7 @@
     '.dd-card.ticket-container[data-id]',
     '.dd-card[data-id]'
   ].join(',');
+  const LEAD_CARD_SELECTOR = '.dd-card.referral-container[data-id]';
   const PRODUCER_SLOT_SELECTOR = '.cardes-template-item[gs-id="producer"]';
   const PRODUCER_ANCHOR_SELECTOR = '.badge, span.badge, .cardes-template-item-content, .ctr';
   const ACTION_GROUP_CLASS = 'tm-az-ticket-action-strip';
@@ -61,9 +62,9 @@
     if (!isAgencyZoom()) return;
     injectStyle();
     installRingCentralDialerHooks();
+    clearPendingAction();
     scheduleScan(50);
     startObserver();
-    setTimeout(resumePendingAction, 250);
   }
 
   function isAgencyZoom() {
@@ -230,7 +231,7 @@
 
     attachTaskModalCallButtons();
 
-    const cards = Array.from(document.querySelectorAll(CARD_SELECTOR));
+    const cards = Array.from(document.querySelectorAll(LEAD_CARD_SELECTOR));
     for (const card of cards) {
       const ticketId = getCardTicketId(card);
       if (!ticketId) continue;
@@ -365,26 +366,19 @@
   function findButtonHost(card) {
     const producerSlot = card.querySelector(PRODUCER_SLOT_SELECTOR);
     if (producerSlot) {
-      for (const candidate of [
-        producerSlot.querySelector('.badge'),
-        producerSlot.querySelector(PRODUCER_ANCHOR_SELECTOR),
-        producerSlot
-      ]) {
-        const safeHost = safeButtonHost(card, candidate);
-        if (safeHost) return safeHost;
-      }
+      const badge = producerSlot.querySelector('.badge');
+      if (badge) return badge;
+
+      const anchor = producerSlot.querySelector(PRODUCER_ANCHOR_SELECTOR);
+      if (anchor) return anchor;
+
+      return producerSlot;
     }
 
-    const anyBadge = safeButtonHost(card, card.querySelector('.badge'));
+    const anyBadge = card.querySelector('.badge');
     if (anyBadge) return anyBadge;
 
     return card;
-  }
-
-  function safeButtonHost(card, candidate) {
-    if (!(candidate instanceof Element) || !card.contains(candidate)) return null;
-    if (candidate.closest('a[href],button,[role="button"],[onclick]')) return null;
-    return candidate;
   }
 
   function removeOldCardButtons(card) {
@@ -435,29 +429,25 @@
     const ticketId = clean(btn.dataset.ticketId || closestTicketId(btn));
     if (!card || !ticketId || btn.dataset.busy === '1') return;
 
-    savePendingAction(kind, ticketId);
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', kind === 'sms' ? 'Opening SMS...' : 'Opening email...');
 
     try {
       const opened = await openTicketFromCard(card, ticketId);
       if (!opened) {
-        clearPendingAction();
         flashButton(btn, 'error', 'Could not open ticket');
         return;
       }
 
-      const openedComposer = await openDockComposer(kind);
-      if (!openedComposer) {
-        clearPendingAction();
-        flashButton(btn, 'error', kind === 'sms' ? 'SMS did not open' : 'Email did not open');
+      const action = await waitForDockAction(kind, 4500);
+      if (!action) {
+        flashButton(btn, 'error', kind === 'sms' ? 'SMS button not found' : 'Email button not found');
         return;
       }
 
-      clearPendingAction();
+      strongClick(action);
       flashButton(btn, 'ready', kind === 'sms' ? 'SMS opened' : 'Email opened');
     } catch (err) {
-      clearPendingAction();
       flashButton(btn, 'error', `${kind.toUpperCase()} failed: ${err && err.message ? err.message : String(err)}`);
     } finally {
       delete btn.dataset.busy;
@@ -474,22 +464,18 @@
     const ticketId = clean(btn.dataset.ticketId || closestTicketId(btn));
     if (!card || !ticketId || btn.dataset.busy === '1') return;
 
-    savePendingAction('note', ticketId);
     btn.dataset.busy = '1';
     flashButton(btn, 'loading', 'Opening ticket...');
 
     try {
       const opened = await openTicketFromCard(card, ticketId);
       if (!opened) {
-        clearPendingAction();
         flashButton(btn, 'error', 'Could not open ticket');
         return;
       }
 
       await openOrPreparePinnedNote(btn);
-      clearPendingAction();
     } catch (err) {
-      clearPendingAction();
       flashButton(btn, 'error', `Note failed: ${err && err.message ? err.message : String(err)}`);
     } finally {
       delete btn.dataset.busy;
@@ -596,130 +582,12 @@
   }
 
   async function openTicketFromCard(card, ticketId) {
-    const recordType = getCardRecordType(card);
-    if (ticketDockMatches(ticketId, { recordType })) return true;
+    if (ticketDockMatches(ticketId)) return true;
 
-    const previousDockSignature = getDockSignature();
-    const targets = findCardOpenTargets(card);
+    const target = card.querySelector('a.customer[rel], a.customer') || card;
+    strongClick(target);
 
-    for (const target of targets) {
-      strongClick(target);
-
-      let opened = await waitFor(() => ticketDockMatches(ticketId, {
-        recordType,
-        allowTypeOnly: true,
-        previousDockSignature
-      }), 1600, 90);
-      if (opened) return true;
-
-      if (nativeClick(target)) {
-        opened = await waitFor(() => ticketDockMatches(ticketId, {
-          recordType,
-          allowTypeOnly: true,
-          previousDockSignature
-        }), 1600, 90);
-        if (opened) return true;
-      }
-    }
-
-    return waitFor(() => ticketDockMatches(ticketId, {
-      recordType,
-      allowTypeOnly: true,
-      previousDockSignature
-    }), 1200, 120);
-  }
-
-  function findCardOpenTarget(card) {
-    return findCardOpenTargets(card)[0] || null;
-  }
-
-  function findCardOpenTargets(card) {
-    if (!card) return [];
-
-    const candidates = [];
-    const add = (el) => {
-      if (isSafeCardOpenTarget(card, el)) candidates.push(el);
-    };
-
-    add(findCardPointTarget(card));
-    add(card);
-
-    const selectors = [
-      '[data-toggle][data-target]',
-      '[data-target]',
-      '[data-toggle]',
-      '[data-action*="open" i]',
-      '[data-action*="detail" i]',
-      '[role="button"]',
-      '[onclick]',
-      'a[href^="javascript:"]',
-      'a[href="#"]',
-      '.dd-card-content',
-      '.dd-card-body',
-      '.card-body',
-      '.cardes-template',
-      '.cardes-template-item-content',
-      '.cardes-template-item'
-    ];
-
-    for (const selector of selectors) {
-      for (const target of Array.from(card.querySelectorAll(selector))) {
-        add(target);
-      }
-    }
-
-    return uniqueElements(candidates).slice(0, 6);
-  }
-
-  function findCardPointTarget(card) {
-    if (!card || typeof document.elementFromPoint !== 'function') return null;
-
-    const rect = card.getBoundingClientRect();
-    if (!rect.width || !rect.height) return null;
-
-    const xInset = Math.min(28, Math.max(8, rect.width * 0.18));
-    const yMid = rect.top + rect.height * 0.55;
-    const points = [
-      [rect.left + xInset, yMid],
-      [rect.left + rect.width * 0.5, yMid],
-      [rect.right - xInset, yMid]
-    ];
-
-    for (const [x, y] of points) {
-      const el = document.elementFromPoint(x, y);
-      if (!el || !card.contains(el)) continue;
-      const target = el.closest('[data-toggle],[data-target],[role="button"],[onclick],a,button,.cardes-template-item-content,.cardes-template-item') || el;
-      if (isSafeCardOpenTarget(card, target)) return target;
-    }
-
-    return null;
-  }
-
-  function isSafeCardOpenTarget(card, el) {
-    if (!(el instanceof Element) || !card || (el !== card && !card.contains(el))) return false;
-    if (!isVisible(el)) return false;
-    if (el.closest(`.${ACTION_GROUP_CLASS}`) || el.closest(`.${BUTTON_CLASS}`)) return false;
-    if (el.closest('input,textarea,select,option,[contenteditable="true"]')) return false;
-    if (isProfileLink(el)) return false;
-    if (isNavigatingLink(el)) return false;
-    return true;
-  }
-
-  function isProfileLink(el) {
-    const link = el?.closest?.('a[href]');
-    if (!link) return false;
-    const href = String(link.getAttribute('href') || '');
-    return /\/lead\/index\b/i.test(href);
-  }
-
-  function isNavigatingLink(el) {
-    const link = el?.closest?.('a[href]');
-    if (!link) return false;
-
-    const href = clean(link.getAttribute('href') || '');
-    if (!href || href === '#' || /^javascript:/i.test(href)) return false;
-
-    return true;
+    return waitFor(() => ticketDockMatches(ticketId), 10000, 120);
   }
 
   async function waitForDockAction(kind, timeoutMs) {
@@ -746,8 +614,24 @@
   }
 
   function findDockAction(kind, exclude = new Set()) {
-    const candidates = findDockActionCandidates(kind, exclude);
-    return candidates[0] || null;
+    const sideActions = document.querySelector('.az-dock__side-actions');
+    const root = sideActions || document;
+    let action = null;
+
+    if (kind === 'sms') {
+      action = root.querySelector('#dockSms') ||
+        closestVisibleIconButton(root, 'i.fal.fa-sms, i.fa-sms') ||
+        null;
+    }
+
+    if (kind === 'email') {
+      action = root.querySelector('#dockEmail') ||
+        closestVisibleIconButton(root, 'i.fal.fa-paper-plane, i.fa-paper-plane') ||
+        null;
+    }
+
+    if (action && exclude && exclude.has(action)) return null;
+    return action;
   }
 
   function findDockActionCandidates(kind, exclude = new Set()) {
@@ -1322,76 +1206,17 @@
 
   function strongClick(el) {
     if (!el) return;
-    const point = getElementClickPoint(el);
-    const base = {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      button: 0,
-      detail: 1,
-      clientX: point.x,
-      clientY: point.y,
-      screenX: window.screenX + point.x,
-      screenY: window.screenY + point.y
-    };
-    const mouse = (type, buttons = 0) => {
-      el.dispatchEvent(new MouseEvent(type, { ...base, buttons }));
-    };
-    const pointer = (type, buttons = 0) => {
-      if (typeof PointerEvent !== 'function') return;
-      el.dispatchEvent(new PointerEvent(type, {
-        ...base,
-        buttons,
-        pointerId: 1,
-        pointerType: 'mouse',
-        isPrimary: true
-      }));
-    };
-
+    const opts = { bubbles: true, cancelable: true, view: window };
     hideAgencyZoomTooltips(el);
-    pointer('pointerover');
-    pointer('pointerenter');
-    mouse('mouseover');
-    mouse('mouseenter');
-    pointer('pointermove');
-    mouse('mousemove');
-    pointer('pointerdown', 1);
-    mouse('mousedown', 1);
-    pointer('pointerup');
-    mouse('mouseup');
-    mouse('click');
-    pointer('pointerout');
-    pointer('pointerleave');
-    mouse('mouseout');
-    mouse('mouseleave');
+    el.dispatchEvent(new MouseEvent('mouseover', opts));
+    el.dispatchEvent(new MouseEvent('mousedown', opts));
+    el.dispatchEvent(new MouseEvent('mouseup', opts));
+    el.dispatchEvent(new MouseEvent('click', opts));
+    el.dispatchEvent(new MouseEvent('mouseout', opts));
+    el.dispatchEvent(new MouseEvent('mouseleave', opts));
     hideAgencyZoomTooltips(el);
     setTimeout(() => hideAgencyZoomTooltips(el), 80);
     setTimeout(() => hideAgencyZoomTooltips(el), 350);
-  }
-
-  function nativeClick(el) {
-    if (!el || isProfileLink(el) || typeof el.click !== 'function') return false;
-    try {
-      el.click();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function getElementClickPoint(el) {
-    const rect = el && typeof el.getBoundingClientRect === 'function'
-      ? el.getBoundingClientRect()
-      : null;
-
-    if (!rect || !rect.width || !rect.height) {
-      return { x: 0, y: 0 };
-    }
-
-    return {
-      x: Math.round(rect.left + rect.width / 2),
-      y: Math.round(rect.top + rect.height / 2)
-    };
   }
 
   function hideAgencyZoomTooltips(sourceEl = null) {
