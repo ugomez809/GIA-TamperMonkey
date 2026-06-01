@@ -12,8 +12,8 @@
 // @grant        GM_registerMenuCommand
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags.user.js
 // ==/UserScript==
 
 (function () {

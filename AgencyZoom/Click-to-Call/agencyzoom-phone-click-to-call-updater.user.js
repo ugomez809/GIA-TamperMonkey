@@ -12,8 +12,8 @@
 // @grant        GM_deleteValue
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js
 // ==/UserScript==
 
 (function () {
@@ -23,7 +23,7 @@
   const TARGET_ID = 'phone-click-to-call';
   const TARGET_LABEL = 'Pipeline Click-to-Call';
   const TARGET_FILE = 'agencyzoom-phone-click-to-call.user.js';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call';
   const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;
   const CACHE_KEY = `tmAzPerScriptUpdater:${TARGET_ID}:code`;

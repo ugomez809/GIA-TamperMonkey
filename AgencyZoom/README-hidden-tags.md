@@ -30,13 +30,13 @@ This project adds a manager-controlled hidden-tag list for AgencyZoom cards.
 Install only the updater for the script each PC actually needs. Each updater is a tiny Tampermonkey script that fetches, caches, and runs one target script from GitHub. This does not depend on Tampermonkey's native update timing for normal script changes.
 
 - Managers install Hidden Tag Manager Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js`
 - Producers install Producer Hide Tags Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js`
 - Optional helper, Click-to-Call Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js`
 - Optional helper, AI Follow-Up Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js`
+  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js`
 
 Do not install or enable `LOCAL AgencyZoom Master Updater` on office PCs. It is retired and removed from this folder.
 

@@ -13,8 +13,8 @@
 // @grant        GM_deleteValue
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/STAFF%20scripts/GWPC/policycenter-gwpc-property-tools-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/STAFF%20scripts/GWPC/policycenter-gwpc-property-tools-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/STAFF%20scripts/GWPC/policycenter-gwpc-property-tools-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/STAFF%20scripts/GWPC/policycenter-gwpc-property-tools-updater.user.js
 // ==/UserScript==
 
 (function () {
@@ -24,7 +24,7 @@
   const TARGET_ID = 'gwpc-property-tools';
   const TARGET_LABEL = 'GWPC Property Tools';
   const TARGET_FILE = 'policycenter-gwpc-property-tools.user.js';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/STAFF%20scripts/GWPC';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/STAFF%20scripts/GWPC';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;

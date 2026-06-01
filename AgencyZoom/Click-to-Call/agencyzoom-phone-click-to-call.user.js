@@ -7,8 +7,8 @@
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-idle
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/HEAD/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call.user.js
 // ==/UserScript==
 
 (function () {

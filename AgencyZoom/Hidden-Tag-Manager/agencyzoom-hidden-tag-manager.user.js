@@ -13,8 +13,8 @@
 // @grant        GM_registerMenuCommand
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager.user.js
 // ==/UserScript==
 
 (function () {

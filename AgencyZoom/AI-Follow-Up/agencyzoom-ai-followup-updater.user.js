@@ -18,8 +18,8 @@
 // @connect      docs.google.com
 // @connect      spreadsheets.google.com
 // @connect      googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js
 // ==/UserScript==
 
 (function () {
@@ -29,7 +29,7 @@
   const TARGET_ID = 'ai-followup';
   const TARGET_LABEL = 'AI Follow-Up';
   const TARGET_FILE = 'agencyzoom-ai-followup.user.js';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/AI-Follow-Up';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/AI-Follow-Up';
   const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;
   const CACHE_KEY = `tmAzPerScriptUpdater:${TARGET_ID}:code`;

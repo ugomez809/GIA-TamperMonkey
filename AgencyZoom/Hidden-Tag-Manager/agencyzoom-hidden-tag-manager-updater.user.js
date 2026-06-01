@@ -15,8 +15,8 @@
 // @connect      raw.githubusercontent.com
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js
 // ==/UserScript==
 
 (function () {
@@ -26,7 +26,7 @@
   const TARGET_ID = 'hidden-tag-manager';
   const TARGET_LABEL = 'Hidden Tag Manager';
   const TARGET_FILE = 'agencyzoom-hidden-tag-manager.user.js';
-  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/refs/heads/main/AgencyZoom/Hidden-Tag-Manager';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Hidden-Tag-Manager';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 30 * 1000;
   const RELOAD_DELAY_MS = 1200;
