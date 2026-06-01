@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GIA Tampermonkey Updater Installers</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #5d6b82;
+      --line: #d8e0eb;
+      --blue: #1f6feb;
+      --blue-dark: #174ea6;
+      --green: #16794c;
+      --shadow: 0 10px 30px rgba(23, 32, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    header {
+      background: #0f172a;
+      color: #fff;
+      padding: 28px 20px;
+    }
+
+    .wrap {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.55rem, 2.5vw, 2.25rem);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .subhead {
+      margin: 10px 0 0;
+      max-width: 820px;
+      color: #cbd5e1;
+      font-size: 0.98rem;
+    }
+
+    main {
+      padding: 22px 0 40px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    button,
+    .button {
+      appearance: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: var(--blue);
+      color: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 8px 12px;
+      font: inherit;
+      font-weight: 650;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    button:hover,
+    .button:hover {
+      background: var(--blue-dark);
+    }
+
+    .secondary {
+      background: #fff;
+      border-color: var(--line);
+      color: var(--ink);
+    }
+
+    .secondary:hover {
+      background: #eef3f9;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 14px;
+    }
+
+    .script {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      min-height: 252px;
+      padding: 16px;
+    }
+
+    .script h2 {
+      margin: 0 0 8px;
+      font-size: 1.04rem;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .description {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin: 0 0 12px;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 10px;
+      margin: 0 0 14px;
+      font-size: 0.86rem;
+    }
+
+    dt {
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    dd {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .matches {
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      flex-wrap: wrap;
+    }
+
+    .install {
+      background: var(--green);
+    }
+
+    .install:hover {
+      background: #10613c;
+    }
+
+    .empty,
+    .error {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      color: var(--muted);
+    }
+
+    .error {
+      border-color: #f2b8b5;
+      color: #8a1c12;
+    }
+
+    code {
+      font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.86em;
+    }
+
+    @media (max-width: 640px) {
+      header {
+        padding: 22px 16px;
+      }
+
+      .wrap {
+        width: min(100% - 24px, 1120px);
+      }
+
+      .toolbar {
+        align-items: stretch;
+      }
+
+      button,
+      .button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>GIA Tampermonkey Updater Installers</h1>
+      <p class="subhead">Install the updater scripts from the live UGomez Tampermonkey repository. Each updater pulls its target script from GitHub and keeps that script current after installation.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="toolbar">
+      <div class="status" id="status">Loading updater scripts from GitHub...</div>
+      <div class="actions">
+        <button type="button" class="secondary" id="refresh">Refresh list</button>
+        <button type="button" id="openAll">Open all installers</button>
+      </div>
+    </div>
+    <section class="grid" id="scripts" aria-live="polite"></section>
+  </main>
+
+  <script>
+    const OWNER = 'ugomez809';
+    const REPO = 'GIA-TamperMonkey';
+    const BRANCH = 'main';
+    const API_TREE_URL = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
+    const RAW_BASE_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/`;
+    const GITHUB_BASE_URL = `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/`;
+
+    const FALLBACK_UPDATERS = [
+      'AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js',
+      'AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js',
+      'AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js',
+      'AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js',
+      'STAFF scripts/GWPC/policycenter-gwpc-property-tools-updater.user.js'
+    ];
+
+    const scriptsEl = document.getElementById('scripts');
+    const statusEl = document.getElementById('status');
+    const refreshButton = document.getElementById('refresh');
+    const openAllButton = document.getElementById('openAll');
+
+    function encodePath(path) {
+      return path.split('/').map(encodeURIComponent).join('/');
+    }
+
+    function rawUrl(path) {
+      return `${RAW_BASE_URL}${encodePath(path)}`;
+    }
+
+    function githubUrl(path) {
+      return `${GITHUB_BASE_URL}${encodePath(path)}`;
+    }
+
+    function clean(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function readMeta(source, key) {
+      const pattern = new RegExp(`^//\\s*@${key}\\s+(.+)$`, 'mi');
+      const match = source.match(pattern);
+      return match ? clean(match[1]) : '';
+    }
+
+    function readMatches(source) {
+      return Array.from(source.matchAll(/^\/\/\s*@match\s+(.+)$/gmi))
+        .map((match) => clean(match[1]))
+        .filter(Boolean);
+    }
+
+    function parseUpdater(path, source) {
+      const installUrl = readMeta(source, 'downloadURL') || readMeta(source, 'updateURL') || rawUrl(path);
+      return {
+        path,
+        installUrl,
+        sourceUrl: githubUrl(path),
+        name: readMeta(source, 'name') || path.split('/').pop(),
+        version: readMeta(source, 'version') || 'unknown',
+        description: readMeta(source, 'description'),
+        matches: readMatches(source)
+      };
+    }
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function renderError(message) {
+      scriptsEl.innerHTML = '';
+      const node = document.createElement('div');
+      node.className = 'error';
+      node.textContent = message;
+      scriptsEl.appendChild(node);
+    }
+
+    function renderEmpty() {
+      scriptsEl.innerHTML = '';
+      const node = document.createElement('div');
+      node.className = 'empty';
+      node.textContent = 'No updater scripts were found in this repository.';
+      scriptsEl.appendChild(node);
+    }
+
+    function renderScripts(updaters) {
+      scriptsEl.innerHTML = '';
+
+      if (!updaters.length) {
+        renderEmpty();
+        return;
+      }
+
+      updaters.forEach((script) => {
+        const article = document.createElement('article');
+        article.className = 'script';
+
+        const title = document.createElement('h2');
+        title.textContent = script.name;
+
+        const description = document.createElement('p');
+        description.className = 'description';
+        description.textContent = script.description || 'Tampermonkey updater script.';
+
+        const meta = document.createElement('dl');
+        const rows = [
+          ['Version', script.version],
+          ['Path', script.path],
+          ['Runs on', script.matches.length ? script.matches.join(', ') : 'Not specified']
+        ];
+
+        rows.forEach(([label, value]) => {
+          const dt = document.createElement('dt');
+          dt.textContent = label;
+          const dd = document.createElement('dd');
+          if (label === 'Path') {
+            const code = document.createElement('code');
+            code.textContent = value;
+            dd.appendChild(code);
+          } else {
+            dd.textContent = value;
+          }
+          if (label === 'Runs on') dd.className = 'matches';
+          meta.append(dt, dd);
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const install = document.createElement('a');
+        install.className = 'button install';
+        install.href = script.installUrl;
+        install.textContent = 'Install';
+        install.rel = 'noopener';
+
+        const source = document.createElement('a');
+        source.className = 'button secondary';
+        source.href = script.sourceUrl;
+        source.textContent = 'Source';
+        source.target = '_blank';
+        source.rel = 'noopener';
+
+        actions.append(install, source);
+        article.append(title, description, meta, actions);
+        scriptsEl.appendChild(article);
+      });
+    }
+
+    async function fetchUpdaterPaths() {
+      const response = await fetch(API_TREE_URL, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`GitHub tree request returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.tree
+        .filter((item) => item.type === 'blob')
+        .map((item) => item.path)
+        .filter((path) => /updater\.user\.js$/i.test(path))
+        .sort((a, b) => a.localeCompare(b));
+    }
+
+    async function fetchUpdater(path) {
+      const response = await fetch(`${rawUrl(path)}?installPage=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`${path} returned ${response.status}`);
+      }
+
+      return parseUpdater(path, await response.text());
+    }
+
+    async function loadUpdaters() {
+      refreshButton.disabled = true;
+      openAllButton.disabled = true;
+      setStatus('Loading updater scripts from GitHub...');
+
+      try {
+        let paths = await fetchUpdaterPaths();
+        if (!paths.length) paths = FALLBACK_UPDATERS;
+
+        const updaters = await Promise.all(paths.map(fetchUpdater));
+        updaters.sort((a, b) => a.name.localeCompare(b.name));
+        renderScripts(updaters);
+        setStatus(`Loaded ${updaters.length} updater installers from ${OWNER}/${REPO}.`);
+        openAllButton.disabled = false;
+      } catch (error) {
+        try {
+          const updaters = await Promise.all(FALLBACK_UPDATERS.map(fetchUpdater));
+          updaters.sort((a, b) => a.name.localeCompare(b.name));
+          renderScripts(updaters);
+          setStatus(`Loaded ${updaters.length} fallback updater installers.`);
+        } catch (fallbackError) {
+          renderError(`Could not load updater installers. ${fallbackError.message || fallbackError}`);
+          setStatus('Unable to load updater installers.');
+        }
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    refreshButton.addEventListener('click', loadUpdaters);
+    openAllButton.addEventListener('click', () => {
+      const links = Array.from(document.querySelectorAll('a.install'));
+      links.forEach((link, index) => {
+        window.setTimeout(() => window.open(link.href, '_blank', 'noopener'), index * 350);
+      });
+    });
+
+    loadUpdaters();
+  </script>
+</body>
+</html>
