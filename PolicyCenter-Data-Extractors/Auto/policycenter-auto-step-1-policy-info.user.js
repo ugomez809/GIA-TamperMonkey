@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 1: Policy Info Extractor (InfoBar Policy + Account) (ALWAYS ON)
 // @namespace    tm.pc.step1.policyinfo
-// @version      1.3.0
+// @version      1.3.1
 // @description  ALWAYS ON. Auto-arms on load (STOP is session-only). Waits for GO_AHEAD, CONSUMES it (sets to "0"), clicks Policy Info, extracts Policy Info + InfoBar Policy/Account + Paperless status, saves to localStorage, clicks Drivers, then re-arms for next GO_AHEAD.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

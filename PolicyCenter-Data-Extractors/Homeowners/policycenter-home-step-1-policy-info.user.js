@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 1: Policy Info Extractor (Top Banner + Policy Info) (ALWAYS ON)
 // @namespace    tm.pc.home.step1.policyinfo
-// @version      1.0.3
+// @version      1.0.4
 // @description  ALWAYS ON. Auto-arms on load (STOP is session-only). Waits for GO_AHEAD, CONSUMES it (sets to "0"), clicks Policy Info, extracts Top Banner + Policy Info + Policy Details + Additional Named Insureds LV (rows only), merges into tm_pc_home_payload_v1, triggers Step2 + clicks Dwelling, then re-arms for next GO_AHEAD.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

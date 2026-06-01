@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 4: Quote Extractor (ALWAYS ON)
 // @namespace    tm.pc.step4.quote
-// @version      1.1.0
+// @version      1.1.1
 // @description  ALWAYS ON. Coverages-done gate + Quote visible → run ONCE → then wait until Quote is NOT visible before allowing another run. STOP is session-only; reload re-arms. Split Discounts vs Surcharges and capture Reconstruction Cost block.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

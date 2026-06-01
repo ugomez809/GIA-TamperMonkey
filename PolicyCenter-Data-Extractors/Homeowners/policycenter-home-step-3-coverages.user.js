@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 3: Coverages Extractor (All + Optional + Detailed + Exclusions/Conditions) (ALWAYS ON)
 // @namespace    tm.pc.step3.coverages
-// @version      1.1.0
+// @version      1.1.1
 // @description  ALWAYS ON. Auto-arms on load (STOP is session-only). Rule: Step2 signal + Coverages visible → run ONCE → wait until Coverages NOT visible before allowing another run. If run errors, gate clears to auto-retry. Per-subtab timebox: wait up to 2s for "ready"; if not ready, capture whatever is there and move on.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

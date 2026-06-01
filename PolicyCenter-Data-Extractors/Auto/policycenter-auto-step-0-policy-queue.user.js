@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 0: Policy Queue (loop → GO AHEAD Step1)
 // @namespace    tm.pc.step0.policyqueue
-// @version      1.3.2
+// @version      1.3.3
 // @description  Step0: shared queue/success/fail/input+UI across ALL tabs/subdomains using TM storage. Manual START loop: open Policy dropdown → type → Submit → (wait 2s) → success/fail by header. On success: writes localStorage tm_pc_go_ahead_v1="1" (after resetting to "0"), then waits until Risk Analysis header is visible, then cooldown 2s, then next. On fail: retries with slower waits; if policy is 8 digits: tries 8-digit 3x, then (only if still failing) tries leading-0 variant 3x; cooldown 2s then next.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

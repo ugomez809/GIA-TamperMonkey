@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 3: Vehicles (ALWAYS ON + Annual Miles + PA Coverages click/verify)
 // @namespace    tm.pc.step3.vehicles
-// @version      1.1.5
+// @version      1.1.6
 // @description  ALWAYS ON each load. Watches for Vehicles header; when visible runs: extract Vehicles table + Annual Miles, save to localStorage, real-click PA Coverages and verify by URL/header. STOP only stops this page session; reload forgets STOP and resumes.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

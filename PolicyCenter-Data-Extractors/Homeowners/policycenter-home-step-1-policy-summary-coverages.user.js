@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — HOME Helper: Policy Summary → Coverages → Optional → Detailed (MANUAL)
 // @namespace    tm.pc.step1.summary.to.coverages
-// @version      1.0.4
+// @version      1.0.5
 // @description  MANUAL helper. When started and header starts with "Policy Summary" (ex: "Policy Summary: 123") → click Coverages once → wait 2s → click Optional Coverages → wait 2s → click Detailed Coverages. Kept manual so it does not race the extraction chain.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

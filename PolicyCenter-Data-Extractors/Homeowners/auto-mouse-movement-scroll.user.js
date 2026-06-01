@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto Mouse Movement & Scroll Script
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  Moves the mouse randomly and scrolls up/down. Stops on key press (Escape). Excludes AgencyZoom dashboard.
 // @author       You
 // @match        *://*/*

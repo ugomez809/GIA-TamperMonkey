@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reconstruction Calculator Button for PolicyCenter
 // @namespace    GPG_Scripts
-// @version      5.1
+// @version      5.2
 // @description  Add one Reconstruction Calculator button that works on existing-policy, quoting, and policy-change screens in PolicyCenter
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

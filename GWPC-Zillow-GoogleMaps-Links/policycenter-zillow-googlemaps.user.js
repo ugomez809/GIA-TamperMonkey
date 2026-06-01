@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zillow and Google Maps Links for PolicyCenter
 // @namespace    GPG_Scripts
-// @version      2.5
+// @version      2.6
 // @description  Add buttons for Zillow and Google Maps to PolicyCenter/Guidewire
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

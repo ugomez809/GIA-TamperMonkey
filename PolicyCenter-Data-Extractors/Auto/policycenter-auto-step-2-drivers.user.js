@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 2: Drivers (extract + stop)
 // @namespace    tm.pc.pa.extractor.step2
-// @version      1.5.4
+// @version      1.5.5
 // @description  Step2: ON by default every page load → auto-start when Drivers header visible → wait 5s → extract up to 7 drivers → store to localStorage → real-click Vehicles. STOP only stops this session; reload always re-arms.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

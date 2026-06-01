@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — HOME Selector Mapper (Click-to-Capture JSON)
 // @namespace    tm.pc.home.selector.mapper
-// @version      1.0.1
+// @version      1.0.2
 // @description  ON/OFF/RESET. Prompts you to click each Home field. While ON: hover-highlights + captures selector/xpath/frameChain. Draggable UI (starts centered). Auto-downloads JSON when complete. Works across PolicyCenter frames.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

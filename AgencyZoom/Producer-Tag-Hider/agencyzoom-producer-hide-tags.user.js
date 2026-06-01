@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LOCAL AgencyZoom Producer Hide Tags
 // @namespace    local.agencyzoom.hidden-tags.producer
-// @version      0.8
+// @version      0.9
 // @description  Hides manager-selected AgencyZoom card tags from producer views, syncing the hidden list at most once per day.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 5: Quote → Forms (Totals + Vehicle Subtotals) (ALWAYS ON)
 // @namespace    tm.pc.step5.quote
-// @version      1.4.2
+// @version      1.4.3
 // @description  ALWAYS ON each load (STOP is session-only; reload re-enables). When Quote/Pricing header is visible: wait 5s, extract Total Cost + Discounts + per-vehicle subtotal via table sequence (Vehicle table -> next non-fee table last row/last cell), save to localStorage, then click Forms. Prevents duplicates by leaf-table scan + block de-dupe + runlock.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

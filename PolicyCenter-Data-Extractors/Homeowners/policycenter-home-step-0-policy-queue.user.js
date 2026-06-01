@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 0: Policy Queue (loop → GO AHEAD Step1) (chunk counter + pause countdown)
 // @namespace    tm.pc.step0.policyqueue
-// @version      1.4.3
+// @version      1.4.4
 // @description  Manual START loop. CUSTOM: every N successes pause M minutes. Shows CHUNK counter + PAUSE countdown (live tick). Clears extractor state before each policy.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

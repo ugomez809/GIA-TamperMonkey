@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 5: Homeowners → POST to Sheets + HARD Risk Analysis Click (ALWAYS ON)
 // @namespace    tm.pc.home.step5.post.sheets
-// @version      1.0.13
+// @version      1.0.14
 // @description  ALWAYS ON. When tm_pc_stage_v1 == quote_done: build complete Homeowners payload from tm_pc_home_payload_v1 + tm_pc_coverages_v1 + tm_pc_quote_v1, refuse incomplete posts, then HARD click Risk Analysis after a successful POST. STOP session-only; reload re-arms.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

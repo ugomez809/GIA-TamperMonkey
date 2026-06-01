@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 2: Dwelling Extractor (Details + Eligibility + Mortgagee) (ALWAYS ON)
 // @namespace    tm.pc.step2.dwelling
-// @version      1.0.7
+// @version      1.0.8
 // @description  ALWAYS ON. Auto-arms on load (STOP is session-only). Rule: EVERY time Dwelling header becomes visible → run ONCE → wait until Dwelling NOT visible before allowing another run. If run errors, gate clears to auto-retry while still on Dwelling. When Dwelling header is visible: wait 5s → ensure Details tab loaded → extract Dwelling fields + Details blocks (HomeShare/HVAC/Plumbing/Roofing) → click Eligibility (wait 2s) → extract Dogs row → click Additional Interests (wait 2s) → extract Mortgagee table → save → click Coverages → signal Step3.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

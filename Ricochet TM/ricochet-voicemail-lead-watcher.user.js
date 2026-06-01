@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet VoiceMail Lead Watcher
 // @namespace    GIA.INC
-// @version      1.64
+// @version      1.65
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*

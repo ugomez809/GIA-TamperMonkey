@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Step 6: Forms → POST ONCE → Clear → ALWAYS Click Risk Analysis (ALWAYS ON)
 // @namespace    tm.pc.step6.forms.post.risk
-// @version      1.2.7
+// @version      1.2.8
 // @description  ALWAYS ON. When Forms header is visible: wait 5s → POST policy payload ONCE (no retries, no duplicates) → clear all tm_pc_* (keeps Step6 dedupe keys) → click Risk Analysis. FAILSAFE: after 2 minutes on Forms, click Risk Analysis no matter what (ignores busy). Sends Vehicles ONLY when VIN matches a Step5 subtotal VIN (unmatched VINs are skipped). Saves failed policy numbers to auto-downloaded pc_failed_posts.txt. UI: bottom-left circle toggles log drawer.
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*

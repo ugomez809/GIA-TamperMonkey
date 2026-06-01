@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter — Storage Tools (Export TXT + Clear) Steps 1–5
 // @namespace    tm.pc.tools.localstorage
-// @version      1.1.0
+// @version      1.1.1
 // @description  Two tiny buttons (top-right): Green = download export TXT for tm_pc_* keys (local+session); Red = clear tm_pc_* keys (local+session).
 // @match        https://policycenter.farmersinsurance.com/pc/PolicyCenter.do*
 // @match        https://policycenter-2.farmersinsurance.com/pc/PolicyCenter.do*
