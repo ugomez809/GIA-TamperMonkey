@@ -240,10 +240,8 @@
     const BRANCH = 'main';
     const API_TREE_URL = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
     const RAW_BASE_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/`;
-    const GITHUB_BASE_URL = `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/`;
 
     const FALLBACK_UPDATERS = [
-      'AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js',
       'AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js',
       'AgencyZoom/Hidden-Tag-Manager/agencyzoom-hidden-tag-manager-updater.user.js',
       'AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js',
@@ -261,10 +259,6 @@
 
     function rawUrl(path) {
       return `${RAW_BASE_URL}${encodePath(path)}`;
-    }
-
-    function githubUrl(path) {
-      return `${GITHUB_BASE_URL}${encodePath(path)}`;
     }
 
     function clean(value) {
@@ -288,7 +282,6 @@
       return {
         path,
         installUrl,
-        sourceUrl: githubUrl(path),
         name: readMeta(source, 'name') || path.split('/').pop(),
         version: readMeta(source, 'version') || 'unknown',
         description: readMeta(source, 'description'),
@@ -367,14 +360,7 @@
         install.target = '_blank';
         install.rel = 'noopener';
 
-        const source = document.createElement('a');
-        source.className = 'button secondary';
-        source.href = script.sourceUrl;
-        source.textContent = 'Source';
-        source.target = '_blank';
-        source.rel = 'noopener';
-
-        actions.append(install, source);
+        actions.append(install);
         article.append(title, description, meta, actions);
         scriptsEl.appendChild(article);
       });

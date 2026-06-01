@@ -35,8 +35,6 @@ Install only the updater for the script each PC actually needs. Each updater is 
   `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Producer-Tag-Hider/agencyzoom-producer-hide-tags-updater.user.js`
 - Optional helper, Click-to-Call Updater:
   `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Click-to-Call/agencyzoom-phone-click-to-call-updater.user.js`
-- Optional helper, AI Follow-Up Updater:
-  `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/AI-Follow-Up/agencyzoom-ai-followup-updater.user.js`
 
 Do not install or enable `LOCAL AgencyZoom Master Updater` on office PCs. It is retired and removed from this folder.
 
