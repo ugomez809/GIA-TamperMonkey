@@ -153,6 +153,7 @@
     }
 
     input[type="text"],
+    input[type="password"],
     textarea {
       width: 100%;
       border: 1px solid var(--line);
@@ -165,6 +166,23 @@
 
     .position-input {
       max-width: 280px;
+    }
+
+    .token-grid {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(220px, 1fr);
+      gap: 12px;
+      align-items: end;
+    }
+
+    .save-actions {
+      margin-top: 12px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.84rem;
+      margin: 10px 0 0;
     }
 
     .grid {
@@ -244,6 +262,7 @@
     }
 
     @media (max-width: 760px) {
+      .token-grid,
       .check-groups {
         grid-template-columns: 1fr;
       }
@@ -279,6 +298,24 @@
       <p class="status">Available employee positions: PRODUCER, CSR, SDR.</p>
     </section>
 
+    <section class="panel">
+      <h2>GitHub Save</h2>
+      <div class="token-grid">
+        <label class="field">
+          <span>GitHub token</span>
+          <input type="password" id="githubToken" autocomplete="off" spellcheck="false" placeholder="Fine-grained token">
+        </label>
+        <label class="field">
+          <span>Commit message</span>
+          <input type="text" id="commitMessage" value="Update installer positions">
+        </label>
+      </div>
+      <div class="actions save-actions">
+        <button type="button" class="success" id="saveGitHub">Save to GitHub</button>
+      </div>
+      <p class="hint">Token needs Contents: Read and write for ugomez809/GIA-TamperMonkey.</p>
+    </section>
+
     <section class="grid" id="scripts"></section>
 
     <section class="panel">
@@ -288,7 +325,14 @@
   </main>
 
   <script>
+    const OWNER = 'ugomez809';
+    const REPO = 'GIA-TamperMonkey';
+    const BRANCH = 'main';
+    const CONFIG_PATH = 'Installer/installer-config.json';
     const CONFIG_URL = './installer-config.json';
+    const GITHUB_CONTENTS_URL = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeRepoPath(CONFIG_PATH)}`;
+    const REQUIRED_POSITIONS = ['PRODUCER', 'CSR', 'SDR'];
+
     const state = {
       config: null
     };
@@ -299,6 +343,9 @@
     const refreshButton = document.getElementById('refresh');
     const downloadButton = document.getElementById('download');
     const copyButton = document.getElementById('copy');
+    const githubTokenInput = document.getElementById('githubToken');
+    const commitMessageInput = document.getElementById('commitMessage');
+    const saveGitHubButton = document.getElementById('saveGitHub');
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
@@ -307,6 +354,10 @@
 
     function normalizePosition(value) {
       return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function encodeRepoPath(path) {
+      return path.split('/').map(encodeURIComponent).join('/');
     }
 
     function cloneConfig(config) {
@@ -321,6 +372,92 @@
 
     function syncOutput() {
       jsonOutput.value = JSON.stringify(getConfigForExport(), null, 2);
+    }
+
+    function validateConfig(config) {
+      const errors = [];
+      if (!config || typeof config !== 'object') {
+        return ['Config must be a JSON object.'];
+      }
+      if (JSON.stringify(config.positions || []) !== JSON.stringify(REQUIRED_POSITIONS)) {
+        errors.push('Positions must be PRODUCER, CSR, SDR.');
+      }
+      if ('tags' in config) {
+        errors.push('Tags are not part of the installer config.');
+      }
+      if (!Array.isArray(config.scripts)) {
+        errors.push('Scripts must be an array.');
+        return errors;
+      }
+      config.scripts.forEach((script) => {
+        if (!script.path || !script.path.endsWith('-updater.user.js')) {
+          errors.push(`Only updater scripts can be listed: ${script.path || '(missing path)'}`);
+        }
+        if (!Array.isArray(script.positions)) {
+          errors.push(`Positions must be an array: ${script.path}`);
+        } else {
+          script.positions.forEach((position) => {
+            if (!REQUIRED_POSITIONS.includes(position)) {
+              errors.push(`Unknown position ${position}: ${script.path}`);
+            }
+          });
+        }
+        if ('tags' in script) {
+          errors.push(`Script tags are not allowed: ${script.path}`);
+        }
+      });
+      return errors;
+    }
+
+    function readOutputConfig() {
+      let config;
+      try {
+        config = JSON.parse(jsonOutput.value);
+      } catch (error) {
+        throw new Error(`Generated config is not valid JSON: ${error.message}`);
+      }
+      const errors = validateConfig(config);
+      if (errors.length) {
+        throw new Error(errors.join(' '));
+      }
+      return {
+        config,
+        json: `${JSON.stringify(config, null, 2)}\n`
+      };
+    }
+
+    function toBase64Utf8(value) {
+      const bytes = new TextEncoder().encode(value);
+      let binary = '';
+      bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+      });
+      return btoa(binary);
+    }
+
+    async function githubRequest(url, token, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...(options.headers || {})
+        }
+      });
+      const body = await response.text();
+      let data = null;
+      try {
+        data = body ? JSON.parse(body) : null;
+      } catch {
+        data = body;
+      }
+      if (!response.ok) {
+        const message = data && data.message ? data.message : `GitHub returned ${response.status}`;
+        throw new Error(message);
+      }
+      return data;
     }
 
     function updateScript(path, patch) {
@@ -409,6 +546,44 @@
       }
     }
 
+    async function saveConfigToGitHub() {
+      const token = githubTokenInput.value.trim();
+      if (!token) {
+        setStatus('Enter a GitHub token before saving.', true);
+        return;
+      }
+
+      try {
+        saveGitHubButton.disabled = true;
+        const { config, json } = readOutputConfig();
+        setStatus('Reading current GitHub config...');
+        const currentFile = await githubRequest(`${GITHUB_CONTENTS_URL}?ref=${encodeURIComponent(BRANCH)}`, token);
+        if (!currentFile || !currentFile.sha) {
+          throw new Error('GitHub did not return a file SHA.');
+        }
+
+        setStatus('Saving config to GitHub...');
+        const result = await githubRequest(GITHUB_CONTENTS_URL, token, {
+          method: 'PUT',
+          body: JSON.stringify({
+            message: commitMessageInput.value.trim() || 'Update installer positions',
+            content: toBase64Utf8(json),
+            sha: currentFile.sha,
+            branch: BRANCH
+          })
+        });
+
+        state.config = config;
+        jsonOutput.value = json;
+        const shortSha = result && result.commit && result.commit.sha ? result.commit.sha.slice(0, 7) : 'saved';
+        setStatus(`Saved to GitHub (${shortSha}). GitHub Pages may take a minute to refresh.`);
+      } catch (error) {
+        setStatus(error.message || String(error), true);
+      } finally {
+        saveGitHubButton.disabled = false;
+      }
+    }
+
     scriptsEl.addEventListener('change', (event) => {
       const target = event.target;
       if (!target.matches('input[type="checkbox"]')) return;
@@ -431,6 +606,7 @@
     refreshButton.addEventListener('click', () => loadConfig().catch((error) => setStatus(error.message || String(error), true)));
     downloadButton.addEventListener('click', downloadConfig);
     copyButton.addEventListener('click', copyConfig);
+    saveGitHubButton.addEventListener('click', saveConfigToGitHub);
 
     loadConfig().catch((error) => setStatus(error.message || String(error), true));
   </script>

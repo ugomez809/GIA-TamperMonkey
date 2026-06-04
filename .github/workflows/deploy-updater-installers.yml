@@ -39,10 +39,10 @@ jobs:
             <head>
               <meta charset="utf-8">
               <meta http-equiv="refresh" content="0; url=./updater-installers.html">
-              <title>GIA Tampermonkey Updater Installers</title>
+              <title>Tampermonkey Installers</title>
             </head>
             <body>
-              <p><a href="./updater-installers.html">Open GIA Tampermonkey Updater Installers</a></p>
+              <p><a href="./updater-installers.html">Open Tampermonkey Installers</a></p>
             </body>
           </html>
           HTML
