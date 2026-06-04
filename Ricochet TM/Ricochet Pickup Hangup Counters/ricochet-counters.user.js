@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Pickup / Hangup Counters
 // @namespace    local.ricochet-counters
-// @version      0.5.12
+// @version      0.5.13
 // @description  Adds Pickup and Hangup counters to Ricochet and sends click/report webhooks.
 // @match        https://giainc.ricochet.me/*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters.user.js
@@ -16,10 +16,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '0.5.12';
-  const SCRIPT_ID = 'ricochet-counters';
-  const SCRIPT_NAME = 'Ricochet Pickup / Hangup Counters';
-  const SCRIPT_UPDATE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters.user.js';
+  const SCRIPT_VERSION = '0.5.13';
   const HOST_ID = 'rc-call-counter-host';
   const STYLE_ID = 'rc-call-counter-style';
   const STORAGE_PREFIX = 'rcCallCounter.';
@@ -47,28 +44,6 @@
     { id: 'pickup', label: 'Pick Ups', payloadKey: 'pickupCount' },
     { id: 'hangup', label: 'Hang Ups', payloadKey: 'hangupCount' },
   ];
-
-  function announceScriptPresence() {
-    window.dispatchEvent(new CustomEvent('ricochetUserScript:loaded', {
-      detail: {
-        id: SCRIPT_ID,
-        name: SCRIPT_NAME,
-        version: SCRIPT_VERSION,
-        updateUrl: SCRIPT_UPDATE_URL,
-      },
-    }));
-  }
-
-  function bindUpdaterStatusEvents() {
-    window.addEventListener('ricochetUserScript:requestStatus', (event) => {
-      const requestedId = event.detail && event.detail.id;
-      if (!requestedId || requestedId === SCRIPT_ID) {
-        announceScriptPresence();
-      }
-    });
-
-    announceScriptPresence();
-  }
 
   const californiaDisplayFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: CALIFORNIA_TIME_ZONE,
@@ -970,8 +945,6 @@
     window.setInterval(renderClock, 1000);
     window.setInterval(mountCounters, 2000);
   }
-
-  bindUpdaterStatusEvents();
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start, { once: true });

@@ -1,375 +1,276 @@
 // ==UserScript==
-// @name         Ricochet VoiceMail Lead Watcher Updater
-// @namespace    GIA.INC
-// @version      1.0.0
-// @description  Checks Ricochet VoiceMail Lead Watcher for GitHub updates.
+// @name         LOCAL Ricochet VoiceMail Lead Watcher Updater
+// @namespace    local.ricochet-voicemail-lead-watcher.updater
+// @version      1.1.0
+// @description  Loads and auto-updates only the Ricochet VoiceMail Lead Watcher script from GitHub.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
+// @run-at       document-idle
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_deleteValue
+// @grant        GM_registerMenuCommand
+// @connect      api.github.com
+// @connect      raw.githubusercontent.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
-// @grant        GM_xmlhttpRequest
-// @grant        GM_registerMenuCommand
-// @connect      raw.githubusercontent.com
-// @run-at       document-idle
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const TARGET = {
-    id: 'ricochet-voicemail-lead-watcher',
-    name: 'Ricochet VoiceMail Lead Watcher',
-    url: 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js',
-  };
+  const LOADER_VERSION = '1.1.0';
+  const TARGET_ID = 'ricochet-voicemail-lead-watcher';
+  const TARGET_LABEL = 'Ricochet VoiceMail Lead Watcher';
+  const TARGET_FILE = 'ricochet-voicemail-lead-watcher.user.js';
+  const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher';
+  const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
+  const CHECK_INTERVAL_MS = 30 * 1000;
+  const RELOAD_DELAY_MS = 1200;
+  const CACHE_KEY = `tmRicochetPerScriptUpdater:${TARGET_ID}:code`;
+  const VERSION_KEY = `tmRicochetPerScriptUpdater:${TARGET_ID}:version`;
+  const LAST_CHECK_KEY = `tmRicochetPerScriptUpdater:${TARGET_ID}:lastCheck`;
+  const RELOAD_KEY = `tmRicochetPerScriptUpdater:${TARGET_ID}:reload`;
 
-  const PANEL_ID = 'ricochet-voicemail-lead-watcher-updater-panel';
-  const STYLE_ID = 'ricochet-voicemail-lead-watcher-updater-style';
-  const REQUEST_EVENT = 'ricochetUserScript:requestStatus';
-  const LOADED_EVENT = 'ricochetUserScript:loaded';
+  let executed = false;
+  let debugEnabled = false;
+  let forceRequested = false;
+  let clearRequested = false;
+  let latestBaseUrl = '';
 
-  const state = {
-    installedVersion: '',
-    remoteVersion: '',
-    error: '',
-    checking: false,
-    panelOpen: false,
-    lastChecked: '',
-  };
+  boot();
 
-  bindEvents();
-  registerMenuCommands();
-  requestInstalledStatus();
+  function boot() {
+    if (!isRicochet()) return;
+    applyOptionsFromUrl();
 
-  window.setTimeout(() => {
-    requestInstalledStatus();
-    checkForUpdate(false);
-  }, 1000);
+    if (clearRequested) clearCache();
 
-  window.setTimeout(requestInstalledStatus, 3000);
+    const cached = storageGet(CACHE_KEY, '');
+    if (cached) executeTarget(cached, 'cache');
 
-  function bindEvents() {
-    window.addEventListener(LOADED_EVENT, (event) => {
-      const detail = event.detail || {};
-      if (detail.id !== TARGET.id) return;
+    checkForUpdates({ runIfNoCache: !cached, forceReload: forceRequested })
+      .catch((err) => console.warn(`[${TARGET_LABEL} Updater] update check failed`, err));
 
-      state.installedVersion = String(detail.version || '');
-      renderPanel();
-    });
+    window.setInterval(() => {
+      checkForUpdates({ runIfNoCache: false, forceReload: false })
+        .catch((err) => console.warn(`[${TARGET_LABEL} Updater] background update failed`, err));
+    }, CHECK_INTERVAL_MS);
   }
 
-  function registerMenuCommands() {
-    if (typeof GM_registerMenuCommand !== 'function') return;
+  async function checkForUpdates(options = {}) {
+    const remote = await fetchTarget();
+    const cached = storageGet(CACHE_KEY, '');
+    const remoteVersion = extractVersion(remote);
 
-    GM_registerMenuCommand(`Check ${TARGET.name} update`, () => {
-      state.panelOpen = true;
-      renderPanel();
-      checkForUpdate(true);
-    });
+    storageSet(LAST_CHECK_KEY, String(Date.now()));
 
-    GM_registerMenuCommand(`Open ${TARGET.name} installer`, openTargetUrl);
-  }
+    if (!sameCode(remote, cached)) {
+      storageSet(CACHE_KEY, remote);
+      storageSet(VERSION_KEY, remoteVersion);
 
-  function requestInstalledStatus() {
-    window.dispatchEvent(new CustomEvent(REQUEST_EVENT, {
-      detail: { id: TARGET.id },
-    }));
-  }
+      if (options.runIfNoCache && !executed) {
+        executeTarget(remote, 'remote');
+        if (debugEnabled) showStatus(`Loaded ${TARGET_LABEL} v${remoteVersion}.`);
+        return;
+      }
 
-  async function checkForUpdate(showPanel) {
-    if (state.checking) return;
-
-    state.checking = true;
-    state.error = '';
-    if (showPanel) state.panelOpen = true;
-    renderPanel();
-
-    try {
-      const text = await fetchText(TARGET.url);
-      const version = parseVersion(text);
-      if (!version) throw new Error('Missing @version metadata.');
-      state.remoteVersion = version;
-    } catch (error) {
-      state.error = error.message || String(error);
+      reloadOnce(remoteVersion, options.forceReload);
+      return;
     }
 
-    state.checking = false;
-    state.lastChecked = formatTime(new Date());
-
-    if (needsAttention()) {
-      state.panelOpen = true;
-    }
-
-    renderPanel();
+    if (debugEnabled) showStatus(`${TARGET_LABEL} already current: v${remoteVersion}.`);
   }
 
-  function fetchText(url) {
+  function executeTarget(code, source) {
+    if (executed) return;
+    executed = true;
+    storageSet(VERSION_KEY, extractVersion(code));
+    const sourceUrl = `${latestBaseUrl || BASE_URL}/${TARGET_FILE}`;
+    console.info(`[${TARGET_LABEL} Updater] Running ${TARGET_LABEL} from ${source}.`);
+    eval(`${code}\n//# sourceURL=${sourceUrl}`);
+  }
+
+  function fetchTarget() {
     return new Promise((resolve, reject) => {
+      getTargetBaseUrl()
+        .then((baseUrl) => {
+          const url = `${baseUrl}/${TARGET_FILE}?tmRicochetUpdater=${Date.now()}`;
+          GM_xmlhttpRequest({
+            method: 'GET',
+            url,
+            timeout: 20000,
+            onload: (response) => {
+              if (response.status < 200 || response.status >= 300) {
+                reject(new Error(`${TARGET_LABEL} returned HTTP ${response.status}`));
+                return;
+              }
+              const text = String(response.responseText || '').trim();
+              if (!text || !text.includes('// ==UserScript==')) {
+                reject(new Error(`${TARGET_LABEL} did not look like a userscript`));
+                return;
+              }
+              resolve(text);
+            },
+            onerror: () => reject(new Error(`${TARGET_LABEL} network request failed`)),
+            ontimeout: () => reject(new Error(`${TARGET_LABEL} request timed out`))
+          });
+        })
+        .catch(reject);
+    });
+  }
+
+  function reloadOnce(version, force) {
+    const signature = `${TARGET_ID}:${version}`;
+    if (!force && sessionStorage.getItem(RELOAD_KEY) === signature) return;
+    sessionStorage.setItem(RELOAD_KEY, signature);
+    window.setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+  }
+
+  async function getTargetBaseUrl() {
+    try {
+      const sha = await fetchLatestCommitSha();
+      latestBaseUrl = `https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/${sha}/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher`;
+      return latestBaseUrl;
+    } catch (err) {
+      console.warn(`[${TARGET_LABEL} Updater] commit lookup failed; using branch URL`, err);
+      latestBaseUrl = BASE_URL;
+      return latestBaseUrl;
+    }
+  }
+
+  function fetchLatestCommitSha() {
+    return new Promise((resolve, reject) => {
+      const url = `${COMMIT_API_URL}?tmRicochetUpdater=${Date.now()}`;
       GM_xmlhttpRequest({
         method: 'GET',
         url,
-        timeout: 15000,
-        onload(response) {
-          if (response.status >= 200 && response.status < 300) {
-            resolve(response.responseText || '');
-          } else {
-            reject(new Error(`GitHub returned ${response.status}.`));
+        headers: { Accept: 'application/vnd.github+json' },
+        timeout: 20000,
+        onload: (response) => {
+          if (response.status < 200 || response.status >= 300) {
+            reject(new Error(`GitHub commit lookup returned HTTP ${response.status}`));
+            return;
           }
+          const data = parseJson(response.responseText);
+          const sha = clean(data && data.sha);
+          if (!/^[a-f0-9]{40}$/i.test(sha)) {
+            reject(new Error('GitHub commit lookup did not return a valid SHA'));
+            return;
+          }
+          resolve(sha);
         },
-        onerror() {
-          reject(new Error('GitHub request failed.'));
-        },
-        ontimeout() {
-          reject(new Error('GitHub request timed out.'));
-        },
+        onerror: () => reject(new Error('GitHub commit lookup network request failed')),
+        ontimeout: () => reject(new Error('GitHub commit lookup timed out'))
       });
     });
   }
 
-  function parseVersion(text) {
-    const match = String(text || '').match(/^\s*\/\/\s*@version\s+(.+?)\s*$/m);
-    return match ? match[1].trim() : '';
-  }
-
-  function getStatus() {
-    if (state.error) return { label: 'Check failed', tone: 'bad' };
-    if (!state.installedVersion) return { label: 'Not detected', tone: 'warn' };
-    if (!state.remoteVersion) return { label: state.checking ? 'Checking' : 'Ready', tone: 'neutral' };
-    if (compareVersions(state.remoteVersion, state.installedVersion) > 0) {
-      return { label: 'Update available', tone: 'warn' };
-    }
-    if (compareVersions(state.remoteVersion, state.installedVersion) < 0) {
-      return { label: 'Installed newer', tone: 'good' };
-    }
-
-    return { label: 'Up to date', tone: 'good' };
-  }
-
-  function needsAttention() {
-    const status = getStatus();
-    return status.tone === 'warn' || status.tone === 'bad';
-  }
-
-  function renderPanel() {
-    injectStyles();
-
-    let panel = document.getElementById(PANEL_ID);
-    if (!state.panelOpen && !needsAttention()) {
-      if (panel) panel.remove();
+  function applyOptionsFromUrl() {
+    let url = null;
+    try {
+      url = new URL(location.href);
+    } catch {
       return;
     }
 
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = PANEL_ID;
-      document.body.appendChild(panel);
+    debugEnabled = isTruthy(url.searchParams.get('ricochetUpdaterDebug')) || isTruthy(url.searchParams.get('ricochetVmUpdaterDebug'));
+    forceRequested = isTruthy(url.searchParams.get('ricochetUpdaterForce')) || isTruthy(url.searchParams.get('ricochetVmUpdaterForce'));
+    clearRequested = isTruthy(url.searchParams.get('ricochetUpdaterClear')) || isTruthy(url.searchParams.get('ricochetVmUpdaterClear'));
+
+    if (forceRequested || clearRequested) sessionStorage.removeItem(RELOAD_KEY);
+
+    url.searchParams.delete('ricochetVmUpdaterDebug');
+    url.searchParams.delete('ricochetVmUpdaterForce');
+    url.searchParams.delete('ricochetVmUpdaterClear');
+    history.replaceState(history.state, document.title, url.toString());
+  }
+
+  function showStatus(message) {
+    alert([
+      `Updater: ${TARGET_LABEL} loader v${LOADER_VERSION}`,
+      message,
+      `Cached: ${storageGet(VERSION_KEY, 'none')}`,
+      `Last check: ${formatTimestamp(storageGet(LAST_CHECK_KEY, ''))}`
+    ].join('\n'));
+  }
+
+  function clearCache() {
+    storageDelete(CACHE_KEY);
+    storageDelete(VERSION_KEY);
+    storageDelete(LAST_CHECK_KEY);
+  }
+
+  function isRicochet() {
+    return /(^|\.)giainc\.ricochet\.me$/i.test(String(location.hostname || ''));
+  }
+
+  function extractVersion(code) {
+    const match = String(code || '').match(/^\/\/\s*@version\s+([^\s]+)/m);
+    return match ? match[1] : 'unknown';
+  }
+
+  function sameCode(left, right) {
+    return normalizeCode(left) === normalizeCode(right);
+  }
+
+  function normalizeCode(value) {
+    return String(value || '').replace(/\r\n?/g, '\n').trim();
+  }
+
+  function isTruthy(value) {
+    return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+  }
+
+  function clean(value) {
+    return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+  }
+
+  function parseJson(text) {
+    try {
+      return JSON.parse(String(text || '').trim());
+    } catch {
+      return null;
     }
-
-    const status = getStatus();
-    const actionLabel = status.label === 'Update available'
-      ? 'Update'
-      : status.label === 'Not detected'
-        ? 'Install'
-        : 'Open';
-
-    panel.textContent = '';
-    const card = createEl('div', 'rsu-card');
-
-    const header = createEl('div', 'rsu-header');
-    header.appendChild(createEl('strong', '', 'VoiceMail Updater'));
-
-    const headerActions = createEl('div', 'rsu-header-actions');
-    headerActions.appendChild(createButton(state.checking ? 'Checking...' : 'Check', () => checkForUpdate(true), 'rsu-secondary'));
-    headerActions.appendChild(createButton('x', () => {
-      state.panelOpen = false;
-      renderPanel();
-    }, 'rsu-icon'));
-    header.appendChild(headerActions);
-    card.appendChild(header);
-
-    const row = createEl('div', 'rsu-row');
-    const body = createEl('div', 'rsu-row-body');
-    body.appendChild(createEl('div', 'rsu-name', TARGET.name));
-
-    const versions = createEl('div', 'rsu-version');
-    versions.appendChild(createEl('span', '', `Installed: ${state.installedVersion || 'not detected'}`));
-    versions.appendChild(createEl('span', '', `Latest: ${state.remoteVersion || 'unknown'}`));
-    body.appendChild(versions);
-    body.appendChild(createEl('span', `rsu-badge rsu-${status.tone}`, status.label));
-
-    row.appendChild(body);
-    row.appendChild(createButton(actionLabel, openTargetUrl, 'rsu-primary'));
-    card.appendChild(row);
-
-    const footerText = state.error || (state.lastChecked ? `Last checked ${state.lastChecked}` : 'Waiting for first check');
-    card.appendChild(createEl('div', 'rsu-footer', footerText));
-    panel.appendChild(card);
   }
 
-  function injectStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = `
-      #${PANEL_ID} {
-        position: fixed;
-        right: 14px;
-        bottom: 14px;
-        z-index: 2147483647;
-        width: min(360px, calc(100vw - 28px));
-        color: #172033;
-        font: 13px/1.35 Arial, Helvetica, sans-serif;
-      }
-
-      #${PANEL_ID} .rsu-card {
-        background: #ffffff;
-        border: 1px solid #c8d3df;
-        border-radius: 8px;
-        box-shadow: 0 12px 32px rgba(14, 24, 36, 0.22);
-        overflow: hidden;
-      }
-
-      #${PANEL_ID} .rsu-header,
-      #${PANEL_ID} .rsu-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
-
-      #${PANEL_ID} .rsu-header {
-        padding: 10px 12px;
-        background: #f5f8fb;
-        border-bottom: 1px solid #d9e2ec;
-      }
-
-      #${PANEL_ID} .rsu-header-actions {
-        display: flex;
-        gap: 6px;
-      }
-
-      #${PANEL_ID} .rsu-row {
-        padding: 11px 12px;
-        border-bottom: 1px solid #e6edf4;
-      }
-
-      #${PANEL_ID} .rsu-row-body {
-        min-width: 0;
-      }
-
-      #${PANEL_ID} .rsu-name {
-        font-weight: 700;
-      }
-
-      #${PANEL_ID} .rsu-version {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 10px;
-        margin-top: 3px;
-        color: #516174;
-        font-size: 12px;
-      }
-
-      #${PANEL_ID} .rsu-badge {
-        display: inline-flex;
-        margin-top: 7px;
-        padding: 3px 7px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 700;
-      }
-
-      #${PANEL_ID} .rsu-good { background: #e8f7ee; color: #166534; }
-      #${PANEL_ID} .rsu-warn { background: #fff3d6; color: #8a5a00; }
-      #${PANEL_ID} .rsu-bad { background: #fde8e8; color: #a61b1b; }
-      #${PANEL_ID} .rsu-neutral { background: #eef3f7; color: #405266; }
-
-      #${PANEL_ID} button {
-        border: 1px solid transparent;
-        border-radius: 6px;
-        cursor: pointer;
-        font: inherit;
-        font-weight: 700;
-        min-height: 30px;
-        white-space: nowrap;
-      }
-
-      #${PANEL_ID} .rsu-primary {
-        background: #135d85;
-        color: #ffffff;
-        padding: 0 10px;
-      }
-
-      #${PANEL_ID} .rsu-secondary,
-      #${PANEL_ID} .rsu-icon {
-        background: #ffffff;
-        border-color: #c8d3df;
-        color: #26384b;
-        padding: 0 9px;
-      }
-
-      #${PANEL_ID} .rsu-icon {
-        width: 30px;
-        padding: 0;
-        text-transform: uppercase;
-      }
-
-      #${PANEL_ID} .rsu-footer {
-        padding: 8px 12px;
-        color: #65758a;
-        font-size: 12px;
-        background: #fbfcfd;
-      }
-    `;
-
-    document.head.appendChild(style);
-  }
-
-  function createEl(tagName, className, text) {
-    const node = document.createElement(tagName);
-    if (className) node.className = className;
-    if (text != null) node.textContent = text;
-    return node;
-  }
-
-  function createButton(label, onClick, className) {
-    const button = createEl('button', className, label);
-    button.type = 'button';
-    button.addEventListener('click', onClick);
-    return button;
-  }
-
-  function openTargetUrl() {
-    window.open(TARGET.url, '_blank', 'noopener');
-  }
-
-  function compareVersions(left, right) {
-    const leftParts = splitVersion(left);
-    const rightParts = splitVersion(right);
-    const length = Math.max(leftParts.length, rightParts.length);
-
-    for (let index = 0; index < length; index += 1) {
-      const leftValue = leftParts[index] || 0;
-      const rightValue = rightParts[index] || 0;
-      if (leftValue > rightValue) return 1;
-      if (leftValue < rightValue) return -1;
+  function formatTimestamp(value) {
+    const timestamp = Number(value) || 0;
+    if (!timestamp) return 'never';
+    try {
+      return new Date(timestamp).toLocaleString();
+    } catch {
+      return String(timestamp);
     }
-
-    return 0;
   }
 
-  function splitVersion(version) {
-    return String(version || '')
-      .split(/[^\d]+/)
-      .filter(Boolean)
-      .map((part) => Number(part));
+  function storageGet(key, fallback = '') {
+    try {
+      if (typeof GM_getValue === 'function') return GM_getValue(key, fallback);
+    } catch {}
+    try {
+      return localStorage.getItem(key) || fallback;
+    } catch {}
+    return fallback;
   }
 
-  function formatTime(date) {
-    return date.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    });
+  function storageSet(key, value) {
+    try {
+      if (typeof GM_setValue === 'function') {
+        GM_setValue(key, value);
+        return;
+      }
+    } catch {}
+    try { localStorage.setItem(key, value); } catch {}
+  }
+
+  function storageDelete(key) {
+    try {
+      if (typeof GM_deleteValue === 'function') GM_deleteValue(key);
+    } catch {}
+    try { localStorage.removeItem(key); } catch {}
   }
 })();

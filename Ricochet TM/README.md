@@ -1,24 +1,28 @@
 # Ricochet Tampermonkey Scripts
 
-Install/update links:
+Updater installer links:
 
 ```text
-Ricochet Pickup / Hangup Counters
-https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters.user.js
-
 Ricochet Pickup / Hangup Counters Updater
 https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters-updater.user.js
-
-Ricochet VoiceMail Lead Watcher
-https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js
 
 Ricochet VoiceMail Lead Watcher Updater
 https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
 ```
 
-Tampermonkey uses the same raw GitHub URL in `@updateURL` and `@downloadURL`.
+Install only the updater for the script each PC needs. Each updater fetches, caches, and runs only the Ricochet script in its folder.
 
-Each updater checks only the Ricochet script in its folder and opens that script's install/update URL when a new version is available.
+Each updater checks GitHub every 30 seconds while Ricochet is open and reloads once when it finds a script change.
+
+Direct script links:
+
+```text
+Ricochet Pickup / Hangup Counters
+https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters.user.js
+
+Ricochet VoiceMail Lead Watcher
+https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js
+```
 
 Counters roll over at 11:59 PM California time so each day starts from zero.
 
