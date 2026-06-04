@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         Ricochet Script Updater
+// @name         Ricochet VoiceMail Lead Watcher Updater
 // @namespace    GIA.INC
 // @version      1.0.0
-// @description  Checks the Ricochet Tampermonkey scripts for GitHub updates.
+// @description  Checks Ricochet VoiceMail Lead Watcher for GitHub updates.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Script%20Updater/ricochet-script-updater.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Script%20Updater/ricochet-script-updater.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @connect      raw.githubusercontent.com
@@ -16,28 +16,21 @@
 (function () {
   'use strict';
 
-  const PANEL_ID = 'ricochet-script-updater-panel';
-  const STYLE_ID = 'ricochet-script-updater-style';
+  const TARGET = {
+    id: 'ricochet-voicemail-lead-watcher',
+    name: 'Ricochet VoiceMail Lead Watcher',
+    url: 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js',
+  };
+
+  const PANEL_ID = 'ricochet-voicemail-lead-watcher-updater-panel';
+  const STYLE_ID = 'ricochet-voicemail-lead-watcher-updater-style';
   const REQUEST_EVENT = 'ricochetUserScript:requestStatus';
   const LOADED_EVENT = 'ricochetUserScript:loaded';
 
-  const SCRIPTS = [
-    {
-      id: 'ricochet-counters',
-      name: 'Ricochet Pickup / Hangup Counters',
-      url: 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters.user.js',
-    },
-    {
-      id: 'ricochet-voicemail-lead-watcher',
-      name: 'Ricochet VoiceMail Lead Watcher',
-      url: 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js',
-    },
-  ];
-
   const state = {
-    installed: new Map(),
-    remote: new Map(),
-    errors: new Map(),
+    installedVersion: '',
+    remoteVersion: '',
+    error: '',
     checking: false,
     panelOpen: false,
     lastChecked: '',
@@ -49,7 +42,7 @@
 
   window.setTimeout(() => {
     requestInstalledStatus();
-    checkForUpdates(false);
+    checkForUpdate(false);
   }, 1000);
 
   window.setTimeout(requestInstalledStatus, 3000);
@@ -57,14 +50,9 @@
   function bindEvents() {
     window.addEventListener(LOADED_EVENT, (event) => {
       const detail = event.detail || {};
-      if (!SCRIPTS.some((script) => script.id === detail.id)) return;
+      if (detail.id !== TARGET.id) return;
 
-      state.installed.set(detail.id, {
-        name: detail.name || getScript(detail.id).name,
-        version: String(detail.version || ''),
-        updateUrl: detail.updateUrl || getScript(detail.id).url,
-      });
-
+      state.installedVersion = String(detail.version || '');
       renderPanel();
     });
   }
@@ -72,48 +60,42 @@
   function registerMenuCommands() {
     if (typeof GM_registerMenuCommand !== 'function') return;
 
-    GM_registerMenuCommand('Check Ricochet script updates', () => {
+    GM_registerMenuCommand(`Check ${TARGET.name} update`, () => {
       state.panelOpen = true;
       renderPanel();
-      checkForUpdates(true);
+      checkForUpdate(true);
     });
 
-    for (const script of SCRIPTS) {
-      GM_registerMenuCommand(`Open ${script.name}`, () => {
-        openScriptUrl(script);
-      });
-    }
+    GM_registerMenuCommand(`Open ${TARGET.name} installer`, openTargetUrl);
   }
 
-  function requestInstalledStatus(id) {
+  function requestInstalledStatus() {
     window.dispatchEvent(new CustomEvent(REQUEST_EVENT, {
-      detail: id ? { id } : {},
+      detail: { id: TARGET.id },
     }));
   }
 
-  async function checkForUpdates(showPanel) {
+  async function checkForUpdate(showPanel) {
     if (state.checking) return;
 
     state.checking = true;
-    state.errors.clear();
+    state.error = '';
     if (showPanel) state.panelOpen = true;
     renderPanel();
 
-    await Promise.all(SCRIPTS.map(async (script) => {
-      try {
-        const text = await fetchText(script.url);
-        const version = parseVersion(text);
-        if (!version) throw new Error('Missing @version metadata.');
-        state.remote.set(script.id, { version, checkedAt: new Date() });
-      } catch (error) {
-        state.errors.set(script.id, error.message || String(error));
-      }
-    }));
+    try {
+      const text = await fetchText(TARGET.url);
+      const version = parseVersion(text);
+      if (!version) throw new Error('Missing @version metadata.');
+      state.remoteVersion = version;
+    } catch (error) {
+      state.error = error.message || String(error);
+    }
 
     state.checking = false;
     state.lastChecked = formatTime(new Date());
 
-    if (hasAttentionStatus()) {
+    if (needsAttention()) {
       state.panelOpen = true;
     }
 
@@ -148,33 +130,30 @@
     return match ? match[1].trim() : '';
   }
 
-  function getStatus(script) {
-    const installed = state.installed.get(script.id);
-    const remote = state.remote.get(script.id);
-    const error = state.errors.get(script.id);
-
-    if (error) return { label: 'Check failed', tone: 'bad' };
-    if (!installed) return { label: 'Not detected', tone: 'warn' };
-    if (!remote) return { label: state.checking ? 'Checking' : 'Ready', tone: 'neutral' };
-    if (compareVersions(remote.version, installed.version) > 0) {
+  function getStatus() {
+    if (state.error) return { label: 'Check failed', tone: 'bad' };
+    if (!state.installedVersion) return { label: 'Not detected', tone: 'warn' };
+    if (!state.remoteVersion) return { label: state.checking ? 'Checking' : 'Ready', tone: 'neutral' };
+    if (compareVersions(state.remoteVersion, state.installedVersion) > 0) {
       return { label: 'Update available', tone: 'warn' };
+    }
+    if (compareVersions(state.remoteVersion, state.installedVersion) < 0) {
+      return { label: 'Installed newer', tone: 'good' };
     }
 
     return { label: 'Up to date', tone: 'good' };
   }
 
-  function hasAttentionStatus() {
-    return SCRIPTS.some((script) => {
-      const status = getStatus(script);
-      return status.tone === 'warn' || status.tone === 'bad';
-    });
+  function needsAttention() {
+    const status = getStatus();
+    return status.tone === 'warn' || status.tone === 'bad';
   }
 
   function renderPanel() {
     injectStyles();
 
     let panel = document.getElementById(PANEL_ID);
-    if (!state.panelOpen && !hasAttentionStatus()) {
+    if (!state.panelOpen && !needsAttention()) {
       if (panel) panel.remove();
       return;
     }
@@ -185,14 +164,21 @@
       document.body.appendChild(panel);
     }
 
-    panel.textContent = '';
+    const status = getStatus();
+    const actionLabel = status.label === 'Update available'
+      ? 'Update'
+      : status.label === 'Not detected'
+        ? 'Install'
+        : 'Open';
 
+    panel.textContent = '';
     const card = createEl('div', 'rsu-card');
+
     const header = createEl('div', 'rsu-header');
-    header.appendChild(createEl('strong', '', 'Ricochet Updater'));
+    header.appendChild(createEl('strong', '', 'VoiceMail Updater'));
 
     const headerActions = createEl('div', 'rsu-header-actions');
-    headerActions.appendChild(createButton(state.checking ? 'Checking...' : 'Check', () => checkForUpdates(true), 'rsu-secondary'));
+    headerActions.appendChild(createButton(state.checking ? 'Checking...' : 'Check', () => checkForUpdate(true), 'rsu-secondary'));
     headerActions.appendChild(createButton('x', () => {
       state.panelOpen = false;
       renderPanel();
@@ -200,41 +186,23 @@
     header.appendChild(headerActions);
     card.appendChild(header);
 
-    for (const script of SCRIPTS) {
-      card.appendChild(renderScriptRow(script));
-    }
-
-    const footer = createEl('div', 'rsu-footer', state.lastChecked ? `Last checked ${state.lastChecked}` : 'Waiting for first check');
-    card.appendChild(footer);
-    panel.appendChild(card);
-  }
-
-  function renderScriptRow(script) {
-    const installed = state.installed.get(script.id);
-    const remote = state.remote.get(script.id);
-    const status = getStatus(script);
-
     const row = createEl('div', 'rsu-row');
     const body = createEl('div', 'rsu-row-body');
-    body.appendChild(createEl('div', 'rsu-name', script.name));
+    body.appendChild(createEl('div', 'rsu-name', TARGET.name));
 
     const versions = createEl('div', 'rsu-version');
-    versions.appendChild(createEl('span', '', `Installed: ${installed && installed.version ? installed.version : 'not detected'}`));
-    versions.appendChild(createEl('span', '', `Latest: ${remote && remote.version ? remote.version : 'unknown'}`));
+    versions.appendChild(createEl('span', '', `Installed: ${state.installedVersion || 'not detected'}`));
+    versions.appendChild(createEl('span', '', `Latest: ${state.remoteVersion || 'unknown'}`));
     body.appendChild(versions);
+    body.appendChild(createEl('span', `rsu-badge rsu-${status.tone}`, status.label));
 
-    const badge = createEl('span', `rsu-badge rsu-${status.tone}`, status.label);
-    body.appendChild(badge);
-
-    const actionLabel = status.label === 'Update available'
-      ? 'Update'
-      : status.label === 'Not detected'
-        ? 'Install'
-        : 'Open';
-    const action = createButton(actionLabel, () => openScriptUrl(script), 'rsu-primary');
     row.appendChild(body);
-    row.appendChild(action);
-    return row;
+    row.appendChild(createButton(actionLabel, openTargetUrl, 'rsu-primary'));
+    card.appendChild(row);
+
+    const footerText = state.error || (state.lastChecked ? `Last checked ${state.lastChecked}` : 'Waiting for first check');
+    card.appendChild(createEl('div', 'rsu-footer', footerText));
+    panel.appendChild(card);
   }
 
   function injectStyles() {
@@ -248,7 +216,7 @@
         right: 14px;
         bottom: 14px;
         z-index: 2147483647;
-        width: min(380px, calc(100vw - 28px));
+        width: min(360px, calc(100vw - 28px));
         color: #172033;
         font: 13px/1.35 Arial, Helvetica, sans-serif;
       }
@@ -291,7 +259,6 @@
 
       #${PANEL_ID} .rsu-name {
         font-weight: 700;
-        color: #172033;
       }
 
       #${PANEL_ID} .rsu-version {
@@ -305,7 +272,6 @@
 
       #${PANEL_ID} .rsu-badge {
         display: inline-flex;
-        align-items: center;
         margin-top: 7px;
         padding: 3px 7px;
         border-radius: 999px;
@@ -313,25 +279,10 @@
         font-weight: 700;
       }
 
-      #${PANEL_ID} .rsu-good {
-        background: #e8f7ee;
-        color: #166534;
-      }
-
-      #${PANEL_ID} .rsu-warn {
-        background: #fff3d6;
-        color: #8a5a00;
-      }
-
-      #${PANEL_ID} .rsu-bad {
-        background: #fde8e8;
-        color: #a61b1b;
-      }
-
-      #${PANEL_ID} .rsu-neutral {
-        background: #eef3f7;
-        color: #405266;
-      }
+      #${PANEL_ID} .rsu-good { background: #e8f7ee; color: #166534; }
+      #${PANEL_ID} .rsu-warn { background: #fff3d6; color: #8a5a00; }
+      #${PANEL_ID} .rsu-bad { background: #fde8e8; color: #a61b1b; }
+      #${PANEL_ID} .rsu-neutral { background: #eef3f7; color: #405266; }
 
       #${PANEL_ID} button {
         border: 1px solid transparent;
@@ -388,12 +339,8 @@
     return button;
   }
 
-  function openScriptUrl(script) {
-    window.open(script.url, '_blank', 'noopener');
-  }
-
-  function getScript(id) {
-    return SCRIPTS.find((script) => script.id === id);
+  function openTargetUrl() {
+    window.open(TARGET.url, '_blank', 'noopener');
   }
 
   function compareVersions(left, right) {

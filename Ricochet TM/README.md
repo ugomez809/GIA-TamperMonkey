@@ -6,16 +6,19 @@ Install/update links:
 Ricochet Pickup / Hangup Counters
 https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters.user.js
 
+Ricochet Pickup / Hangup Counters Updater
+https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Pickup%20Hangup%20Counters/ricochet-counters-updater.user.js
+
 Ricochet VoiceMail Lead Watcher
 https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js
 
-Ricochet Script Updater
-https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20Script%20Updater/ricochet-script-updater.user.js
+Ricochet VoiceMail Lead Watcher Updater
+https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
 ```
 
 Tampermonkey uses the same raw GitHub URL in `@updateURL` and `@downloadURL`.
 
-The updater checks both Ricochet scripts from GitHub and opens the install/update URL when a new version is available.
+Each updater checks only the Ricochet script in its folder and opens that script's install/update URL when a new version is available.
 
 Counters roll over at 11:59 PM California time so each day starts from zero.
 
