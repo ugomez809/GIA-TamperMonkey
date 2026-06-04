@@ -5,8 +5,8 @@
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
-// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-voicemail-lead-watcher.user.js
-// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/ricochet-voicemail-lead-watcher.user.js
+// @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js
+// @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_getValue
@@ -19,6 +19,10 @@
 (function () {
   'use strict';
 
+  const SCRIPT_VERSION = '1.65';
+  const SCRIPT_ID = 'ricochet-voicemail-lead-watcher';
+  const SCRIPT_NAME = 'Ricochet VoiceMail Lead Watcher';
+  const SCRIPT_UPDATE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet%20TM/Ricochet%20VoiceMail%20Lead%20Watcher/ricochet-voicemail-lead-watcher.user.js';
   const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxxPdfKXKPbhBTUg2mlM9ZP3CpO70_gGMSYpNY8AQ5Ikn7SFPZez7-J954KfnqnlXTtng/exec';
   const DEFAULT_SDR_NAME = '';
   const LOOP_MS = 250;
@@ -46,7 +50,30 @@
     loopHandle: null
   };
 
+  bindUpdaterStatusEvents();
   init();
+
+  function announceScriptPresence() {
+    window.dispatchEvent(new CustomEvent('ricochetUserScript:loaded', {
+      detail: {
+        id: SCRIPT_ID,
+        name: SCRIPT_NAME,
+        version: SCRIPT_VERSION,
+        updateUrl: SCRIPT_UPDATE_URL,
+      },
+    }));
+  }
+
+  function bindUpdaterStatusEvents() {
+    window.addEventListener('ricochetUserScript:requestStatus', (event) => {
+      const requestedId = event.detail && event.detail.id;
+      if (!requestedId || requestedId === SCRIPT_ID) {
+        announceScriptPresence();
+      }
+    });
+
+    announceScriptPresence();
+  }
 
   function init() {
     if (!localStorage.getItem(KEYS.url)) {
