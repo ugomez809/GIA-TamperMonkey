@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GIA Tampermonkey Updater Installers</title>
+  <title>GIA Tampermonkey Employee Installers</title>
   <style>
     :root {
       color-scheme: light;
@@ -16,6 +16,8 @@
       --blue-dark: #174ea6;
       --green: #16794c;
       --shadow: 0 10px 30px rgba(23, 32, 51, 0.08);
+      --tag: #eef4ff;
+      --tag-border: #c7d8ff;
     }
 
     * {
@@ -59,18 +61,34 @@
       padding: 22px 0 40px;
     }
 
+    .toolbar,
+    .filters,
+    .script {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
     .toolbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       margin-bottom: 14px;
+      padding: 14px;
       flex-wrap: wrap;
     }
 
     .status {
       color: var(--muted);
       font-size: 0.92rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     button,
@@ -98,6 +116,11 @@
       background: var(--blue-dark);
     }
 
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
     .secondary {
       background: #fff;
       border-color: var(--line);
@@ -108,20 +131,52 @@
       background: #eef3f9;
     }
 
+    .install {
+      background: var(--green);
+    }
+
+    .install:hover {
+      background: #10613c;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px);
+      gap: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .field span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 750;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+
+    select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      padding: 8px 10px;
+    }
+
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
       gap: 14px;
     }
 
     .script {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
-      min-height: 252px;
+      min-height: 292px;
       padding: 16px;
     }
 
@@ -138,6 +193,23 @@
       margin: 0 0 12px;
     }
 
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .tag {
+      background: var(--tag);
+      border: 1px solid var(--tag-border);
+      border-radius: 999px;
+      color: #174ea6;
+      font-size: 0.78rem;
+      font-weight: 750;
+      padding: 3px 8px;
+    }
+
     dl {
       display: grid;
       grid-template-columns: auto 1fr;
@@ -148,7 +220,7 @@
 
     dt {
       color: var(--muted);
-      font-weight: 650;
+      font-weight: 700;
     }
 
     dd {
@@ -157,23 +229,29 @@
       overflow-wrap: anywhere;
     }
 
-    .matches {
-      color: var(--muted);
+    code {
+      font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.86em;
     }
 
-    .actions {
+    .card-actions {
       display: flex;
       gap: 8px;
       margin-top: auto;
       flex-wrap: wrap;
     }
 
-    .install {
-      background: var(--green);
+    .details {
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      display: none;
+      font-size: 0.9rem;
+      margin-top: 12px;
+      padding-top: 12px;
     }
 
-    .install:hover {
-      background: #10613c;
+    .details.open {
+      display: block;
     }
 
     .empty,
@@ -190,22 +268,9 @@
       color: #8a1c12;
     }
 
-    code {
-      font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-      font-size: 0.86em;
-    }
-
-    @media (max-width: 640px) {
-      header {
-        padding: 22px 16px;
-      }
-
-      .wrap {
-        width: min(100% - 24px, 1120px);
-      }
-
-      .toolbar {
-        align-items: stretch;
+    @media (max-width: 700px) {
+      .filters {
+        grid-template-columns: 1fr;
       }
 
       button,
@@ -218,19 +283,36 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>GIA Tampermonkey Updater Installers</h1>
-      <p class="subhead">Install the updater scripts from the live UGomez Tampermonkey repository. Each updater pulls its target script from GitHub and keeps that script current after installation.</p>
+      <h1>GIA Tampermonkey Installers</h1>
+      <p class="subhead">Install approved updater scripts from the live UGomez Tampermonkey repository.</p>
     </div>
   </header>
 
   <main class="wrap">
     <div class="toolbar">
-      <div class="status" id="status">Loading updater scripts from GitHub...</div>
+      <div class="status" id="status">Loading installer config...</div>
       <div class="actions">
-        <button type="button" class="secondary" id="refresh">Refresh list</button>
-        <button type="button" id="openAll">Open all installers</button>
+        <a class="button secondary" href="./Installer/manager.html">Manager page</a>
+        <button type="button" class="secondary" id="refresh">Refresh</button>
+        <button type="button" id="openAll" disabled>Open shown installers</button>
       </div>
     </div>
+
+    <section class="filters">
+      <label class="field">
+        <span>Position</span>
+        <select id="positionSelect">
+          <option value="">Choose position</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Tag</span>
+        <select id="tagSelect">
+          <option value="">All tags</option>
+        </select>
+      </label>
+    </section>
+
     <section class="grid" id="scripts" aria-live="polite"></section>
   </main>
 
@@ -238,24 +320,23 @@
     const OWNER = 'ugomez809';
     const REPO = 'GIA-TamperMonkey';
     const BRANCH = 'main';
-    const API_TREE_URL = `https://api.github.com/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`;
+    const CONFIG_URL = './Installer/installer-config.json';
     const RAW_BASE_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/`;
+    const POSITION_STORAGE_KEY = 'giaInstallerPosition';
+    const TAG_STORAGE_KEY = 'giaInstallerTag';
 
-    const FALLBACK_UPDATERS = [
-      'AgencyZoom/Hidden Tag Manager/agencyzoom-hidden-tag-manager-updater.user.js',
-      'AgencyZoom/Location Box Cleanup/agencyzoom-cleanup-force-usa-country-updater.user.js',
-      'AgencyZoom/Pipeline Click-to-Call/agencyzoom-pipeline-click-to-call-updater.user.js',
-      'AgencyZoom/Producer Tag Hider/agencyzoom-producer-tag-hider-updater.user.js',
-      'PolicyCenter/Property Tools/gwpc-property-tools-updater.user.js',
-      'Ricochet/Pickup & Hangup Counters/ricochet-pickup-hangup-counters-updater.user.js',
-      'Ricochet/Voicemail Lead Watcher/ricochet-voicemail-lead-watcher-updater.user.js',
-      'General Utilities/CFP Quick Quote PDF/cfp-quick-quote-pdf-updater.user.js'
-    ];
+    const state = {
+      config: null,
+      scripts: [],
+      shownScripts: []
+    };
 
     const scriptsEl = document.getElementById('scripts');
     const statusEl = document.getElementById('status');
     const refreshButton = document.getElementById('refresh');
     const openAllButton = document.getElementById('openAll');
+    const positionSelect = document.getElementById('positionSelect');
+    const tagSelect = document.getElementById('tagSelect');
 
     function encodePath(path) {
       return path.split('/').map(encodeURIComponent).join('/');
@@ -281,20 +362,72 @@
         .filter(Boolean);
     }
 
-    function parseUpdater(path, source) {
-      const installUrl = readMeta(source, 'downloadURL') || readMeta(source, 'updateURL') || rawUrl(path);
+    function readConst(source, name) {
+      const pattern = new RegExp(`const\\s+${name}\\s*=\\s*['"]([^'"]+)['"]`);
+      const match = source.match(pattern);
+      return match ? clean(match[1]) : '';
+    }
+
+    async function fetchText(url) {
+      const response = await fetch(url, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`${url} returned ${response.status}`);
+      }
+      return response.text();
+    }
+
+    function targetPathFromUpdater(path, source) {
+      const targetFile = readConst(source, 'TARGET_FILE');
+      if (!targetFile) return '';
+      const folder = path.split('/').slice(0, -1).join('/');
+      return `${folder}/${targetFile}`;
+    }
+
+    async function loadScript(configScript) {
+      const updaterSource = await fetchText(`${rawUrl(configScript.path)}?installer=${Date.now()}`);
+      const targetPath = targetPathFromUpdater(configScript.path, updaterSource);
+      let targetSource = '';
+      let scriptVersion = 'unknown';
+      let scriptName = '';
+      let scriptDescription = '';
+
+      if (targetPath) {
+        targetSource = await fetchText(`${rawUrl(targetPath)}?script=${Date.now()}`);
+        scriptVersion = readMeta(targetSource, 'version') || 'unknown';
+        scriptName = readMeta(targetSource, 'name');
+        scriptDescription = readMeta(targetSource, 'description');
+      }
+
+      const updaterName = readMeta(updaterSource, 'name') || configScript.path.split('/').pop();
+      const displayName = scriptName || updaterName.replace(/\s+Updater$/i, '');
+
       return {
-        path,
-        installUrl,
-        name: readMeta(source, 'name') || path.split('/').pop(),
-        version: readMeta(source, 'version') || 'unknown',
-        description: readMeta(source, 'description'),
-        matches: readMatches(source)
+        path: configScript.path,
+        installUrl: readMeta(updaterSource, 'downloadURL') || readMeta(updaterSource, 'updateURL') || rawUrl(configScript.path),
+        name: displayName,
+        updaterName,
+        updaterVersion: readMeta(updaterSource, 'version') || 'unknown',
+        scriptVersion,
+        description: configScript.summary || scriptDescription || readMeta(updaterSource, 'description') || 'Tampermonkey updater script.',
+        details: configScript.details || scriptDescription || readMeta(updaterSource, 'description') || '',
+        matches: readMatches(updaterSource),
+        targetPath,
+        positions: configScript.positions || [],
+        tags: configScript.tags || []
       };
     }
 
-    function setStatus(message) {
+    function setStatus(message, isError = false) {
       statusEl.textContent = message;
+      statusEl.classList.toggle('error', isError);
+    }
+
+    function renderEmpty(message) {
+      scriptsEl.innerHTML = '';
+      const node = document.createElement('div');
+      node.className = 'empty';
+      node.textContent = message;
+      scriptsEl.appendChild(node);
     }
 
     function renderError(message) {
@@ -305,132 +438,143 @@
       scriptsEl.appendChild(node);
     }
 
-    function renderEmpty() {
-      scriptsEl.innerHTML = '';
-      const node = document.createElement('div');
-      node.className = 'empty';
-      node.textContent = 'No updater scripts were found in this repository.';
-      scriptsEl.appendChild(node);
+    function renderOptions() {
+      const savedPosition = localStorage.getItem(POSITION_STORAGE_KEY) || '';
+      const savedTag = localStorage.getItem(TAG_STORAGE_KEY) || '';
+      positionSelect.innerHTML = '<option value="">Choose position</option>';
+      (state.config.positions || []).forEach((position) => {
+        const option = document.createElement('option');
+        option.value = position;
+        option.textContent = position;
+        positionSelect.appendChild(option);
+      });
+      tagSelect.innerHTML = '<option value="">All tags</option>';
+      (state.config.tags || []).forEach((tag) => {
+        const option = document.createElement('option');
+        option.value = tag;
+        option.textContent = tag;
+        tagSelect.appendChild(option);
+      });
+      if (savedPosition && [...positionSelect.options].some((option) => option.value === savedPosition)) {
+        positionSelect.value = savedPosition;
+      }
+      if (savedTag && [...tagSelect.options].some((option) => option.value === savedTag)) {
+        tagSelect.value = savedTag;
+      }
     }
 
-    function renderScripts(updaters) {
-      scriptsEl.innerHTML = '';
-
-      if (!updaters.length) {
-        renderEmpty();
-        return;
-      }
-
-      updaters.forEach((script) => {
-        const article = document.createElement('article');
-        article.className = 'script';
-
-        const title = document.createElement('h2');
-        title.textContent = script.name;
-
-        const description = document.createElement('p');
-        description.className = 'description';
-        description.textContent = script.description || 'Tampermonkey updater script.';
-
-        const meta = document.createElement('dl');
-        const rows = [
-          ['Version', script.version],
-          ['Path', script.path],
-          ['Runs on', script.matches.length ? script.matches.join(', ') : 'Not specified']
-        ];
-
-        rows.forEach(([label, value]) => {
-          const dt = document.createElement('dt');
-          dt.textContent = label;
-          const dd = document.createElement('dd');
-          if (label === 'Path') {
-            const code = document.createElement('code');
-            code.textContent = value;
-            dd.appendChild(code);
-          } else {
-            dd.textContent = value;
-          }
-          if (label === 'Runs on') dd.className = 'matches';
-          meta.append(dt, dd);
-        });
-
-        const actions = document.createElement('div');
-        actions.className = 'actions';
-
-        const install = document.createElement('a');
-        install.className = 'button install';
-        install.href = script.installUrl;
-        install.textContent = 'Install';
-        install.target = '_blank';
-        install.rel = 'noopener';
-
-        actions.append(install);
-        article.append(title, description, meta, actions);
-        scriptsEl.appendChild(article);
+    function filterScripts() {
+      const position = positionSelect.value;
+      const tag = tagSelect.value;
+      if (!position) return [];
+      return state.scripts.filter((script) => {
+        const positionMatch = script.positions.includes(position);
+        const tagMatch = !tag || script.tags.includes(tag);
+        return positionMatch && tagMatch;
       });
     }
 
-    async function fetchUpdaterPaths() {
-      const response = await fetch(API_TREE_URL, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`GitHub tree request returned ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.tree
-        .filter((item) => item.type === 'blob')
-        .map((item) => item.path)
-        .filter((path) => /updater\.user\.js$/i.test(path))
-        .sort((a, b) => a.localeCompare(b));
+    function tagHtml(tags) {
+      if (!tags.length) return '';
+      return `<div class="tags">${tags.map((tag) => `<span class="tag">${tag}</span>`).join('')}</div>`;
     }
 
-    async function fetchUpdater(path) {
-      const response = await fetch(`${rawUrl(path)}?installPage=${Date.now()}`, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`${path} returned ${response.status}`);
+    function renderScripts() {
+      const position = positionSelect.value;
+      state.shownScripts = filterScripts();
+      openAllButton.disabled = state.shownScripts.length === 0;
+
+      if (!position) {
+        renderEmpty('Choose a position to show installers.');
+        setStatus(`Loaded ${state.scripts.length} configured installers.`);
+        return;
       }
 
-      return parseUpdater(path, await response.text());
+      if (!state.shownScripts.length) {
+        renderEmpty('No installers match the selected filters.');
+        setStatus(`Showing 0 installers for ${position}.`);
+        return;
+      }
+
+      scriptsEl.innerHTML = '';
+      state.shownScripts.forEach((script, index) => {
+        const article = document.createElement('article');
+        article.className = 'script';
+        article.innerHTML = `
+          <h2>${script.name}</h2>
+          <p class="description">${script.description}</p>
+          ${tagHtml(script.tags)}
+          <dl>
+            <dt>Updater version</dt>
+            <dd>${script.updaterVersion}</dd>
+            <dt>Script version</dt>
+            <dd>${script.scriptVersion}</dd>
+            <dt>Updater path</dt>
+            <dd><code>${script.path}</code></dd>
+            <dt>Script path</dt>
+            <dd><code>${script.targetPath || 'Not found'}</code></dd>
+            <dt>Runs on</dt>
+            <dd>${script.matches.length ? script.matches.join(', ') : 'Not specified'}</dd>
+          </dl>
+          <div class="card-actions">
+            <a class="button install" href="${script.installUrl}" target="_blank" rel="noopener">Install</a>
+            <button type="button" class="secondary" data-details="${index}">Details</button>
+          </div>
+          <div class="details" id="details-${index}">${script.details || script.description}</div>
+        `;
+        scriptsEl.appendChild(article);
+      });
+      setStatus(`Showing ${state.shownScripts.length} installers for ${position}.`);
     }
 
-    async function loadUpdaters() {
+    async function loadInstallers() {
       refreshButton.disabled = true;
       openAllButton.disabled = true;
-      setStatus('Loading updater scripts from GitHub...');
+      setStatus('Loading installer config...');
 
       try {
-        let paths = await fetchUpdaterPaths();
-        if (!paths.length) paths = FALLBACK_UPDATERS;
-
-        const updaters = await Promise.all(paths.map(fetchUpdater));
-        updaters.sort((a, b) => a.name.localeCompare(b.name));
-        renderScripts(updaters);
-        setStatus(`Loaded ${updaters.length} updater installers from ${OWNER}/${REPO}.`);
-        openAllButton.disabled = false;
+        const configResponse = await fetch(`${CONFIG_URL}?config=${Date.now()}`, { cache: 'no-store' });
+        if (!configResponse.ok) throw new Error(`Installer config returned ${configResponse.status}`);
+        state.config = await configResponse.json();
+        renderOptions();
+        setStatus('Loading script versions...');
+        state.scripts = await Promise.all((state.config.scripts || []).map(loadScript));
+        state.scripts.sort((a, b) => a.name.localeCompare(b.name));
+        renderScripts();
       } catch (error) {
-        try {
-          const updaters = await Promise.all(FALLBACK_UPDATERS.map(fetchUpdater));
-          updaters.sort((a, b) => a.name.localeCompare(b.name));
-          renderScripts(updaters);
-          setStatus(`Loaded ${updaters.length} fallback updater installers.`);
-        } catch (fallbackError) {
-          renderError(`Could not load updater installers. ${fallbackError.message || fallbackError}`);
-          setStatus('Unable to load updater installers.');
-        }
+        renderError(`Could not load installers. ${error.message || error}`);
+        setStatus('Unable to load installers.', true);
       } finally {
         refreshButton.disabled = false;
       }
     }
 
-    refreshButton.addEventListener('click', loadUpdaters);
+    scriptsEl.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-details]');
+      if (!button) return;
+      const panel = document.getElementById(`details-${button.dataset.details}`);
+      if (!panel) return;
+      panel.classList.toggle('open');
+    });
+
+    positionSelect.addEventListener('change', () => {
+      localStorage.setItem(POSITION_STORAGE_KEY, positionSelect.value);
+      renderScripts();
+    });
+
+    tagSelect.addEventListener('change', () => {
+      localStorage.setItem(TAG_STORAGE_KEY, tagSelect.value);
+      renderScripts();
+    });
+
+    refreshButton.addEventListener('click', loadInstallers);
     openAllButton.addEventListener('click', () => {
-      const links = Array.from(document.querySelectorAll('a.install'));
-      links.forEach((link, index) => {
-        window.setTimeout(() => window.open(link.href, '_blank', 'noopener'), index * 350);
+      state.shownScripts.forEach((script, index) => {
+        window.setTimeout(() => window.open(script.installUrl, '_blank', 'noopener'), index * 350);
       });
     });
 
-    loadUpdaters();
+    loadInstallers();
   </script>
 </body>
 </html>
