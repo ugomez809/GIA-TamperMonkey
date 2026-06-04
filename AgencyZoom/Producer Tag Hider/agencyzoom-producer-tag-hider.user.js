@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         AgencyZoom Producer Tag Hider
 // @namespace    local.agencyzoom.hidden-tags.producer
-// @version      0.9
-// @description  Hides manager-selected AgencyZoom card tags from producer views, syncing the hidden list at most once per day.
+// @version      1.1
+// @description  Blocks manager-selected AgencyZoom card tags from producer ticket data and removes any matching tags that still render.
 // @match        https://app.agencyzoom.com/*
 // @exclude      https://app.agencyzoom.com/login*
 // @run-at       document-start
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
+// @grant        unsafeWindow
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Producer%20Tag%20Hider/agencyzoom-producer-tag-hider.user.js
@@ -19,7 +20,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.8';
+  const VERSION = '1.1';
   const SCRIPT = 'AZ Producer Hide Tags';
   const DEFAULT_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbzKxEGakrLmc-wEQv_6cx2rLxwtp8Lb9aKxTOICDuehlGybn-u3RaNuWAJbk-Hio1x9/exec';
   const DEFAULT_READ_TOKEN = '';
@@ -31,6 +32,8 @@
   const EMPTY_TAG_CONTAINER_CLASS = 'tm-az-producer-empty-tag-container';
   const HIDDEN_ATTR = 'data-tm-az-producer-hidden-tag';
   const CHECKED_ATTR = 'data-tm-az-producer-checked-tag';
+  const NETWORK_FILTER_STATE_KEY = '__tmAzProducerHiddenTagFilterV1';
+  const REMOVE_HIDDEN_TAG_NODES = true;
   const CARD_SELECTORS = [
     '.dd-card.referral-container[data-id]',
     '.referral-container[data-id]',
@@ -77,6 +80,8 @@
     injectStyle();
     registerMenuCommands();
     loadCachedConfig();
+    installNetworkFilter();
+    syncNetworkFilterState();
     updateImmediateHideStyle();
     syncPrehideClass();
 
@@ -112,15 +117,36 @@
 
   function startObserver() {
     if (observer) observer.disconnect();
-    observer = new MutationObserver(() => scheduleScan(120));
+    observer = new MutationObserver(handleMutations);
     observer.observe(document.documentElement || document.body, {
       childList: true,
-      subtree: true
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: [
+        'class',
+        'id',
+        'data-name',
+        'data-value',
+        'data-tag',
+        'data-tag-id',
+        'data-id',
+        'aria-label',
+        'title'
+      ]
     });
 
     document.addEventListener('scroll', handleScrollOrWheel, true);
     document.addEventListener('wheel', handleScrollOrWheel, { capture: true, passive: true });
     window.setInterval(() => scheduleScan(0), 2500);
+  }
+
+  function handleMutations(records) {
+    const roots = collectMutationRoots(records);
+    if (roots.length) {
+      applyHiddenTags({ roots });
+    }
+    scheduleScan(60);
   }
 
   function handleScrollOrWheel() {
@@ -129,7 +155,8 @@
     requestAnimationFrame(() => {
       scrollQueued = false;
       hideVisibleHiddenTagsNearViewport();
-      scheduleScan(180);
+      applyHiddenTags({ viewportOnly: true });
+      scheduleScan(60);
     });
   }
 
@@ -177,6 +204,7 @@
     hiddenTags = Array.isArray(response.tags) ? response.tags : [];
     rebuildIndex();
     cacheConfig();
+    syncNetworkFilterState();
     updateImmediateHideStyle();
     syncPrehideClass();
     markSyncedNow();
@@ -242,6 +270,8 @@
     if (!(el instanceof Element)) return;
 
     if (hidden) {
+      if (REMOVE_HIDDEN_TAG_NODES && removeHiddenTagNode(el)) return;
+
       el.classList.add(HIDDEN_CLASS);
       el.setAttribute(HIDDEN_ATTR, '1');
       el.setAttribute(CHECKED_ATTR, 'hidden');
@@ -257,6 +287,39 @@
       el.removeAttribute('aria-hidden');
       el.removeAttribute('data-tm-az-hidden-tag-text');
     }
+  }
+
+  function removeHiddenTagNode(el) {
+    if (!(el instanceof Element) || !el.isConnected) return false;
+
+    const boundary = el.closest(CARD_SELECTOR) ||
+      el.closest('.az-dock__container, #serviceDetailDock, .az-dock');
+    if (!boundary) return false;
+
+    const parent = el.parentElement;
+    el.remove();
+
+    if (parent) removeEmptyTagWrappers(parent, boundary);
+    if (boundary.matches?.(CARD_SELECTOR)) relaxCardSize(boundary, true);
+    return true;
+  }
+
+  function removeEmptyTagWrappers(start, boundary) {
+    let el = start;
+    let depth = 0;
+
+    while (el && el !== boundary && depth < 5) {
+      const next = el.parentElement;
+      if (!hasTagContainerSignal(el) || hasAnyRemainingContent(el)) break;
+      el.remove();
+      el = next;
+      depth += 1;
+    }
+  }
+
+  function hasAnyRemainingContent(el) {
+    if (!(el instanceof Element)) return false;
+    return !!clean(el.innerText || el.textContent || '');
   }
 
   function compactCards(roots = null) {
@@ -595,6 +658,459 @@
       : '';
   }
 
+  function installNetworkFilter() {
+    const pageWindow = getPageWindow();
+    if (!pageWindow) return;
+
+    let state = null;
+    try { state = pageWindow[NETWORK_FILTER_STATE_KEY]; } catch {}
+    if (state && state.installed) return;
+
+    state = {
+      installed: true,
+      revision: 0,
+      hiddenKeys: new Set(),
+      hiddenTagIds: new Set(),
+      xhrMeta: new WeakMap()
+    };
+
+    try {
+      Object.defineProperty(pageWindow, NETWORK_FILTER_STATE_KEY, {
+        value: state,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+    } catch {
+      try { pageWindow[NETWORK_FILTER_STATE_KEY] = state; } catch {}
+    }
+
+    patchNetworkResponseReaders(pageWindow, state);
+    patchNetworkXhr(pageWindow, state);
+  }
+
+  function syncNetworkFilterState() {
+    const pageWindow = getPageWindow();
+    if (!pageWindow) return;
+
+    let state = null;
+    try { state = pageWindow[NETWORK_FILTER_STATE_KEY]; } catch {}
+    if (!state || !state.installed) return;
+
+    state.hiddenKeys = new Set(Array.from(hiddenKeys));
+    state.hiddenTagIds = new Set(Array.from(hiddenTagIds));
+    state.revision += 1;
+  }
+
+  function patchNetworkResponseReaders(pageWindow, state) {
+    const responseProto = pageWindow.Response && pageWindow.Response.prototype;
+    if (!responseProto) return;
+
+    const originalJson = responseProto.json;
+    if (typeof originalJson === 'function') {
+      responseProto.json = function tmAzProducerFilteredJson(...args) {
+        const response = this;
+        return originalJson.apply(response, args).then((data) => {
+          try {
+            return filterNetworkJson(
+              pageWindow,
+              state,
+              data,
+              getNetworkResponseUrl(response),
+              getNetworkResponseContentType(response)
+            );
+          } catch (err) {
+            console.warn(`[${SCRIPT}] response JSON filter failed:`, err);
+            return data;
+          }
+        });
+      };
+    }
+
+    const originalText = responseProto.text;
+    if (typeof originalText === 'function') {
+      responseProto.text = function tmAzProducerFilteredText(...args) {
+        const response = this;
+        return originalText.apply(response, args).then((text) => {
+          try {
+            return filterNetworkText(
+              state,
+              text,
+              getNetworkResponseUrl(response),
+              getNetworkResponseContentType(response)
+            );
+          } catch (err) {
+            console.warn(`[${SCRIPT}] response text filter failed:`, err);
+            return text;
+          }
+        });
+      };
+    }
+  }
+
+  function patchNetworkXhr(pageWindow, state) {
+    const xhrProto = pageWindow.XMLHttpRequest && pageWindow.XMLHttpRequest.prototype;
+    if (!xhrProto || typeof xhrProto.open !== 'function') return;
+
+    const originalOpen = xhrProto.open;
+    xhrProto.open = function tmAzProducerFilteredXhrOpen(method, url, ...args) {
+      try {
+        state.xhrMeta.set(this, {
+          method: clean(method || 'GET').toUpperCase(),
+          url: absoluteNetworkUrl(url),
+          revision: -1,
+          sourceText: null,
+          filteredText: null,
+          sourceResponse: null,
+          filteredResponse: null
+        });
+      } catch {}
+      return originalOpen.call(this, method, url, ...args);
+    };
+
+    patchNetworkXhrGetter(xhrProto, 'responseText', (xhr, value) => filterNetworkXhrText(state, xhr, value));
+    patchNetworkXhrGetter(xhrProto, 'response', (xhr, value) => filterNetworkXhrResponse(pageWindow, state, xhr, value));
+  }
+
+  function patchNetworkXhrGetter(xhrProto, property, filter) {
+    const descriptor = findPropertyDescriptor(xhrProto, property);
+    if (!descriptor || typeof descriptor.get !== 'function') return;
+
+    try {
+      Object.defineProperty(xhrProto, property, {
+        configurable: descriptor.configurable,
+        enumerable: descriptor.enumerable,
+        get() {
+          const value = descriptor.get.call(this);
+          return filter(this, value);
+        }
+      });
+    } catch {}
+  }
+
+  function filterNetworkXhrText(state, xhr, value) {
+    if (typeof value !== 'string' || !value) return value;
+
+    const meta = state.xhrMeta.get(xhr);
+    const url = meta && meta.url ? meta.url : location.href;
+    if (!shouldFilterNetworkPayload(state, url, getNetworkXhrContentType(xhr))) return value;
+
+    if (meta &&
+        meta.revision === state.revision &&
+        meta.sourceText === value &&
+        typeof meta.filteredText === 'string') {
+      return meta.filteredText;
+    }
+
+    const filtered = filterNetworkText(state, value, url, getNetworkXhrContentType(xhr));
+    if (meta) {
+      meta.revision = state.revision;
+      meta.sourceText = value;
+      meta.filteredText = filtered;
+    }
+    return filtered;
+  }
+
+  function filterNetworkXhrResponse(pageWindow, state, xhr, value) {
+    const responseType = clean(xhr.responseType).toLowerCase();
+    if (!responseType || responseType === 'text') {
+      return typeof value === 'string' ? filterNetworkXhrText(state, xhr, value) : value;
+    }
+
+    if (responseType !== 'json' || !value || typeof value !== 'object') return value;
+
+    const meta = state.xhrMeta.get(xhr);
+    const url = meta && meta.url ? meta.url : location.href;
+    if (!shouldFilterNetworkPayload(state, url, getNetworkXhrContentType(xhr))) return value;
+
+    if (meta &&
+        meta.revision === state.revision &&
+        meta.sourceResponse === value &&
+        meta.filteredResponse) {
+      return meta.filteredResponse;
+    }
+
+    const filtered = filterNetworkJson(pageWindow, state, value, url, getNetworkXhrContentType(xhr));
+    if (meta) {
+      meta.revision = state.revision;
+      meta.sourceResponse = value;
+      meta.filteredResponse = filtered;
+    }
+    return filtered;
+  }
+
+  function filterNetworkJson(pageWindow, state, data, url, contentType) {
+    if (!shouldFilterNetworkPayload(state, url, contentType)) return data;
+
+    const rootIsTagPayload = isLikelyTagPayloadUrl(url);
+    const result = sanitizeNetworkValue(data, state, '', rootIsTagPayload, new WeakMap());
+    if (!result.changed) return data;
+
+    console.debug(`[${SCRIPT}] stripped hidden tags from AgencyZoom response: ${safeUrlForLog(url)}`);
+    return cloneForPageWindow(pageWindow, result.value);
+  }
+
+  function filterNetworkText(state, text, url, contentType) {
+    if (typeof text !== 'string' || !text || !shouldFilterNetworkPayload(state, url, contentType)) return text;
+
+    const trimmed = text.trim();
+    if (!trimmed || !/^[{\[]/.test(trimmed)) return text;
+
+    const parsed = parseJson(trimmed);
+    if (!parsed) return text;
+
+    const rootIsTagPayload = isLikelyTagPayloadUrl(url);
+    const result = sanitizeNetworkValue(parsed, state, '', rootIsTagPayload, new WeakMap());
+    if (!result.changed) return text;
+
+    console.debug(`[${SCRIPT}] stripped hidden tags from AgencyZoom text response: ${safeUrlForLog(url)}`);
+    return JSON.stringify(result.value);
+  }
+
+  function sanitizeNetworkValue(value, state, contextKey, inTagCollection, seen) {
+    const strongTagContext = inTagCollection || isNetworkTagCollectionKey(contextKey);
+
+    if (value == null) return { value, changed: false };
+
+    if (typeof value === 'string') {
+      if (!strongTagContext) return { value, changed: false };
+      const cleaned = sanitizeNetworkTagString(value, state);
+      return cleaned === value
+        ? { value, changed: false }
+        : { value: cleaned, changed: true };
+    }
+
+    if (typeof value !== 'object') return { value, changed: false };
+    if (seen.has(value)) return { value, changed: false };
+    seen.set(value, true);
+
+    if (Array.isArray(value)) {
+      let changed = false;
+      const next = [];
+
+      for (const item of value) {
+        if (shouldRemoveNetworkTagEntry(item, state, strongTagContext)) {
+          changed = true;
+          continue;
+        }
+
+        const child = sanitizeNetworkValue(item, state, contextKey, strongTagContext, seen);
+        if (child.changed) changed = true;
+        next.push(child.value);
+      }
+
+      return changed ? { value: next, changed: true } : { value, changed: false };
+    }
+
+    let clone = null;
+    for (const key of Object.keys(value)) {
+      const original = value[key];
+      const childStrongContext = isNetworkTagCollectionKey(key);
+      const child = sanitizeNetworkValue(original, state, key, childStrongContext, seen);
+      if (!child.changed) continue;
+
+      if (!clone) clone = { ...value };
+      clone[key] = child.value;
+    }
+
+    return clone ? { value: clone, changed: true } : { value, changed: false };
+  }
+
+  function shouldRemoveNetworkTagEntry(value, state, strongTagContext) {
+    if (!hasNetworkFilterRules(state) || value == null) return false;
+
+    if (typeof value === 'string' || typeof value === 'number') {
+      return strongTagContext && matchesHiddenNetworkTag(value, state);
+    }
+
+    if (typeof value !== 'object' || Array.isArray(value)) return false;
+
+    const tagRecord = strongTagContext || looksLikeNetworkTagRecord(value);
+    if (!tagRecord) return false;
+
+    for (const id of collectNetworkTagIdCandidates(value, strongTagContext)) {
+      if (state.hiddenTagIds.has(clean(id))) return true;
+    }
+
+    for (const text of collectNetworkTagTextCandidates(value, strongTagContext)) {
+      if (state.hiddenKeys.has(normalizeTagKey(text))) return true;
+    }
+
+    return false;
+  }
+
+  function looksLikeNetworkTagRecord(value) {
+    const keys = Object.keys(value);
+    if (!keys.length || keys.length > 12) return false;
+
+    const names = keys.map(normalizeNetworkName);
+    if (names.some((name) => /^(tagid|tagids|tagname|tagtext|taglabel|tagkey|datatag|datatagid)$/.test(name))) {
+      return true;
+    }
+
+    const typeText = clean(value.type || value.kind || value.category || value.objectType || value.entityType);
+    if (/\b(tag|label|badge|chip|pill)\b/i.test(typeText)) return true;
+
+    const hasId = names.includes('id') || names.includes('value');
+    const hasName = names.some((name) => /^(name|text|label|title|displayname)$/.test(name));
+    return keys.length <= 6 && hasId && hasName;
+  }
+
+  function collectNetworkTagIdCandidates(value, strongTagContext) {
+    const candidates = [];
+
+    for (const [key, raw] of Object.entries(value)) {
+      const name = normalizeNetworkName(key);
+      if (/^(tagid|tagids|datatag|datatagid)$/.test(name) ||
+          (strongTagContext && /^(id|ids|value)$/.test(name))) {
+        pushPrimitiveNetworkValues(candidates, raw);
+      }
+    }
+
+    return candidates;
+  }
+
+  function collectNetworkTagTextCandidates(value, strongTagContext) {
+    const candidates = [];
+
+    for (const [key, raw] of Object.entries(value)) {
+      const name = normalizeNetworkName(key);
+      if (/^(tag|tags|tagname|tagtext|taglabel|tagkey|name|text|label|title|displayname|value)$/.test(name) ||
+          (strongTagContext && /name|text|label|title|display|value/.test(name))) {
+        pushPrimitiveNetworkValues(candidates, raw);
+      }
+    }
+
+    return candidates;
+  }
+
+  function pushPrimitiveNetworkValues(candidates, value) {
+    if (typeof value === 'string' || typeof value === 'number') {
+      candidates.push(value);
+      return;
+    }
+
+    if (!Array.isArray(value)) return;
+    for (const item of value) {
+      if (typeof item === 'string' || typeof item === 'number') candidates.push(item);
+    }
+  }
+
+  function sanitizeNetworkTagString(value, state) {
+    if (!matchesNetworkTagListText(value)) {
+      return matchesHiddenNetworkTag(value, state) ? '' : value;
+    }
+
+    const parts = String(value).split(/\s*[,;|]\s*/).filter(Boolean);
+    const kept = parts.filter((part) => !matchesHiddenNetworkTag(part, state));
+    return kept.length === parts.length ? value : kept.join(', ');
+  }
+
+  function matchesNetworkTagListText(value) {
+    return /[,;|]/.test(String(value || ''));
+  }
+
+  function matchesHiddenNetworkTag(value, state) {
+    const text = clean(value);
+    return !!text && (state.hiddenTagIds.has(text) || state.hiddenKeys.has(normalizeTagKey(text)));
+  }
+
+  function shouldFilterNetworkPayload(state, url, contentType) {
+    if (!hasNetworkFilterRules(state) || !isAgencyZoomNetworkUrl(url)) return false;
+    const type = lower(contentType);
+    return !type || /json|javascript|text|html|x-www-form-urlencoded/.test(type);
+  }
+
+  function hasNetworkFilterRules(state) {
+    return !!(state && ((state.hiddenKeys && state.hiddenKeys.size) || (state.hiddenTagIds && state.hiddenTagIds.size)));
+  }
+
+  function isAgencyZoomNetworkUrl(url) {
+    try {
+      const parsed = new URL(url || location.href, location.href);
+      return /(^|\.)agencyzoom\.com$/i.test(parsed.hostname) &&
+        !/^\/login\b/i.test(parsed.pathname);
+    } catch {
+      return true;
+    }
+  }
+
+  function isLikelyTagPayloadUrl(url) {
+    try {
+      const parsed = new URL(url || location.href, location.href);
+      return /(^|[/?&_.=-])(tags?|labels?|badges?|chips?|pills?)([/?&_.=-]|$)/i.test(`${parsed.pathname}${parsed.search}`);
+    } catch {
+      return false;
+    }
+  }
+
+  function isNetworkTagCollectionKey(key) {
+    const name = normalizeNetworkName(key);
+    return /^(tag|tags|taglist|taglists|tagids|tagnames|tagname|tagtext|labels|badges|chips|pills|leadtags|referraltags|customertags|tickettags|cardtags)$/.test(name) ||
+      /(?:^|[a-z])(tags|tagids|tagnames|labels|badges|chips|pills)$/.test(name);
+  }
+
+  function normalizeNetworkName(value) {
+    return String(value == null ? '' : value).replace(/[^a-z0-9]+/gi, '').toLowerCase();
+  }
+
+  function cloneForPageWindow(pageWindow, value) {
+    try {
+      return pageWindow.JSON.parse(pageWindow.JSON.stringify(value));
+    } catch {
+      return value;
+    }
+  }
+
+  function getPageWindow() {
+    try {
+      if (typeof unsafeWindow !== 'undefined' && unsafeWindow && unsafeWindow.window === unsafeWindow) {
+        return unsafeWindow;
+      }
+    } catch {}
+    return window;
+  }
+
+  function getNetworkResponseUrl(response) {
+    try { return response && response.url ? response.url : location.href; } catch {}
+    return location.href;
+  }
+
+  function getNetworkResponseContentType(response) {
+    try { return response && response.headers ? response.headers.get('content-type') || '' : ''; } catch {}
+    return '';
+  }
+
+  function getNetworkXhrContentType(xhr) {
+    try { return xhr.getResponseHeader('content-type') || ''; } catch {}
+    return '';
+  }
+
+  function absoluteNetworkUrl(url) {
+    try { return new URL(url || location.href, location.href).toString(); } catch {}
+    return clean(url || location.href);
+  }
+
+  function safeUrlForLog(url) {
+    try {
+      const parsed = new URL(url || location.href, location.href);
+      parsed.search = parsed.search ? '?...' : '';
+      return parsed.toString();
+    } catch {
+      return clean(url || '');
+    }
+  }
+
+  function findPropertyDescriptor(obj, property) {
+    let current = obj;
+    while (current) {
+      const descriptor = Object.getOwnPropertyDescriptor(current, property);
+      if (descriptor) return descriptor;
+      current = Object.getPrototypeOf(current);
+    }
+    return null;
+  }
+
   function syncPrehideClass() {
     document.documentElement.classList.toggle(PREHIDE_CLASS, hiddenKeys.size > 0 || hiddenTagIds.size > 0);
   }
@@ -749,6 +1265,22 @@
     const prehideSelectors = buildScopedTagSelectors([
       '[data-tag-id]',
       '[data-tag]',
+      '[class*="tag" i]',
+      '[class*="label" i]',
+      '[class*="badge" i]',
+      '[class*="chip" i]',
+      '[class*="pill" i]',
+      '[id*="tag" i]',
+      '[id*="label" i]',
+      '[id*="badge" i]',
+      '[data-name*="tag" i]',
+      '[data-name*="label" i]',
+      '[data-name*="badge" i]',
+      '[data-value*="tag" i]',
+      '[data-value*="label" i]',
+      '[data-value*="badge" i]',
+      '[aria-label*="tag" i]',
+      '[aria-label*="label" i]',
       '.az-tag',
       '.lead-tag',
       '.referral-tag',

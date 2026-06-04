@@ -69,7 +69,7 @@ In AgencyZoom, use the Tampermonkey menu:
 
 ## How It Works
 
-The manager script stores each selected tag as visible text, a normalized key, and optional AgencyZoom tag attributes. The producer script reads that list on the first AgencyZoom load of each local browser day, caches it locally, and keeps hiding matching tags as cards are dynamically rendered. For the rest of that day, producers use the cached list instead of calling Google again.
+The manager script stores each selected tag as visible text, a normalized key, and optional AgencyZoom tag attributes. The producer script reads that list on the first AgencyZoom load of each local browser day, caches it locally, and uses the cached list immediately on later page loads. When possible, the producer script strips matching tag entries from AgencyZoom JSON/XHR ticket data before the page renders them; any matching tags that still reach the DOM are removed as a fallback. For the rest of that day, producers use the cached list instead of calling Google again.
 
 Producers can still force an immediate sync from Tampermonkey with `AZ Hidden Tags: Refresh now`.
 
