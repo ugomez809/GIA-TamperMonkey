@@ -31,7 +31,8 @@ function Test-AgencyZoomUserScriptUrls {
   $userScripts = Get-ChildItem -LiteralPath $AgencyZoomPath -File -Filter "*.user.js" -Recurse
   foreach ($script in $userScripts) {
     $repoPath = Convert-ToRepoPath -Root $repoRoot -Path $script.FullName
-    $rawUrl = "https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/$repoPath"
+    $rawPath = Convert-ToRawGitHubPath -RepoPath $repoPath
+    $rawUrl = "https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/$rawPath"
     $content = Get-Content -Raw -LiteralPath $script.FullName
 
     if ($content -notmatch [regex]::Escape("// @updateURL    $rawUrl") -or
@@ -59,6 +60,15 @@ function Convert-ToRepoPath {
   $pathUri = New-Object System.Uri($pathFull)
   $relative = [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
   return $relative -replace "\\", "/"
+}
+
+function Convert-ToRawGitHubPath {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$RepoPath
+  )
+
+  return (($RepoPath -split "/") | ForEach-Object { [System.Uri]::EscapeDataString($_) }) -join "/"
 }
 
 function Get-UserScriptVersion {
