@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GIA Tampermonkey Employee Installers</title>
+  <title>Tampermonkey Installers</title>
   <style>
     :root {
       color-scheme: light;
@@ -16,8 +16,6 @@
       --blue-dark: #174ea6;
       --green: #16794c;
       --shadow: 0 10px 30px rgba(23, 32, 51, 0.08);
-      --tag: #eef4ff;
-      --tag-border: #c7d8ff;
     }
 
     * {
@@ -62,7 +60,7 @@
     }
 
     .toolbar,
-    .filters,
+    .position-panel,
     .script {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -139,32 +137,36 @@
       background: #10613c;
     }
 
-    .filters {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px);
-      gap: 12px;
+    .position-panel {
       padding: 14px;
       margin-bottom: 14px;
     }
 
-    .field span {
-      display: block;
+    .position-title {
       color: var(--muted);
       font-size: 0.82rem;
       font-weight: 750;
-      margin-bottom: 5px;
+      margin: 0 0 10px;
       text-transform: uppercase;
     }
 
-    select {
-      width: 100%;
-      min-height: 40px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
+    .position-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .position-button {
       background: #fff;
+      border-color: var(--line);
       color: var(--ink);
-      font: inherit;
-      padding: 8px 10px;
+      min-height: 46px;
+    }
+
+    .position-button.active {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
     }
 
     .grid {
@@ -176,7 +178,7 @@
     .script {
       display: flex;
       flex-direction: column;
-      min-height: 292px;
+      min-height: 274px;
       padding: 16px;
     }
 
@@ -191,23 +193,6 @@
       color: var(--muted);
       font-size: 0.92rem;
       margin: 0 0 12px;
-    }
-
-    .tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-
-    .tag {
-      background: var(--tag);
-      border: 1px solid var(--tag-border);
-      border-radius: 999px;
-      color: #174ea6;
-      font-size: 0.78rem;
-      font-weight: 750;
-      padding: 3px 8px;
     }
 
     dl {
@@ -269,7 +254,7 @@
     }
 
     @media (max-width: 700px) {
-      .filters {
+      .position-buttons {
         grid-template-columns: 1fr;
       }
 
@@ -283,8 +268,8 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>GIA Tampermonkey Installers</h1>
-      <p class="subhead">Install approved updater scripts from the live UGomez Tampermonkey repository.</p>
+      <h1>Tampermonkey Installers</h1>
+      <p class="subhead">Choose your position and install the approved updater scripts for your workstation.</p>
     </div>
   </header>
 
@@ -292,25 +277,14 @@
     <div class="toolbar">
       <div class="status" id="status">Loading installer config...</div>
       <div class="actions">
-        <a class="button secondary" href="./Installer/manager.html">Manager page</a>
         <button type="button" class="secondary" id="refresh">Refresh</button>
         <button type="button" id="openAll" disabled>Open shown installers</button>
       </div>
     </div>
 
-    <section class="filters">
-      <label class="field">
-        <span>Position</span>
-        <select id="positionSelect">
-          <option value="">Choose position</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Tag</span>
-        <select id="tagSelect">
-          <option value="">All tags</option>
-        </select>
-      </label>
+    <section class="position-panel">
+      <p class="position-title">Select position</p>
+      <div class="position-buttons" id="positionButtons"></div>
     </section>
 
     <section class="grid" id="scripts" aria-live="polite"></section>
@@ -322,11 +296,11 @@
     const BRANCH = 'main';
     const CONFIG_URL = './Installer/installer-config.json';
     const RAW_BASE_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/`;
-    const POSITION_STORAGE_KEY = 'giaInstallerPosition';
-    const TAG_STORAGE_KEY = 'giaInstallerTag';
+    const POSITION_STORAGE_KEY = 'tampermonkeyInstallerPosition';
 
     const state = {
       config: null,
+      position: '',
       scripts: [],
       shownScripts: []
     };
@@ -335,8 +309,7 @@
     const statusEl = document.getElementById('status');
     const refreshButton = document.getElementById('refresh');
     const openAllButton = document.getElementById('openAll');
-    const positionSelect = document.getElementById('positionSelect');
-    const tagSelect = document.getElementById('tagSelect');
+    const positionButtons = document.getElementById('positionButtons');
 
     function encodePath(path) {
       return path.split('/').map(encodeURIComponent).join('/');
@@ -386,13 +359,12 @@
     async function loadScript(configScript) {
       const updaterSource = await fetchText(`${rawUrl(configScript.path)}?installer=${Date.now()}`);
       const targetPath = targetPathFromUpdater(configScript.path, updaterSource);
-      let targetSource = '';
       let scriptVersion = 'unknown';
       let scriptName = '';
       let scriptDescription = '';
 
       if (targetPath) {
-        targetSource = await fetchText(`${rawUrl(targetPath)}?script=${Date.now()}`);
+        const targetSource = await fetchText(`${rawUrl(targetPath)}?script=${Date.now()}`);
         scriptVersion = readMeta(targetSource, 'version') || 'unknown';
         scriptName = readMeta(targetSource, 'name');
         scriptDescription = readMeta(targetSource, 'description');
@@ -412,8 +384,7 @@
         details: configScript.details || scriptDescription || readMeta(updaterSource, 'description') || '',
         matches: readMatches(updaterSource),
         targetPath,
-        positions: configScript.positions || [],
-        tags: configScript.tags || []
+        positions: configScript.positions || []
       };
     }
 
@@ -438,61 +409,38 @@
       scriptsEl.appendChild(node);
     }
 
-    function renderOptions() {
-      const savedPosition = localStorage.getItem(POSITION_STORAGE_KEY) || '';
-      const savedTag = localStorage.getItem(TAG_STORAGE_KEY) || '';
-      positionSelect.innerHTML = '<option value="">Choose position</option>';
+    function renderPositionButtons() {
+      positionButtons.innerHTML = '';
       (state.config.positions || []).forEach((position) => {
-        const option = document.createElement('option');
-        option.value = position;
-        option.textContent = position;
-        positionSelect.appendChild(option);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'position-button';
+        button.dataset.position = position;
+        button.textContent = position;
+        button.classList.toggle('active', state.position === position);
+        positionButtons.appendChild(button);
       });
-      tagSelect.innerHTML = '<option value="">All tags</option>';
-      (state.config.tags || []).forEach((tag) => {
-        const option = document.createElement('option');
-        option.value = tag;
-        option.textContent = tag;
-        tagSelect.appendChild(option);
-      });
-      if (savedPosition && [...positionSelect.options].some((option) => option.value === savedPosition)) {
-        positionSelect.value = savedPosition;
-      }
-      if (savedTag && [...tagSelect.options].some((option) => option.value === savedTag)) {
-        tagSelect.value = savedTag;
-      }
     }
 
     function filterScripts() {
-      const position = positionSelect.value;
-      const tag = tagSelect.value;
-      if (!position) return [];
-      return state.scripts.filter((script) => {
-        const positionMatch = script.positions.includes(position);
-        const tagMatch = !tag || script.tags.includes(tag);
-        return positionMatch && tagMatch;
-      });
-    }
-
-    function tagHtml(tags) {
-      if (!tags.length) return '';
-      return `<div class="tags">${tags.map((tag) => `<span class="tag">${tag}</span>`).join('')}</div>`;
+      if (!state.position) return [];
+      return state.scripts.filter((script) => script.positions.includes(state.position));
     }
 
     function renderScripts() {
-      const position = positionSelect.value;
       state.shownScripts = filterScripts();
       openAllButton.disabled = state.shownScripts.length === 0;
+      renderPositionButtons();
 
-      if (!position) {
-        renderEmpty('Choose a position to show installers.');
-        setStatus(`Loaded ${state.scripts.length} configured installers.`);
+      if (!state.position) {
+        renderEmpty('Choose your position to show installers.');
+        setStatus(`Loaded ${state.scripts.length} configured updaters.`);
         return;
       }
 
       if (!state.shownScripts.length) {
-        renderEmpty('No installers match the selected filters.');
-        setStatus(`Showing 0 installers for ${position}.`);
+        renderEmpty('No installers are assigned to this position.');
+        setStatus(`Showing 0 installers for ${state.position}.`);
         return;
       }
 
@@ -503,7 +451,6 @@
         article.innerHTML = `
           <h2>${script.name}</h2>
           <p class="description">${script.description}</p>
-          ${tagHtml(script.tags)}
           <dl>
             <dt>Updater version</dt>
             <dd>${script.updaterVersion}</dd>
@@ -524,7 +471,7 @@
         `;
         scriptsEl.appendChild(article);
       });
-      setStatus(`Showing ${state.shownScripts.length} installers for ${position}.`);
+      setStatus(`Showing ${state.shownScripts.length} installers for ${state.position}.`);
     }
 
     async function loadInstallers() {
@@ -536,7 +483,9 @@
         const configResponse = await fetch(`${CONFIG_URL}?config=${Date.now()}`, { cache: 'no-store' });
         if (!configResponse.ok) throw new Error(`Installer config returned ${configResponse.status}`);
         state.config = await configResponse.json();
-        renderOptions();
+        const savedPosition = localStorage.getItem(POSITION_STORAGE_KEY) || '';
+        state.position = (state.config.positions || []).includes(savedPosition) ? savedPosition : '';
+        renderPositionButtons();
         setStatus('Loading script versions...');
         state.scripts = await Promise.all((state.config.scripts || []).map(loadScript));
         state.scripts.sort((a, b) => a.name.localeCompare(b.name));
@@ -549,22 +498,20 @@
       }
     }
 
+    positionButtons.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-position]');
+      if (!button) return;
+      state.position = button.dataset.position;
+      localStorage.setItem(POSITION_STORAGE_KEY, state.position);
+      renderScripts();
+    });
+
     scriptsEl.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-details]');
       if (!button) return;
       const panel = document.getElementById(`details-${button.dataset.details}`);
       if (!panel) return;
       panel.classList.toggle('open');
-    });
-
-    positionSelect.addEventListener('change', () => {
-      localStorage.setItem(POSITION_STORAGE_KEY, positionSelect.value);
-      renderScripts();
-    });
-
-    tagSelect.addEventListener('change', () => {
-      localStorage.setItem(TAG_STORAGE_KEY, tagSelect.value);
-      renderScripts();
     });
 
     refreshButton.addEventListener('click', loadInstallers);

@@ -1,40 +1,23 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "updatedAt": "2026-06-04",
   "positions": [
-    "AgencyZoom Producer",
-    "AgencyZoom Manager",
-    "PolicyCenter User",
-    "Ricochet SDR",
-    "General Utilities",
-    "Manager"
-  ],
-  "tags": [
-    "GIA",
-    "CPAGY"
+    "PRODUCER",
+    "CSR",
+    "SDR"
   ],
   "scripts": [
     {
       "path": "AgencyZoom/Hidden Tag Manager/agencyzoom-hidden-tag-manager-updater.user.js",
-      "positions": [
-        "AgencyZoom Manager",
-        "Manager"
-      ],
-      "tags": [
-        "GIA"
-      ],
+      "positions": [],
       "summary": "Manager tool for selecting AgencyZoom tags hidden from producer views.",
-      "details": "Use this on manager workstations to maintain the hidden-tag list for AgencyZoom cards. The manager script writes selected tag names to the configured Google Apps Script backend so producer machines can hide matching tags."
+      "details": "Use this on manager workstations to maintain the hidden-tag list for AgencyZoom cards. It has no employee position assignment and will not show on the public installer page unless assigned to PRODUCER, CSR, or SDR."
     },
     {
       "path": "AgencyZoom/Location Box Cleanup/agencyzoom-cleanup-force-usa-country-updater.user.js",
       "positions": [
-        "AgencyZoom Producer",
-        "AgencyZoom Manager",
-        "Manager"
-      ],
-      "tags": [
-        "GIA"
+        "PRODUCER",
+        "CSR"
       ],
       "summary": "Cleans AgencyZoom location fields and forces USA in country dropdowns.",
       "details": "Removes same-as-mailing-address boxes and auto-selects USA in country dropdowns on AgencyZoom pages where those location controls appear."
@@ -42,12 +25,8 @@
     {
       "path": "AgencyZoom/Pipeline Click-to-Call/agencyzoom-pipeline-click-to-call-updater.user.js",
       "positions": [
-        "AgencyZoom Producer",
-        "AgencyZoom Manager",
-        "Manager"
-      ],
-      "tags": [
-        "GIA"
+        "PRODUCER",
+        "CSR"
       ],
       "summary": "Adds call, SMS, email, and note actions to AgencyZoom pipeline views.",
       "details": "Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; notes, SMS, and email actions open the matching AgencyZoom workflows."
@@ -55,12 +34,7 @@
     {
       "path": "AgencyZoom/Producer Tag Hider/agencyzoom-producer-tag-hider-updater.user.js",
       "positions": [
-        "AgencyZoom Producer",
-        "AgencyZoom Manager",
-        "Manager"
-      ],
-      "tags": [
-        "GIA"
+        "PRODUCER"
       ],
       "summary": "Hides manager-selected AgencyZoom card tags from producer views.",
       "details": "Runs on producer machines. It reads the manager-selected hidden-tag list, caches it locally, and hides matching AgencyZoom card tags as cards render."
@@ -68,12 +42,8 @@
     {
       "path": "General Utilities/CFP Quick Quote PDF/cfp-quick-quote-pdf-updater.user.js",
       "positions": [
-        "General Utilities",
-        "Manager"
-      ],
-      "tags": [
-        "GIA",
-        "CPAGY"
+        "PRODUCER",
+        "CSR"
       ],
       "summary": "Generates a downloadable PDF from the CFP quick quote platform.",
       "details": "Adds a PDF generation workflow to the CFP quick quote platform so staff can produce a downloadable quote document from the quote screen."
@@ -81,11 +51,7 @@
     {
       "path": "PolicyCenter/Property Tools/gwpc-property-tools-updater.user.js",
       "positions": [
-        "PolicyCenter User",
-        "Manager"
-      ],
-      "tags": [
-        "GIA"
+        "CSR"
       ],
       "summary": "Adds property helper buttons to PolicyCenter.",
       "details": "Adds Reconstruction Calculator, Zillow, and Google Maps buttons to PolicyCenter or Guidewire pages to speed up property lookup and quoting work."
@@ -93,11 +59,7 @@
     {
       "path": "Ricochet/Pickup & Hangup Counters/ricochet-pickup-hangup-counters-updater.user.js",
       "positions": [
-        "Ricochet SDR",
-        "Manager"
-      ],
-      "tags": [
-        "GIA"
+        "SDR"
       ],
       "summary": "Adds pickup and hangup counters to Ricochet.",
       "details": "Adds daily Pick Ups and Hang Ups counters to Ricochet and can send the count/report payload to the configured webhook."
@@ -105,11 +67,7 @@
     {
       "path": "Ricochet/Voicemail Lead Watcher/ricochet-voicemail-lead-watcher-updater.user.js",
       "positions": [
-        "Ricochet SDR",
-        "Manager"
-      ],
-      "tags": [
-        "GIA"
+        "SDR"
       ],
       "summary": "Reminds Ricochet SDRs when a lead needs voicemail handling.",
       "details": "Watches Ricochet lead activity and reminds SDRs when it is time to leave a voicemail, helping keep follow-up timing consistent."

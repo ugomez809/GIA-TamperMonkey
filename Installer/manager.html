@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GIA Installer Manager</title>
+  <title>Installer Manager</title>
   <style>
     :root {
       color-scheme: light;
@@ -16,7 +16,6 @@
       --blue-dark: #1152b3;
       --green: #147a4b;
       --red: #b42318;
-      --tag: #eef4ff;
       --shadow: 0 8px 22px rgba(21, 32, 51, 0.08);
     }
 
@@ -260,7 +259,7 @@
   <header>
     <div class="wrap">
       <h1>Installer Manager</h1>
-      <p class="subhead">Position, tag, and details configuration for the employee installer page.</p>
+      <p class="subhead">Position and details configuration for the employee installer page.</p>
     </div>
   </header>
 
@@ -277,10 +276,7 @@
 
     <section class="panel">
       <h2>Positions</h2>
-      <div class="position-row">
-        <input class="position-input" id="newPosition" type="text" placeholder="New position">
-        <button type="button" id="addPosition">Add position</button>
-      </div>
+      <p class="status">Available employee positions: PRODUCER, CSR, SDR.</p>
     </section>
 
     <section class="grid" id="scripts"></section>
@@ -293,8 +289,6 @@
 
   <script>
     const CONFIG_URL = './installer-config.json';
-    const TAGS = ['GIA', 'CPAGY'];
-
     const state = {
       config: null
     };
@@ -302,11 +296,9 @@
     const scriptsEl = document.getElementById('scripts');
     const statusEl = document.getElementById('status');
     const jsonOutput = document.getElementById('jsonOutput');
-    const newPositionInput = document.getElementById('newPosition');
     const refreshButton = document.getElementById('refresh');
     const downloadButton = document.getElementById('download');
     const copyButton = document.getElementById('copy');
-    const addPositionButton = document.getElementById('addPosition');
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
@@ -324,7 +316,6 @@
     function getConfigForExport() {
       const config = cloneConfig(state.config);
       config.updatedAt = new Date().toISOString().slice(0, 10);
-      config.tags = TAGS.slice();
       return config;
     }
 
@@ -347,7 +338,7 @@
     }
 
     function renderCheckboxes(script, values, type) {
-      const options = type === 'positions' ? state.config.positions : TAGS;
+      const options = state.config.positions;
       return options.map((option) => {
         const checked = (values || []).includes(option) ? 'checked' : '';
         return `
@@ -369,10 +360,6 @@
               <div class="check-title">Positions</div>
               ${renderCheckboxes(script, script.positions, 'positions')}
             </div>
-            <div class="check-group">
-              <div class="check-title">Tags</div>
-              ${renderCheckboxes(script, script.tags, 'tags')}
-            </div>
           </div>
           <label class="field">
             <span>Summary</span>
@@ -393,22 +380,10 @@
       if (!response.ok) throw new Error(`Config returned ${response.status}`);
       const config = await response.json();
       config.positions = (config.positions || []).map(normalizePosition).filter(Boolean);
-      config.tags = TAGS.slice();
       config.scripts = config.scripts || [];
       state.config = config;
       renderScripts();
       setStatus(`Loaded ${config.scripts.length} scripts.`);
-    }
-
-    function addPosition() {
-      const position = normalizePosition(newPositionInput.value);
-      if (!position) return;
-      if (!state.config.positions.includes(position)) {
-        state.config.positions.push(position);
-        state.config.positions.sort((a, b) => a.localeCompare(b));
-      }
-      newPositionInput.value = '';
-      renderScripts();
     }
 
     function downloadConfig() {
@@ -453,10 +428,6 @@
       });
     });
 
-    addPositionButton.addEventListener('click', addPosition);
-    newPositionInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') addPosition();
-    });
     refreshButton.addEventListener('click', () => loadConfig().catch((error) => setStatus(error.message || String(error), true)));
     downloadButton.addEventListener('click', downloadConfig);
     copyButton.addEventListener('click', copyConfig);
