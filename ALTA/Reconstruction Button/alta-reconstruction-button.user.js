@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button
 // @namespace    GPG_Scripts
-// @version      0.2
+// @version      0.3
 // @description  Add one Reconstruction Calculator button to ALTA Home features
 // @match        https://alta.farmers.com/quote/*
 // @run-at       document-idle
@@ -100,21 +100,39 @@
         }
 
         style.textContent = `
+app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_Launch"],
 app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text,
+app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] mat-icon,
+.home-feature-wrapper .map-links-section [data-test-id="Reconstruction_Calculator_Launch"],
 .home-feature-wrapper .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text,
-.titleAndAddress .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text {
+.home-feature-wrapper .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] mat-icon,
+.titleAndAddress .map-links-section [data-test-id="Reconstruction_Calculator_Launch"],
+.titleAndAddress .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text,
+.titleAndAddress .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] mat-icon {
     color: ${RECONSTRUCTION_TEXT_COLOR} !important;
 }
 
+app-home-features .map-links-section [data-test-id="Zillow_Launch"],
 app-home-features .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text,
+app-home-features .map-links-section [data-test-id="Zillow_Launch"] mat-icon,
+.home-feature-wrapper .map-links-section [data-test-id="Zillow_Launch"],
 .home-feature-wrapper .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text,
-.titleAndAddress .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text {
+.home-feature-wrapper .map-links-section [data-test-id="Zillow_Launch"] mat-icon,
+.titleAndAddress .map-links-section [data-test-id="Zillow_Launch"],
+.titleAndAddress .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text,
+.titleAndAddress .map-links-section [data-test-id="Zillow_Launch"] mat-icon {
     color: ${ZILLOW_TEXT_COLOR} !important;
 }
 
+app-home-features .map-links-section [data-test-id="Google_Maps_Launch"],
 app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text,
+app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-icon,
+.home-feature-wrapper .map-links-section [data-test-id="Google_Maps_Launch"],
 .home-feature-wrapper .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text,
-.titleAndAddress .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text {
+.home-feature-wrapper .map-links-section [data-test-id="Google_Maps_Launch"] mat-icon,
+.titleAndAddress .map-links-section [data-test-id="Google_Maps_Launch"],
+.titleAndAddress .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text,
+.titleAndAddress .map-links-section [data-test-id="Google_Maps_Launch"] mat-icon {
     color: ${GOOGLE_MAPS_TEXT_COLOR} !important;
 }
 `.trim();
