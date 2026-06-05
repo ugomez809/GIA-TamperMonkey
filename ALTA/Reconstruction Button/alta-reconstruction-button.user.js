@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button
 // @namespace    GPG_Scripts
-// @version      0.1
+// @version      0.2
 // @description  Add one Reconstruction Calculator button to ALTA Home features
 // @match        https://alta.farmers.com/quote/*
 // @run-at       document-idle
@@ -18,6 +18,10 @@
     const RECONSTRUCTION_BASE_URL = 'https://gomezagency.net/zipcodes.html';
     const ROOT_ATTR = 'data-gpg-alta-reconstruction-root';
     const LINK_ATTR = 'data-gpg-alta-reconstruction-link';
+    const STYLE_ID = 'gpg-alta-reconstruction-link-colors';
+    const RECONSTRUCTION_TEXT_COLOR = '#f97316';
+    const ZILLOW_TEXT_COLOR = '#005ea8';
+    const GOOGLE_MAPS_TEXT_COLOR = '#188038';
 
     const HOME_FEATURES_PATH = '/quote/home/home-features';
     const MOUNT_SELECTORS = [
@@ -86,6 +90,35 @@
     };
 
     const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
+    const ensureLinkTextColors = () => {
+        let style = document.getElementById(STYLE_ID);
+        if (!style) {
+            style = document.createElement('style');
+            style.id = STYLE_ID;
+            (document.head || document.documentElement).appendChild(style);
+        }
+
+        style.textContent = `
+app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text,
+.home-feature-wrapper .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text,
+.titleAndAddress .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text {
+    color: ${RECONSTRUCTION_TEXT_COLOR} !important;
+}
+
+app-home-features .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text,
+.home-feature-wrapper .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text,
+.titleAndAddress .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text {
+    color: ${ZILLOW_TEXT_COLOR} !important;
+}
+
+app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text,
+.home-feature-wrapper .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text,
+.titleAndAddress .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text {
+    color: ${GOOGLE_MAPS_TEXT_COLOR} !important;
+}
+`.trim();
+    };
 
     const cssEscape = (value) => {
         if (window.CSS && typeof window.CSS.escape === 'function') {
@@ -455,6 +488,8 @@
     };
 
     const ensureButton = () => {
+        ensureLinkTextColors();
+
         if (!isHomeFeaturesPage()) {
             removeStaleRoots(null);
             return;
