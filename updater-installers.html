@@ -195,6 +195,24 @@
       margin: 0 0 12px;
     }
 
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: -2px 0 12px;
+    }
+
+    .tag {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      color: #243043;
+      font-size: 0.78rem;
+      font-weight: 750;
+      line-height: 1.2;
+      padding: 4px 8px;
+    }
+
     dl {
       display: grid;
       grid-template-columns: auto 1fr;
@@ -323,6 +341,26 @@
       return String(value || '').replace(/\s+/g, ' ').trim();
     }
 
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[character]));
+    }
+
+    function renderTags(tags) {
+      const cleanTags = (Array.isArray(tags) ? tags : []).map(clean).filter(Boolean);
+      if (!cleanTags.length) return '';
+      return `
+        <div class="tag-list" aria-label="Script tags">
+          ${cleanTags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+      `;
+    }
+
     function readMeta(source, key) {
       const pattern = new RegExp(`^//\\s*@${key}\\s+(.+)$`, 'mi');
       const match = source.match(pattern);
@@ -384,7 +422,8 @@
         details: configScript.details || scriptDescription || readMeta(updaterSource, 'description') || '',
         matches: readMatches(updaterSource),
         targetPath,
-        positions: configScript.positions || []
+        positions: configScript.positions || [],
+        tags: Array.isArray(configScript.tags) ? configScript.tags.map(clean).filter(Boolean) : []
       };
     }
 
@@ -451,6 +490,7 @@
         article.innerHTML = `
           <h2>${script.name}</h2>
           <p class="description">${script.description}</p>
+          ${renderTags(script.tags)}
           <dl>
             <dt>Updater version</dt>
             <dd>${script.updaterVersion}</dd>

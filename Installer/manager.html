@@ -294,8 +294,8 @@
     </div>
 
     <section class="panel">
-      <h2>Positions</h2>
-      <p class="status">Available employee positions: PRODUCER, CSR, SDR.</p>
+      <h2>Positions and tags</h2>
+      <p class="status">Available employee positions: PRODUCER, CSR, SDR. Available script tags: Ulises Gomez, Carlos Perez.</p>
     </section>
 
     <section class="panel">
@@ -307,7 +307,7 @@
         </label>
         <label class="field">
           <span>Commit message</span>
-          <input type="text" id="commitMessage" value="Update installer positions">
+          <input type="text" id="commitMessage" value="Update installer positions and tags">
         </label>
       </div>
       <div class="actions save-actions">
@@ -332,6 +332,11 @@
     const CONFIG_URL = './installer-config.json';
     const GITHUB_CONTENTS_URL = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeRepoPath(CONFIG_PATH)}`;
     const REQUIRED_POSITIONS = ['PRODUCER', 'CSR', 'SDR'];
+    const REQUIRED_TAGS = ['Ulises Gomez', 'Carlos Perez'];
+    const TAG_ALIASES = {
+      GIA: 'Ulises Gomez',
+      CPAGY: 'Carlos Perez'
+    };
 
     const state = {
       config: null
@@ -354,6 +359,32 @@
 
     function normalizePosition(value) {
       return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeTag(value) {
+      const tag = String(value || '').replace(/\s+/g, ' ').trim();
+      return TAG_ALIASES[tag] || tag;
+    }
+
+    function normalizeKnownList(values, options, normalizeValue) {
+      const next = [];
+      (Array.isArray(values) ? values : []).forEach((value) => {
+        const normalized = normalizeValue(value);
+        if (options.includes(normalized) && !next.includes(normalized)) {
+          next.push(normalized);
+        }
+      });
+      return next;
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[character]));
     }
 
     function encodeRepoPath(path) {
@@ -382,8 +413,8 @@
       if (JSON.stringify(config.positions || []) !== JSON.stringify(REQUIRED_POSITIONS)) {
         errors.push('Positions must be PRODUCER, CSR, SDR.');
       }
-      if ('tags' in config) {
-        errors.push('Tags are not part of the installer config.');
+      if (JSON.stringify(config.tags || []) !== JSON.stringify(REQUIRED_TAGS)) {
+        errors.push('Tags must be Ulises Gomez, Carlos Perez.');
       }
       if (!Array.isArray(config.scripts)) {
         errors.push('Scripts must be an array.');
@@ -402,8 +433,14 @@
             }
           });
         }
-        if ('tags' in script) {
-          errors.push(`Script tags are not allowed: ${script.path}`);
+        if (!Array.isArray(script.tags)) {
+          errors.push(`Tags must be an array: ${script.path}`);
+        } else {
+          script.tags.forEach((tag) => {
+            if (!REQUIRED_TAGS.includes(tag)) {
+              errors.push(`Unknown tag ${tag}: ${script.path}`);
+            }
+          });
         }
       });
       return errors;
@@ -467,21 +504,20 @@
       syncOutput();
     }
 
-    function toggleListValue(values, value, checked) {
+    function toggleListValue(values, value, checked, options) {
       const next = new Set(values || []);
       if (checked) next.add(value);
       else next.delete(value);
-      return Array.from(next);
+      return options.filter((option) => next.has(option));
     }
 
-    function renderCheckboxes(script, values, type) {
-      const options = state.config.positions;
+    function renderCheckboxes(script, values, type, options) {
       return options.map((option) => {
         const checked = (values || []).includes(option) ? 'checked' : '';
         return `
           <label>
-            <input type="checkbox" data-path="${script.path}" data-type="${type}" data-value="${option}" ${checked}>
-            <span>${option}</span>
+            <input type="checkbox" data-path="${escapeHtml(script.path)}" data-type="${type}" data-value="${escapeHtml(option)}" ${checked}>
+            <span>${escapeHtml(option)}</span>
           </label>
         `;
       }).join('');
@@ -490,21 +526,25 @@
     function renderScripts() {
       scriptsEl.innerHTML = state.config.scripts.map((script) => `
         <article class="script">
-          <h2>${script.summary || script.path.split('/').pop()}</h2>
-          <div class="path">${script.path}</div>
+          <h2>${escapeHtml(script.summary || script.path.split('/').pop())}</h2>
+          <div class="path">${escapeHtml(script.path)}</div>
           <div class="check-groups">
             <div class="check-group">
               <div class="check-title">Positions</div>
-              ${renderCheckboxes(script, script.positions, 'positions')}
+              ${renderCheckboxes(script, script.positions, 'positions', state.config.positions)}
+            </div>
+            <div class="check-group">
+              <div class="check-title">Tags</div>
+              ${renderCheckboxes(script, script.tags, 'tags', state.config.tags)}
             </div>
           </div>
           <label class="field">
             <span>Summary</span>
-            <input type="text" data-path="${script.path}" data-field="summary" value="${(script.summary || '').replace(/"/g, '&quot;')}">
+            <input type="text" data-path="${escapeHtml(script.path)}" data-field="summary" value="${escapeHtml(script.summary || '')}">
           </label>
           <label class="field">
             <span>Details</span>
-            <textarea data-path="${script.path}" data-field="details">${script.details || ''}</textarea>
+            <textarea data-path="${escapeHtml(script.path)}" data-field="details">${escapeHtml(script.details || '')}</textarea>
           </label>
         </article>
       `).join('');
@@ -516,8 +556,13 @@
       const response = await fetch(`${CONFIG_URL}?manager=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error(`Config returned ${response.status}`);
       const config = await response.json();
-      config.positions = (config.positions || []).map(normalizePosition).filter(Boolean);
+      config.positions = REQUIRED_POSITIONS.slice();
+      config.tags = REQUIRED_TAGS.slice();
       config.scripts = config.scripts || [];
+      config.scripts.forEach((script) => {
+        script.positions = normalizeKnownList(script.positions, REQUIRED_POSITIONS, normalizePosition);
+        script.tags = normalizeKnownList(script.tags, REQUIRED_TAGS, normalizeTag);
+      });
       state.config = config;
       renderScripts();
       setStatus(`Loaded ${config.scripts.length} scripts.`);
@@ -566,7 +611,7 @@
         const result = await githubRequest(GITHUB_CONTENTS_URL, token, {
           method: 'PUT',
           body: JSON.stringify({
-            message: commitMessageInput.value.trim() || 'Update installer positions',
+            message: commitMessageInput.value.trim() || 'Update installer positions and tags',
             content: toBase64Utf8(json),
             sha: currentFile.sha,
             branch: BRANCH
@@ -590,8 +635,9 @@
       const script = state.config.scripts.find((item) => item.path === target.dataset.path);
       if (!script) return;
       const type = target.dataset.type;
+      const options = type === 'tags' ? state.config.tags : state.config.positions;
       updateScript(script.path, {
-        [type]: toggleListValue(script[type], target.dataset.value, target.checked)
+        [type]: toggleListValue(script[type], target.dataset.value, target.checked, options)
       });
     });
 

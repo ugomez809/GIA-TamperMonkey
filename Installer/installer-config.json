@@ -1,15 +1,20 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-06-04",
+  "updatedAt": "2026-06-05",
   "positions": [
     "PRODUCER",
     "CSR",
     "SDR"
   ],
+  "tags": [
+    "Ulises Gomez",
+    "Carlos Perez"
+  ],
   "scripts": [
     {
       "path": "AgencyZoom/Hidden Tag Manager/agencyzoom-hidden-tag-manager-updater.user.js",
       "positions": [],
+      "tags": [],
       "summary": "Manager tool for selecting AgencyZoom tags hidden from producer views.",
       "details": "Use this on manager workstations to maintain the hidden-tag list for AgencyZoom cards. It has no employee position assignment and will not show on the public installer page unless assigned to PRODUCER, CSR, or SDR."
     },
@@ -19,6 +24,7 @@
         "PRODUCER",
         "CSR"
       ],
+      "tags": [],
       "summary": "Cleans AgencyZoom location fields and forces USA in country dropdowns.",
       "details": "Removes same-as-mailing-address boxes and auto-selects USA in country dropdowns on AgencyZoom pages where those location controls appear."
     },
@@ -28,6 +34,7 @@
         "PRODUCER",
         "CSR"
       ],
+      "tags": [],
       "summary": "Adds call, SMS, email, and note actions to AgencyZoom pipeline views.",
       "details": "Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; notes, SMS, and email actions open the matching AgencyZoom workflows."
     },
@@ -36,6 +43,7 @@
       "positions": [
         "PRODUCER"
       ],
+      "tags": [],
       "summary": "Hides manager-selected AgencyZoom card tags from producer views.",
       "details": "Runs on producer machines. It reads the manager-selected hidden-tag list, caches it locally, and hides matching AgencyZoom card tags as cards render."
     },
@@ -45,14 +53,28 @@
         "PRODUCER",
         "CSR"
       ],
+      "tags": [],
       "summary": "Generates a downloadable PDF from the CFP quick quote platform.",
       "details": "Adds a PDF generation workflow to the CFP quick quote platform so staff can produce a downloadable quote document from the quote screen."
+    },
+    {
+      "path": "General Utilities/CFP Quick Quote PDF CPAGY/cfp-quick-quote-pdf-cpagy-updater.user.js",
+      "positions": [
+        "PRODUCER",
+        "CSR"
+      ],
+      "tags": [
+        "Carlos Perez"
+      ],
+      "summary": "Generates the CPAGY downloadable PDF from the CFP quick quote platform.",
+      "details": "Adds the CPAGY PDF generation workflow to the CFP quick quote platform so sister-agency staff can produce the matching downloadable quote document from the quote screen."
     },
     {
       "path": "PolicyCenter/Property Tools/gwpc-property-tools-updater.user.js",
       "positions": [
         "CSR"
       ],
+      "tags": [],
       "summary": "Adds property helper buttons to PolicyCenter.",
       "details": "Adds Reconstruction Calculator, Zillow, and Google Maps buttons to PolicyCenter or Guidewire pages to speed up property lookup and quoting work."
     },
@@ -61,6 +83,7 @@
       "positions": [
         "SDR"
       ],
+      "tags": [],
       "summary": "Adds pickup and hangup counters to Ricochet.",
       "details": "Adds daily Pick Ups and Hang Ups counters to Ricochet and can send the count/report payload to the configured webhook."
     },
@@ -69,6 +92,7 @@
       "positions": [
         "SDR"
       ],
+      "tags": [],
       "summary": "Reminds Ricochet SDRs when a lead needs voicemail handling.",
       "details": "Watches Ricochet lead activity and reminds SDRs when it is time to leave a voicemail, helping keep follow-up timing consistent."
     }
