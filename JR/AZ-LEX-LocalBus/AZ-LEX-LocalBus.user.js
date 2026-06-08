@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AZ-LEX Bus
 // @namespace    tm.az.lex.localbus
-// @version      3.1.45
+// @version      3.1.46
 // @description  Single script for BOTH tabs (AZ + LEX). Local TM bus via GM_setValue + GM_addValueChangeListener (AZ_TO_LEX / LEX_TO_AZ). No ticket deletion. Never auto-stops: retries/reloads instead, Janiel CSR retry gate, red LEX "Policy no found" banner, hard LEX premium watchdog.
 // @match        https://app.agencyzoom.com/*
 // @match        https://farmersagent.lightning.force.com/*
@@ -18,7 +18,7 @@
 (() => {
   'use strict';
 
-const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.45';
+const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.46';
 
   // =========================
   // Shared: guard + helpers
@@ -810,9 +810,10 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
       css.textContent = `
         #tmAzLexBox{position:fixed;right:12px;bottom:12px;z-index:2147483647;
           background:rgba(18,18,18,.92);border:1px solid rgba(255,255,255,.18);
-          border-radius:14px;padding:10px;width:430px;font-family:system-ui;color:#fff;
+          border-radius:14px;padding:10px;width:430px;height:260px;box-sizing:border-box;
+          display:flex;flex-direction:column;overflow:hidden;font-family:system-ui;color:#fff;
           box-shadow:0 10px 30px rgba(0,0,0,.45)}
-        #tmAzLexRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+        #tmAzLexRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;flex:0 0 auto}
         #tmAzLexStatus{font-size:12px;opacity:.95;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         #tmAzLexActions{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:nowrap}
         .tmAzBtn{border:1px solid rgba(255,255,255,.18);
@@ -827,7 +828,7 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
         #tmAzLexCancel:hover{background:#b91c1c}
         #tmAzLexSetReview03{width:132px;overflow:hidden;text-overflow:ellipsis;text-align:center}
         #tmAzLexReload,#tmAzLexToggle{width:64px;text-align:center}
-        #tmAzLexLog{margin-top:8px;max-height:200px;overflow:auto;font-size:11px;opacity:.9;line-height:1.25}
+        #tmAzLexLog{margin-top:8px;flex:1 1 auto;min-height:0;overflow:auto;font-size:11px;opacity:.9;line-height:1.25}
         #tmAzLexLog div{margin:0 0 6px 0}
       `;
       document.documentElement.appendChild(css);
