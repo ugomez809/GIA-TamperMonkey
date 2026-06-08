@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AZ-LEX Bus
 // @namespace    tm.az.lex.localbus
-// @version      3.1.46
+// @version      3.1.47
 // @description  Single script for BOTH tabs (AZ + LEX). Local TM bus via GM_setValue + GM_addValueChangeListener (AZ_TO_LEX / LEX_TO_AZ). No ticket deletion. Never auto-stops: retries/reloads instead, Janiel CSR retry gate, red LEX "Policy no found" banner, hard LEX premium watchdog.
 // @match        https://app.agencyzoom.com/*
 // @match        https://farmersagent.lightning.force.com/*
@@ -18,7 +18,7 @@
 (() => {
   'use strict';
 
-const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.46';
+const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.47';
 
   // =========================
   // Shared: guard + helpers
@@ -96,6 +96,7 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
         // Confirm submit watcher
         confirmMaxMs: 25000,
         confirmRetryWaitMs: 12000,
+        confirmAutomationDoneMs: 6000,
       },
 
       watchdog: {
@@ -144,6 +145,7 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
         premiumBox: 'input[name="renew[0][PolicyRenewForm][policyPremium]"]',
         confirm:
           '#serviceCompDlg > div > div > div.modal-footer > button.btn.float-right.btn-success.ml-2, #serviceCompDlg .modal-footer button.btn-success, #serviceCompDlg button.btn-success, #serviceCompDlg button[type="submit"]',
+        confirmAutomationDone: '#btnConfirmAutomation',
 
         closeCandidates: [
           '#btnCloseNotePanel',
@@ -1144,6 +1146,17 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
       if (!matches || !matches.length) return '';
       return String(matches[matches.length - 1] || '').replace(/[^\d]/g, '');
     }
+    function isCfpPolicyFormat(text) {
+      return /\bCFP\s+[0-9]{6,}\b/i.test(norm(text || ''));
+    }
+    function pauseForCfpPolicy(candidate, context = 'policy search') {
+      const raw = norm(candidate?.raw || '');
+      const policy = cleanPolicy(candidate?.policy || raw);
+      const label = raw || (policy ? `CFP ${policy}` : 'CFP policy');
+      toast(`CFP policy found. Loop paused.\n${label}`, 7000);
+      uiLog(`[AZ] CFP policy pause (${context}): ${label}. Waiting for manual review.`);
+      stopLoop(`CFP policy requires manual review: ${label}`);
+    }
     function getTicketRoot() {
       return qs(CFG.sel.ticketRoot);
     }
@@ -1176,8 +1189,9 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
     function buildPolicyCandidate(raw, source, prevPolicy, allowPrevious) {
       const policy = extractPolicyNumberLoose(raw);
       if (!policy) return null;
-      if (!allowPrevious && prevPolicy && policy === prevPolicy) return null;
-      return { policy, source, raw: norm(raw).slice(0, 120) };
+      const cfpPolicy = isCfpPolicyFormat(raw);
+      if (!cfpPolicy && !allowPrevious && prevPolicy && policy === prevPolicy) return null;
+      return { policy, source, raw: norm(raw).slice(0, 120), cfpPolicy };
     }
     function collectRelatedPolicyButtons(root) {
       if (!root) return [];
@@ -1264,7 +1278,7 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
       }
 
       const policyText = getPolicyTextNow();
-      const fromText = buildPolicyCandidate(policyText.match(/Policy\s*Number\s*:\s*[0-9]{6,}/i)?.[0] || '', 'ticket_text', prevPolicy, allowPrevious);
+      const fromText = buildPolicyCandidate(policyText.match(/\bCFP\s+[0-9]{6,}\b|Policy\s*Number\s*:\s*[0-9]{6,}/i)?.[0] || '', 'ticket_text', prevPolicy, allowPrevious);
       if (fromText) return fromText;
 
       return null;
@@ -1288,6 +1302,10 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
     function snapshotPolicyForNewTicketGate(prevPolicy = '') {
       const candidate = findCurrentPolicyCandidate(prevPolicy || '', { allowPrevious: true });
       if (candidate?.policy) {
+        if (candidate.cfpPolicy) {
+          pauseForCfpPolicy(candidate, 'LEX handoff snapshot');
+          return '';
+        }
         uiLog(`[AZ] LEX handoff copy: snapshot policy=${candidate.policy} via ${candidate.source}`);
         return candidate.policy;
       }
@@ -1345,6 +1363,10 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
         while (!stopRequested && Date.now() < deadline) {
           const candidate = findCurrentPolicyCandidate(prevPolicy, { allowPrevious });
           if (candidate?.policy) {
+            if (candidate.cfpPolicy) {
+              pauseForCfpPolicy(candidate, logLabel);
+              return '';
+            }
             if (!await verifyPrimaryCsrOrStop(`${logLabel}: before using policy ${candidate.policy}`)) return '';
             if (copyToClipboard) {
               const ok = await writeClipboardText(candidate.policy);
@@ -1500,6 +1522,31 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
       return true;
     }
 
+    async function clickConfirmAutomationDone(flowLabel) {
+      const t0 = Date.now();
+      let btn = null;
+      while (!stopRequested && Date.now() - t0 < CFG.wait.confirmAutomationDoneMs) {
+        const candidate = qs(CFG.sel.confirmAutomationDone);
+        const disabled = candidate?.disabled || candidate?.getAttribute?.('aria-disabled') === 'true';
+        if (candidate && isVisible(candidate) && !disabled) {
+          btn = candidate;
+          break;
+        }
+        await sleep(120);
+      }
+
+      if (!btn) {
+        uiLog(`[AZ] ${flowLabel}: Done automation button not found -> continue`);
+        return false;
+      }
+
+      uiLog(`[AZ] ${flowLabel}: click Done automation button`);
+      humanClick(btn);
+      markProgress();
+      await sleep(CFG.wait.settleDelayMs);
+      return true;
+    }
+
     // --------- flows ---------
     async function runRenewFlowWithPremium(premiumText) {
       if (running) return '';
@@ -1536,6 +1583,7 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
           if (!okConfirm) continue;
 
           await majorDelay('after confirm success');
+          await clickConfirmAutomationDone('RENEW');
           reloadAzOnly('renew flow completed');
           return '';
         }
@@ -1594,6 +1642,7 @@ return '';
           await sleep(CFG.afterCompleteClickMs);
 
           if (!await confirmOpenedCompletedResolution('COMPLETE')) continue;
+          await clickConfirmAutomationDone('COMPLETE');
           reloadAzOnly('complete flow completed');
 return '';
         }
@@ -1836,6 +1885,12 @@ function reloadAzOnly(reason) {
         toast('Bad or missing policy number. Reloading both and retrying. No ticket was deleted.', 4000);
         uiLog('[AZ] Bad policy after thorough AZ search → reload BOTH, keep loop ON (no delete)');
         reloadBoth('bad/missing policy');
+        return;
+      }
+
+      const currentCandidate = findCurrentPolicyCandidate('', { allowPrevious: true });
+      if (currentCandidate?.cfpPolicy && cleanPolicy(currentCandidate.policy) === pn) {
+        pauseForCfpPolicy(currentCandidate, `before sending policy ${pn} to LEX`);
         return;
       }
 
