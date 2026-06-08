@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AZ-LEX Bus
 // @namespace    tm.az.lex.localbus
-// @version      3.1.47
+// @version      3.1.48
 // @description  Single script for BOTH tabs (AZ + LEX). Local TM bus via GM_setValue + GM_addValueChangeListener (AZ_TO_LEX / LEX_TO_AZ). No ticket deletion. Never auto-stops: retries/reloads instead, Janiel CSR retry gate, red LEX "Policy no found" banner, hard LEX premium watchdog.
 // @match        https://app.agencyzoom.com/*
 // @match        https://farmersagent.lightning.force.com/*
@@ -18,7 +18,7 @@
 (() => {
   'use strict';
 
-const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.47';
+const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.48';
 
   // =========================
   // Shared: guard + helpers
@@ -761,7 +761,7 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
     }
 
     // --------- UI overlay ---------
-    const UI = { box: null, status: null, toggleBtn: null, reloadBtn: null, completeBtn: null, cancelBtn: null, setReview03Btn: null, log: null };
+    const UI = { box: null, status: null, version: null, toggleBtn: null, reloadBtn: null, completeBtn: null, cancelBtn: null, setReview03Btn: null, log: null };
 
     function toast(msg, ms = 2600) {
       markProgress();
@@ -830,7 +830,8 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
         #tmAzLexCancel:hover{background:#b91c1c}
         #tmAzLexSetReview03{width:132px;overflow:hidden;text-overflow:ellipsis;text-align:center}
         #tmAzLexReload,#tmAzLexToggle{width:64px;text-align:center}
-        #tmAzLexLog{margin-top:8px;flex:1 1 auto;min-height:0;overflow:auto;font-size:11px;opacity:.9;line-height:1.25}
+        #tmAzLexVersion{flex:0 0 auto;margin-top:6px;font-size:10px;line-height:1;color:rgba(255,255,255,.58);text-align:right}
+        #tmAzLexLog{margin-top:6px;flex:1 1 auto;min-height:0;overflow:auto;font-size:11px;opacity:.9;line-height:1.25}
         #tmAzLexLog div{margin:0 0 6px 0}
       `;
       document.documentElement.appendChild(css);
@@ -848,12 +849,14 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
               <button id="tmAzLexToggle" class="tmAzBtn" title="Start/Stop Loop">Start</button>
           </div>
         </div>
+        <div id="tmAzLexVersion">v${SCRIPT_VERSION}</div>
         <div id="tmAzLexLog"></div>
       `;
       document.documentElement.appendChild(box);
 
       UI.box = box;
       UI.status = box.querySelector('#tmAzLexStatus');
+      UI.version = box.querySelector('#tmAzLexVersion');
       UI.toggleBtn = box.querySelector('#tmAzLexToggle');
 UI.completeBtn = box.querySelector('#tmAzLexComplete');
 UI.cancelBtn = box.querySelector('#tmAzLexCancel');
