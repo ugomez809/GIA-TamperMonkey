@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-06-05",
+  "updatedAt": "2026-06-08",
   "positions": [
     "PRODUCER",
     "CSR",
@@ -46,6 +46,15 @@
       "tags": [],
       "summary": "Hides manager-selected AgencyZoom card tags from producer views.",
       "details": "Runs on producer machines. It reads the manager-selected hidden-tag list, caches it locally, and hides matching AgencyZoom card tags as cards render."
+    },
+    {
+      "path": "JR/AZ-LEX-LocalBus/AZ-LEX-LocalBus-updater.user.js",
+      "positions": [
+        "CSR"
+      ],
+      "tags": [],
+      "summary": "Runs the AgencyZoom to Farmers LEX renewal bus.",
+      "details": "Loads and auto-updates the AZ-LEX Bus script for AgencyZoom and Farmers LEX tabs, keeping the local policy lookup and premium-copy workflow current from GitHub."
     },
     {
       "path": "General Utilities/CFP Quick Quote PDF/cfp-quick-quote-pdf-updater.user.js",
