@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AZ-LEX Bus
 // @namespace    tm.az.lex.localbus
-// @version      3.1.44
+// @version      3.1.45
 // @description  Single script for BOTH tabs (AZ + LEX). Local TM bus via GM_setValue + GM_addValueChangeListener (AZ_TO_LEX / LEX_TO_AZ). No ticket deletion. Never auto-stops: retries/reloads instead, Janiel CSR retry gate, red LEX "Policy no found" banner, hard LEX premium watchdog.
 // @match        https://app.agencyzoom.com/*
 // @match        https://farmersagent.lightning.force.com/*
@@ -18,7 +18,7 @@
 (() => {
   'use strict';
 
-const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.44';
+const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.45';
 
   // =========================
   // Shared: guard + helpers
@@ -759,7 +759,7 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
     }
 
     // --------- UI overlay ---------
-    const UI = { box: null, status: null, toggleBtn: null, reloadBtn: null, completeBtn: null, setReview03Btn: null, log: null };
+    const UI = { box: null, status: null, toggleBtn: null, reloadBtn: null, completeBtn: null, cancelBtn: null, setReview03Btn: null, log: null };
 
     function toast(msg, ms = 2600) {
       markProgress();
@@ -798,7 +798,8 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
 
       // 03-only button visibility
       if (UI.setReview03Btn) {
-        UI.setReview03Btn.style.display = PIPE03 ? '' : 'none';
+        UI.setReview03Btn.style.visibility = PIPE03 ? '' : 'hidden';
+        UI.setReview03Btn.style.pointerEvents = PIPE03 ? '' : 'none';
       }
     }
 
@@ -811,12 +812,21 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
           background:rgba(18,18,18,.92);border:1px solid rgba(255,255,255,.18);
           border-radius:14px;padding:10px;width:430px;font-family:system-ui;color:#fff;
           box-shadow:0 10px 30px rgba(0,0,0,.45)}
-        #tmAzLexRow{display:flex;gap:8px;align-items:center;justify-content:space-between}
-        #tmAzLexStatus{font-size:12px;opacity:.95;max-width:240px}
+        #tmAzLexRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+        #tmAzLexStatus{font-size:12px;opacity:.95;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        #tmAzLexActions{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:nowrap}
         .tmAzBtn{border:1px solid rgba(255,255,255,.18);
           background:rgba(255,255,255,.08);color:#fff;padding:6px 10px;
-          border-radius:999px;cursor:pointer;font-size:12px}
+          border-radius:999px;cursor:pointer;font-size:12px;white-space:nowrap}
         .tmAzBtn:hover{background:rgba(255,255,255,.14)}
+        .tmAzRoundBtn{width:28px;height:28px;flex:0 0 28px;padding:0;border-radius:999px;
+          display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:800}
+        #tmAzLexComplete{background:#16a34a;border-color:#22c55e}
+        #tmAzLexComplete:hover{background:#15803d}
+        #tmAzLexCancel{background:#dc2626;border-color:#ef4444}
+        #tmAzLexCancel:hover{background:#b91c1c}
+        #tmAzLexSetReview03{width:132px;overflow:hidden;text-overflow:ellipsis;text-align:center}
+        #tmAzLexReload,#tmAzLexToggle{width:64px;text-align:center}
         #tmAzLexLog{margin-top:8px;max-height:200px;overflow:auto;font-size:11px;opacity:.9;line-height:1.25}
         #tmAzLexLog div{margin:0 0 6px 0}
       `;
@@ -827,9 +837,10 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
       box.innerHTML = `
         <div id="tmAzLexRow">
           <div id="tmAzLexStatus">Boot…</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <div id="tmAzLexActions">
            <button id="tmAzLexSetReview03" class="tmAzBtn" title="03 only: click, then click a ticket inside Review lane to save laneStatus">Set Review Lane (03)</button>
-              <button id="tmAzLexComplete" class="tmAzBtn" title="Complete current ticket">Complete</button>
+              <button id="tmAzLexComplete" class="tmAzBtn tmAzRoundBtn" title="Complete current ticket" aria-label="Complete current ticket">✓</button>
+              <button id="tmAzLexCancel" class="tmAzBtn tmAzRoundBtn" title="Cancel current ticket" aria-label="Cancel current ticket">×</button>
               <button id="tmAzLexReload" class="tmAzBtn" title="Reload BOTH pages now">Reload</button>
               <button id="tmAzLexToggle" class="tmAzBtn" title="Start/Stop Loop">Start</button>
           </div>
@@ -842,6 +853,7 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
       UI.status = box.querySelector('#tmAzLexStatus');
       UI.toggleBtn = box.querySelector('#tmAzLexToggle');
 UI.completeBtn = box.querySelector('#tmAzLexComplete');
+UI.cancelBtn = box.querySelector('#tmAzLexCancel');
 UI.reloadBtn = box.querySelector('#tmAzLexReload');
 UI.setReview03Btn = box.querySelector('#tmAzLexSetReview03');
 UI.log = box.querySelector('#tmAzLexLog');
@@ -854,6 +866,15 @@ UI.completeBtn.addEventListener('click', async () => {
     await runCompleteFlow();
   } catch (err) {
     uiLog(`[AZ] Manual Complete failed: ${err?.message || err}`);
+  }
+});
+
+UI.cancelBtn.addEventListener('click', async () => {
+  try {
+    uiLog('[AZ] Manual Cancel button clicked');
+    await runCancelFlow();
+  } catch (err) {
+    uiLog(`[AZ] Manual Cancel failed: ${err?.message || err}`);
   }
 });
 
