@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AZ-LEX Bus Updater
 // @namespace    local.jr.az-lex-localbus.updater
-// @version      0.1
+// @version      0.2
 // @description  Loads and auto-updates only the AZ-LEX Bus script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @match        https://farmersagent.lightning.force.com/*
@@ -20,12 +20,12 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.1';
+  const LOADER_VERSION = '0.2';
   const TARGET_ID = 'az-lex-localbus';
   const TARGET_LABEL = 'AZ-LEX Bus';
   const TARGET_FILE = 'AZ-LEX-LocalBus.user.js';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/JR/AZ-LEX-LocalBus';
-  const CHECK_INTERVAL_MS = 30 * 1000;
+  const CHECK_INTERVAL_MS = 1000;
   const RELOAD_DELAY_MS = 1200;
   const CACHE_KEY = `tmGiaPerScriptUpdater:${TARGET_ID}:code`;
   const VERSION_KEY = `tmGiaPerScriptUpdater:${TARGET_ID}:version`;
@@ -36,6 +36,7 @@
   let debugEnabled = false;
   let forceRequested = false;
   let clearRequested = false;
+  let updateCheckRunning = false;
 
   boot();
 
@@ -48,13 +49,27 @@
     const cached = storageGet(CACHE_KEY, '');
     if (cached) executeTarget(cached, 'cache');
 
-    checkForUpdates({ runIfNoCache: !cached, forceReload: forceRequested })
-      .catch((err) => console.warn(`[${TARGET_LABEL} Updater] update check failed`, err));
+    queueUpdateCheck('startup', { runIfNoCache: !cached, forceReload: forceRequested });
 
     window.setInterval(() => {
-      checkForUpdates({ runIfNoCache: false, forceReload: false })
-        .catch((err) => console.warn(`[${TARGET_LABEL} Updater] background update failed`, err));
+      queueUpdateCheck('background', { runIfNoCache: false, forceReload: false });
     }, CHECK_INTERVAL_MS);
+
+    window.addEventListener('focus', () => queueUpdateCheck('focus'));
+    window.addEventListener('online', () => queueUpdateCheck('online'));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) queueUpdateCheck('visible');
+    });
+  }
+
+  function queueUpdateCheck(source, options = {}) {
+    if (updateCheckRunning) return;
+    updateCheckRunning = true;
+    checkForUpdates(options)
+      .catch((err) => console.warn(`[${TARGET_LABEL} Updater] ${source} update check failed`, err))
+      .finally(() => {
+        updateCheckRunning = false;
+      });
   }
 
   async function checkForUpdates(options = {}) {
