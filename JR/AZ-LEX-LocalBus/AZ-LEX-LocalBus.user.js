@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AZ-LEX Bus
 // @namespace    tm.az.lex.localbus
-// @version      3.1.43
+// @version      3.1.44
 // @description  Single script for BOTH tabs (AZ + LEX). Local TM bus via GM_setValue + GM_addValueChangeListener (AZ_TO_LEX / LEX_TO_AZ). No ticket deletion. Never auto-stops: retries/reloads instead, Janiel CSR retry gate, red LEX "Policy no found" banner, hard LEX premium watchdog.
 // @match        https://app.agencyzoom.com/*
 // @match        https://farmersagent.lightning.force.com/*
@@ -18,7 +18,7 @@
 (() => {
   'use strict';
 
-const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.43';
+const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || '3.1.44';
 
   // =========================
   // Shared: guard + helpers
@@ -93,16 +93,9 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
         modalCloseTimeoutMs: 12000,
         panelCloseTimeoutMs: 15000,
         openTicketTimeoutMs: 18000,
-        firstTicketPrecheckModalMs: 6500,
-        firstTicketPrecheckQuestionMs: 3500,
-
         // Confirm submit watcher
         confirmMaxMs: 25000,
         confirmRetryWaitMs: 12000,
-      },
-
-      firstTicketPrecheck: {
-        maxRestarts: 20,
       },
 
       watchdog: {
@@ -151,10 +144,6 @@ const SCRIPT_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.versi
         premiumBox: 'input[name="renew[0][PolicyRenewForm][policyPremium]"]',
         confirm:
           '#serviceCompDlg > div > div > div.modal-footer > button.btn.float-right.btn-success.ml-2, #serviceCompDlg .modal-footer button.btn-success, #serviceCompDlg button.btn-success, #serviceCompDlg button[type="submit"]',
-        actionStatusDropdown:
-          '#serviceCompDlg button[data-id="actionStatus"], #serviceCompForm button[data-id="actionStatus"], button[data-id="actionStatus"][title="Leave it as it is"]',
-        modalCancel:
-          '#serviceCompDlg button[name="btnCancel"], #serviceCompDlg button[data-dismiss="modal"][aria-label="Close"], #serviceCompDlg .modal-footer button.btn-default',
 
         closeCandidates: [
           '#btnCloseNotePanel',
@@ -1073,143 +1062,6 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
       await waitForCondition(() => !isModalOpen(), CFG.wait.modalCloseTimeoutMs, 'modal closed');
     }
 
-    function getPolicyActionStatusButton() {
-      const dlg = qs(CFG.sel.modalRoot) || document;
-      const exact = qsa(CFG.sel.actionStatusDropdown, dlg).find(isVisible) || qs(CFG.sel.actionStatusDropdown);
-      if (exact && isVisible(exact)) return exact;
-
-      const buttons = qsa('button[data-id="actionStatus"],button.dropdown-toggle[title="Leave it as it is"]', dlg).filter(isVisible);
-      return buttons[0] || null;
-    }
-
-    function modalHasPolicyActionQuestion() {
-      const dlg = qs(CFG.sel.modalRoot);
-      if (!dlg || !isModalOpen()) return false;
-      if (!getPolicyActionStatusButton()) return false;
-
-      const questionText = 'what would you like to do with this policy';
-      const textEls = qsa('label,p,span,h1,h2,h3,h4,h5,strong,div', dlg).filter(isVisible);
-      return textEls.some((el) => {
-        const ownText = norm([...el.childNodes]
-          .filter((node) => node.nodeType === Node.TEXT_NODE)
-          .map((node) => node.textContent || '')
-          .join(' ')).toLowerCase();
-        return ownText.includes(questionText);
-      });
-    }
-
-    function getModalCancelButton() {
-      const dlg = qs(CFG.sel.modalRoot) || document;
-      const named = qsa('#serviceCompDlg button[name="btnCancel"], button[name="btnCancel"]', dlg).find(isVisible);
-      if (named) return named;
-
-      const footerCancel = qsa('#serviceCompDlg .modal-footer button, #serviceCompDlg .modal-footer a, .modal-footer button, .modal-footer a', dlg)
-        .find((el) => isVisible(el) && norm(el.textContent).toLowerCase() === 'cancel');
-      if (footerCancel) return footerCancel;
-
-      const exact = qsa(CFG.sel.modalCancel, dlg).find((el) => isVisible(el) && norm(el.textContent).toLowerCase() === 'cancel');
-      if (exact) return exact;
-
-      return qsa('button,a', dlg).find((el) => isVisible(el) && norm(el.textContent).toLowerCase() === 'cancel') || null;
-    }
-
-    function hardCloseServiceCompModal(reason) {
-      const dlg = qs(CFG.sel.modalRoot);
-      uiLog(`[AZ] First-step precheck: hard-close modal (${reason})`);
-
-      try {
-        qsa('.modal-backdrop,.modal-backdrop.show,.modal-backdrop.in').forEach((el) => el.remove());
-      } catch {}
-
-      if (dlg) {
-        try {
-          dlg.classList.remove('show', 'in');
-          dlg.setAttribute('aria-hidden', 'true');
-          dlg.removeAttribute('aria-modal');
-          dlg.style.display = 'none';
-          dlg.style.visibility = 'hidden';
-          dlg.style.pointerEvents = 'none';
-        } catch {}
-      }
-
-      try {
-        document.body.classList.remove('modal-open');
-        document.documentElement.classList.remove('modal-open');
-        document.body.style.removeProperty('padding-right');
-        document.body.style.removeProperty('overflow');
-      } catch {}
-
-      markProgress();
-      return !isModalOpen();
-    }
-
-    async function clickCancelAndCloseFirstStepModal(cancelBtn) {
-      const label = norm(cancelBtn?.textContent || '') || cancelBtn?.getAttribute?.('name') || cancelBtn?.getAttribute?.('aria-label') || 'Cancel';
-      uiLog(`[AZ] First-step precheck: click modal Cancel -> ${label}`);
-
-      closeDropdownsAndBlur();
-      await sleep(120);
-      if (cancelBtn) {
-        humanClick(cancelBtn);
-        try { cancelBtn.click?.(); } catch {}
-      }
-
-      let closed = await waitForCondition(() => !isModalOpen(), 2200, 'first-step modal canceled after button click');
-      if (closed) return true;
-
-      uiLog('[AZ] First-step precheck: Cancel click did not close modal -> Bootstrap/jQuery hide fallback');
-      const dlg = qs(CFG.sel.modalRoot);
-      try {
-        if (window.bootstrap?.Modal && dlg) {
-          const inst = window.bootstrap.Modal.getInstance(dlg) || new window.bootstrap.Modal(dlg);
-          inst.hide();
-        }
-      } catch {}
-      try {
-        const jq = window.jQuery || window.$;
-        if (jq && dlg && typeof jq(dlg).modal === 'function') jq(dlg).modal('hide');
-      } catch {}
-      try { dispatchKeyEscape(); } catch {}
-
-      closed = await waitForCondition(() => !isModalOpen(), 1600, 'first-step modal canceled fallback');
-      if (closed) return true;
-
-      return hardCloseServiceCompModal('cancel fallback failed');
-    }
-
-    async function waitForPolicyActionQuestion(ms) {
-      const t0 = Date.now();
-      while (!stopRequested && Date.now() - t0 < ms) {
-        if (!isModalOpen()) return false;
-        if (modalHasPolicyActionQuestion()) return true;
-        await sleep(120);
-      }
-      return modalHasPolicyActionQuestion();
-    }
-
-    async function openFirstStepResolutionModal() {
-      for (let i = 1; i <= CFG.stepRetries; i++) {
-        if (stopRequested) return false;
-
-        uiLog(`[AZ] New ticket gate: click Complete Service Request (try ${i})`);
-        const okComplete = await clickAny([CFG.sel.openResolution, CFG.sel.openResolutionFallback]);
-        if (!okComplete) {
-          uiLog(`[AZ] New ticket gate: Complete Service Request not found/clicked (try ${i})`);
-          await sleep(350);
-          continue;
-        }
-
-        await sleep(CFG.afterCompleteClickMs);
-        const modalOpened = await waitForCondition(() => isModalOpen(), CFG.wait.firstTicketPrecheckModalMs, `first-step Complete modal try ${i}`);
-        if (modalOpened) return true;
-      }
-
-      toast('New ticket gate Complete modal did not open. Loop paused.', 5200);
-      uiLog('[AZ] New ticket gate: Complete modal did not open -> pause loop');
-      stopLoop('first-step complete modal did not open');
-      return false;
-    }
-
     async function prepareAzTicketForResolution(context) {
       await ensureMainTabOpen();
       if (!await ensurePrimaryCsr()) return false;
@@ -1224,42 +1076,14 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
       return true;
     }
 
-    async function runFirstTicketResolutionPrecheck(prevPolicy = '') {
+    async function prepareFirstTicketForLexHandoff(prevPolicy = '') {
       if (stopRequested) return makeGateResult('stop');
 
-      uiLog('[AZ] New ticket gate: Main -> Janiel Primary CSR/Producer -> Complete Service Request');
-      if (!await prepareAzTicketForResolution('before NEW-TICKET gate Complete click')) return makeGateResult('stop');
+      uiLog('[AZ] LEX handoff: Main -> Janiel Primary CSR/Producer -> copy policy without opening Complete modal');
+      if (!await prepareAzTicketForResolution('before LEX handoff')) return makeGateResult('stop');
 
       const gatePolicy = snapshotPolicyForNewTicketGate(prevPolicy || '');
-
-      const modalOpened = await openFirstStepResolutionModal();
-      if (!modalOpened) return makeGateResult('stop', gatePolicy);
-
-      const hasPolicyActionQuestion = await waitForPolicyActionQuestion(CFG.wait.firstTicketPrecheckQuestionMs);
-      uiLog(`[AZ] New ticket gate: "What would you like to do with this policy" visible=${hasPolicyActionQuestion ? 'yes' : 'no'}`);
-      if (hasPolicyActionQuestion) {
-        uiLog('[AZ] New ticket gate: question available -> Cancel modal and continue to LEX/Apex workflow');
-        const cancelBtn = getModalCancelButton();
-        if (!cancelBtn) {
-          toast('Precheck Cancel button missing. Loop paused.', 5200);
-          uiLog('[AZ] First-step precheck: Cancel button missing -> pause loop');
-          stopLoop('first-step precheck cancel button missing');
-          return makeGateResult('stop', gatePolicy);
-        }
-
-        const closed = await clickCancelAndCloseFirstStepModal(cancelBtn);
-        if (!closed) {
-          toast('Precheck modal did not close after Cancel. Loop paused.', 5200);
-          uiLog('[AZ] First-step precheck: modal still open after Cancel -> pause loop');
-          stopLoop('first-step precheck cancel did not close modal');
-          return makeGateResult('stop', gatePolicy);
-        }
-        return makeGateResult('continue', gatePolicy);
-      }
-
-      uiLog('[AZ] New ticket gate: question missing -> select Complete, Confirm, restart without sending to LEX/Apex');
-      if (!await confirmOpenedCompletedResolution('NEW-TICKET GATE')) return makeGateResult('stop', gatePolicy);
-      return makeGateResult('restart');
+      return makeGateResult('continue', gatePolicy);
     }
 
     // ======= FIND REVIEW LANE =======
@@ -1442,13 +1266,13 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
     function snapshotPolicyForNewTicketGate(prevPolicy = '') {
       const candidate = findCurrentPolicyCandidate(prevPolicy || '', { allowPrevious: true });
       if (candidate?.policy) {
-        uiLog(`[AZ] New ticket gate copy: snapshot policy=${candidate.policy} via ${candidate.source}`);
+        uiLog(`[AZ] LEX handoff copy: snapshot policy=${candidate.policy} via ${candidate.source}`);
         return candidate.policy;
       }
 
       const root = getTicketRoot();
       const btnCount = collectRelatedPolicyButtons(root).length;
-      uiLog(`[AZ] New ticket gate copy: no policy snapshot before modal (buttons=${btnCount}, textChars=${(getPolicyTextNow() || '').length})`);
+      uiLog(`[AZ] LEX handoff copy: no policy snapshot before copy wait (buttons=${btnCount}, textChars=${(getPolicyTextNow() || '').length})`);
       return '';
     }
 
@@ -1460,7 +1284,7 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
         if (!ok) window.prompt('Copy Policy Number:', pn);
       }
       toast(`${copyToClipboard ? 'Copied' : 'Found'} Policy #: ${pn}`, 2200);
-      uiLog(`[AZ] ${logLabel}: using new ticket gate policy snapshot ${pn} -> send to LEX/Apex`);
+      uiLog(`[AZ] ${logLabel}: using LEX handoff policy snapshot ${pn} -> send to LEX/Apex`);
       return pn;
     }
 
@@ -1524,7 +1348,6 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
         logLabel = 'Policy search',
         copyToClipboard = true,
         allowPrevious = false,
-        precheckRestarts = 0,
       } = opts;
 
       uiLog('[AZ] Open: Find Review lane…');
@@ -1553,26 +1376,10 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
       if (!openedOk) { uiLog('[AZ] Ticket did not open in time'); toast('Ticket did not open.', 6000); return ''; }
 
       await majorDelay('after ticket opened');
-      const precheckResult = await runFirstTicketResolutionPrecheck(prevPolicy || '');
-      const precheckAction = getGateAction(precheckResult);
-      if (precheckAction === 'stop') return '';
-      if (precheckAction === 'restart') {
-        uiLog('[AZ] New ticket gate: current ticket completed before LEX/Apex send -> open next Review ticket');
-        if (precheckRestarts >= CFG.firstTicketPrecheck.maxRestarts) {
-          toast('First-step precheck restarted too many times. Loop paused.', 6200);
-          uiLog('[AZ] First-step precheck: restart cap reached -> pause loop');
-          stopLoop('first-step precheck restart cap reached');
-          return '';
-        }
-        return await closeTicketAndOpenFirstReview(prevPolicy || '', {
-          logLabel,
-          copyToClipboard,
-          allowPrevious,
-          precheckRestarts: precheckRestarts + 1,
-        });
-      }
+      const handoffResult = await prepareFirstTicketForLexHandoff(prevPolicy || '');
+      if (getGateAction(handoffResult) === 'stop') return '';
 
-      const gatePolicy = getGatePolicy(precheckResult);
+      const gatePolicy = getGatePolicy(handoffResult);
       if (gatePolicy) return await useGatePolicySnapshot(gatePolicy, logLabel, copyToClipboard);
 
       await ensureMainTabOpen();
@@ -1586,24 +1393,14 @@ UI.reloadBtn.addEventListener('click', () => reloadBoth('manual reload'));
         return await openFirstReviewTicketAndCopyPolicy(prevPolicy, { logLabel, copyToClipboard: false });
       }
 
-      uiLog('[AZ] First step: ticket is already open -> run Complete precheck');
-      const precheckResult = await runFirstTicketResolutionPrecheck(prevPolicy || '');
-      const precheckAction = getGateAction(precheckResult);
-      if (precheckAction === 'stop') return '';
-      if (precheckAction === 'restart') {
-        uiLog('[AZ] New ticket gate: open ticket completed before LEX/Apex send -> open next Review ticket');
-        return await closeTicketAndOpenFirstReview(prevPolicy || '', {
-          logLabel,
-          copyToClipboard: false,
-          allowPrevious: true,
-          precheckRestarts: 1,
-        });
-      }
+      uiLog('[AZ] First step: ticket is already open -> prepare LEX/Apex handoff');
+      const handoffResult = await prepareFirstTicketForLexHandoff(prevPolicy || '');
+      if (getGateAction(handoffResult) === 'stop') return '';
 
       uiLog('[AZ] First step: ticket is already open → click Main');
       await ensureMainTabOpen();
       if (!await ensurePrimaryCsr()) return '';
-      const gatePolicy = getGatePolicy(precheckResult);
+      const gatePolicy = getGatePolicy(handoffResult);
       if (gatePolicy) return await useGatePolicySnapshot(gatePolicy, logLabel, false);
       return await copyPolicyFromCurrentTicketWait(prevPolicy, {
         copyToClipboard: false,
