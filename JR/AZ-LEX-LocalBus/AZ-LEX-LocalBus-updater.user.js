@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AZ-LEX Bus Updater
 // @namespace    local.jr.az-lex-localbus.updater
-// @version      0.3
+// @version      0.4
 // @description  Loads and auto-updates only the AZ-LEX Bus script from GitHub.
 // @match        https://app.agencyzoom.com/*
 // @match        https://farmersagent.lightning.force.com/*
@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.3';
+  const LOADER_VERSION = '0.4';
   const TARGET_ID = 'az-lex-localbus';
   const TARGET_LABEL = 'AZ-LEX Bus';
   const TARGET_FILE = 'AZ-LEX-LocalBus.user.js';
@@ -100,12 +100,14 @@
     const remote = await fetchTarget();
     const cached = storageGet(CACHE_KEY, '');
     const remoteVersion = extractVersion(remote);
+    const remoteHash = hashCode(remote);
 
     storageSet(LAST_CHECK_KEY, String(Date.now()));
 
     if (!sameCode(remote, cached)) {
       storageSet(CACHE_KEY, remote);
       storageSet(VERSION_KEY, remoteVersion);
+      console.info(`[${TARGET_LABEL} Updater] Cached ${TARGET_LABEL} v${remoteVersion} (${remoteHash}).`);
 
       if (options.runIfNoCache && !executed) {
         executeTarget(remote, 'remote');
@@ -113,7 +115,7 @@
         return;
       }
 
-      reloadOnce(remoteVersion, options.forceReload);
+      reloadOnce(remoteVersion, remoteHash, options.forceReload);
       return;
     }
 
@@ -262,8 +264,8 @@
     try { window.open(url, '_blank', 'noopener'); } catch {}
   }
 
-  function reloadOnce(version, force) {
-    const signature = `${TARGET_ID}:${version}`;
+  function reloadOnce(version, hash, force) {
+    const signature = `${TARGET_ID}:${version}:${hash || 'unknown'}`;
     if (!force && sessionStorage.getItem(RELOAD_KEY) === signature) return;
     sessionStorage.setItem(RELOAD_KEY, signature);
     window.setTimeout(() => location.reload(), RELOAD_DELAY_MS);
@@ -335,6 +337,15 @@
 
   function normalizeCode(value) {
     return String(value || '').replace(/\r\n?/g, '\n').trim();
+  }
+
+  function hashCode(value) {
+    const text = normalizeCode(value);
+    let hash = 5381;
+    for (let i = 0; i < text.length; i++) {
+      hash = ((hash << 5) + hash) ^ text.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
   }
 
   function isTruthy(value) {
