@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button Updater
 // @namespace    local.alta.reconstruction-button.updater
-// @version      0.2
+// @version      0.3
 // @description  Loads and auto-updates the ALTA Reconstruction Calculator Button script from GitHub.
-// @match        https://alta.farmers.com/quote/*
+// @match        https://alta.farmers.com/*
 // @run-at       document-start
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.2';
+  const LOADER_VERSION = '0.3';
   const TARGET_ID = 'alta-reconstruction-button';
   const TARGET_LABEL = 'ALTA Reconstruction Calculator Button';
   const TARGET_FILE = 'alta-reconstruction-button.user.js';
@@ -59,7 +59,7 @@
       .catch((err) => console.warn(`[${TARGET_LABEL} Updater] update check failed`, err));
 
     window.setInterval(() => {
-      checkForUpdates({ runIfNoCache: false, forceReload: false })
+      checkForUpdates({ runIfNoLocal: false, forceReload: false })
         .catch((err) => console.warn(`[${TARGET_LABEL} Updater] background update failed`, err));
     }, CHECK_INTERVAL_MS);
   }

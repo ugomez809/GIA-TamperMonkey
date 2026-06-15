@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button
 // @namespace    GPG_Scripts
-// @version      0.5
+// @version      0.6
 // @description  Add Reconstruction Calculator links next to ALTA Google Maps links
-// @match        https://alta.farmers.com/quote/*
+// @match        https://alta.farmers.com/*
 // @run-at       document-idle
 // @grant        none
 // @author       Mr.G
@@ -15,6 +15,8 @@
     'use strict';
 
     const SYNC_DELAY_MS = 100;
+    const STARTUP_SCAN_INTERVAL_MS = 300;
+    const STARTUP_SCAN_DURATION_MS = 20000;
     const RECONSTRUCTION_BASE_URL = 'https://gomezagency.net/zipcodes.html';
     const ROOT_ATTR = 'data-gpg-alta-reconstruction-root';
     const LINK_ATTR = 'data-gpg-alta-reconstruction-link';
@@ -808,6 +810,9 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
     };
 
     let syncScheduled = false;
+    let observer = null;
+    let startupScanTimer = 0;
+    let historyHooksInstalled = false;
 
     function scheduleSync() {
         if (syncScheduled) {
@@ -818,19 +823,91 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
 
         window.setTimeout(() => {
             syncScheduled = false;
-            ensureButtons();
+            try {
+                ensureButtons();
+            } catch (error) {
+                console.warn('[ALTA Reconstruction Calculator] Sync failed', error);
+            }
         }, SYNC_DELAY_MS);
     }
 
-    const observerTarget = document.body || document.documentElement;
-    const observer = new MutationObserver(scheduleSync);
-    observer.observe(observerTarget, { childList: true, subtree: true });
+    function startStartupScan() {
+        if (startupScanTimer) {
+            return;
+        }
 
-    window.addEventListener('load', scheduleSync);
-    window.addEventListener('popstate', scheduleSync);
-    document.addEventListener('readystatechange', scheduleSync);
+        const startedAt = Date.now();
+        const scan = () => {
+            scheduleSync();
+
+            if (Date.now() - startedAt >= STARTUP_SCAN_DURATION_MS) {
+                startupScanTimer = 0;
+                return;
+            }
+
+            startupScanTimer = window.setTimeout(scan, STARTUP_SCAN_INTERVAL_MS);
+        };
+
+        scan();
+    }
+
+    function startObserver() {
+        const observerTarget = document.body || document.documentElement;
+        if (!observerTarget) {
+            window.setTimeout(startObserver, SYNC_DELAY_MS);
+            return;
+        }
+
+        if (!observer) {
+            observer = new MutationObserver(() => {
+                scheduleSync();
+            });
+            observer.observe(observerTarget, { childList: true, subtree: true });
+        }
+
+        scheduleSync();
+        startStartupScan();
+    }
+
+    function installHistoryHooks() {
+        if (historyHooksInstalled || !window.history) {
+            return;
+        }
+
+        historyHooksInstalled = true;
+
+        ['pushState', 'replaceState'].forEach((methodName) => {
+            const original = window.history[methodName];
+            if (typeof original !== 'function') {
+                return;
+            }
+
+            window.history[methodName] = function patchedHistoryMethod() {
+                const result = original.apply(this, arguments);
+                scheduleSync();
+                startStartupScan();
+                return result;
+            };
+        });
+    }
+
+    function scheduleAndScan() {
+        scheduleSync();
+        startStartupScan();
+    }
+
+    installHistoryHooks();
+
+    window.addEventListener('load', scheduleAndScan);
+    window.addEventListener('pageshow', scheduleAndScan);
+    window.addEventListener('popstate', scheduleAndScan);
+    window.addEventListener('hashchange', scheduleAndScan);
+    window.addEventListener('focus', scheduleSync);
+    document.addEventListener('DOMContentLoaded', scheduleAndScan);
+    document.addEventListener('readystatechange', scheduleAndScan);
+    document.addEventListener('visibilitychange', scheduleSync);
     document.addEventListener('input', scheduleSync, true);
     document.addEventListener('change', scheduleSync, true);
 
-    scheduleSync();
+    startObserver();
 })();
