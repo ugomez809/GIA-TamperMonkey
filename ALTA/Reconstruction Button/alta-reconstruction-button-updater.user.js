@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button Updater
 // @namespace    local.alta.reconstruction-button.updater
-// @version      0.3
+// @version      0.4
 // @description  Loads and auto-updates the ALTA Reconstruction Calculator Button script from GitHub.
 // @match        https://alta.farmers.com/*
 // @run-at       document-start
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '0.3';
+  const LOADER_VERSION = '0.4';
   const TARGET_ID = 'alta-reconstruction-button';
   const TARGET_LABEL = 'ALTA Reconstruction Calculator Button';
   const TARGET_FILE = 'alta-reconstruction-button.user.js';
@@ -29,6 +29,8 @@
   const RELOAD_DELAY_MS = 1200;
   const FETCH_TIMEOUT_MS = 12000;
   const RETRY_DELAY_MS = 1200;
+  const TARGET_WAIT_INTERVAL_MS = 300;
+  const TARGET_WAIT_DURATION_MS = 90000;
   const CACHE_KEY = `tmGwpcPerScriptUpdater:${TARGET_ID}:code`;
   const VERSION_KEY = `tmGwpcPerScriptUpdater:${TARGET_ID}:version`;
   const LAST_CHECK_KEY = `tmGwpcPerScriptUpdater:${TARGET_ID}:lastCheck`;
@@ -40,6 +42,9 @@
   let forceRequested = false;
   let clearRequested = false;
   let reloadQueued = false;
+  let pendingTarget = null;
+  let targetWaitTimer = 0;
+  let targetWaitStartedAt = 0;
 
   boot();
 
@@ -53,7 +58,7 @@
     const bundled = cached ? '' : getBundledTarget();
     const initialCode = cached || bundled;
 
-    if (initialCode) executeTarget(initialCode, cached ? 'cache' : 'bundled resource');
+    if (initialCode) runTargetWhenReady(initialCode, cached ? 'cache' : 'bundled resource');
 
     checkForUpdates({ runIfNoLocal: !initialCode, forceReload: forceRequested })
       .catch((err) => console.warn(`[${TARGET_LABEL} Updater] update check failed`, err));
@@ -76,7 +81,7 @@
       storageSet(VERSION_KEY, remoteVersion);
 
       if (options.runIfNoLocal && !executed) {
-        executeTarget(remote, 'remote');
+        runTargetWhenReady(remote, 'remote');
         if (debugEnabled) showStatus(`Loaded ${TARGET_LABEL} v${remoteVersion}.`);
         return;
       }
@@ -86,7 +91,14 @@
         return;
       }
 
-      reloadOnce(remoteVersion, options.forceReload);
+      if (!executed) {
+        runTargetWhenReady(remote, 'remote');
+        return;
+      }
+
+      if (shouldRunTargetNow()) {
+        reloadOnce(remoteVersion, options.forceReload);
+      }
       return;
     }
 
@@ -112,6 +124,58 @@
       if (source === 'cache') storageDelete(CACHE_KEY);
       return false;
     }
+  }
+
+  function runTargetWhenReady(code, source) {
+    const targetCode = getValidCode(code);
+    if (executed || !targetCode) return;
+
+    pendingTarget = {
+      code: targetCode,
+      source
+    };
+
+    if (shouldRunTargetNow()) {
+      executePendingTarget();
+      return;
+    }
+
+    startTargetWaiter();
+  }
+
+  function executePendingTarget() {
+    if (!pendingTarget || executed) return;
+    const target = pendingTarget;
+    pendingTarget = null;
+    executeTarget(target.code, target.source);
+  }
+
+  function startTargetWaiter() {
+    if (targetWaitTimer) return;
+    if (!targetWaitStartedAt) targetWaitStartedAt = Date.now();
+
+    const check = () => {
+      if (!pendingTarget || executed) {
+        targetWaitTimer = 0;
+        return;
+      }
+
+      if (shouldRunTargetNow()) {
+        targetWaitTimer = 0;
+        executePendingTarget();
+        return;
+      }
+
+      if (Date.now() - targetWaitStartedAt >= TARGET_WAIT_DURATION_MS) {
+        targetWaitTimer = 0;
+        targetWaitStartedAt = 0;
+        return;
+      }
+
+      targetWaitTimer = window.setTimeout(check, TARGET_WAIT_INTERVAL_MS);
+    };
+
+    check();
   }
 
   async function fetchTarget() {
@@ -173,16 +237,23 @@
       return;
     }
 
+    const optionNames = [
+      'altaReconstructionUpdaterDebug',
+      'altaReconstructionUpdaterForce',
+      'altaReconstructionUpdaterClear'
+    ];
+    const shouldCleanUrl = optionNames.some((name) => url.searchParams.has(name));
+
     debugEnabled = isTruthy(url.searchParams.get('altaReconstructionUpdaterDebug'));
     forceRequested = isTruthy(url.searchParams.get('altaReconstructionUpdaterForce'));
     clearRequested = isTruthy(url.searchParams.get('altaReconstructionUpdaterClear'));
 
     if (forceRequested || clearRequested) sessionStorage.removeItem(RELOAD_KEY);
 
-    url.searchParams.delete('altaReconstructionUpdaterDebug');
-    url.searchParams.delete('altaReconstructionUpdaterForce');
-    url.searchParams.delete('altaReconstructionUpdaterClear');
-    history.replaceState(history.state, document.title, url.toString());
+    if (shouldCleanUrl) {
+      optionNames.forEach((name) => url.searchParams.delete(name));
+      history.replaceState(history.state, document.title, url.toString());
+    }
   }
 
   function showStatus(message) {
@@ -202,6 +273,21 @@
 
   function isAlta() {
     return /^alta\.farmers\.com$/i.test(String(location.hostname || ''));
+  }
+
+  function shouldRunTargetNow() {
+    if (!isAlta()) return false;
+
+    const path = String(location.pathname || '');
+    if (/^\/quote(?:\/|$)/i.test(path)) return true;
+
+    try {
+      return Boolean(
+        document.querySelector('[data-test-id="Google_Maps_Launch"], app-home-features, .home-feature-wrapper, .titleAndAddress')
+      );
+    } catch {
+      return false;
+    }
   }
 
   function extractVersion(code) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button
 // @namespace    GPG_Scripts
-// @version      0.6
+// @version      0.7
 // @description  Add Reconstruction Calculator links next to ALTA Google Maps links
 // @match        https://alta.farmers.com/*
 // @run-at       document-idle
@@ -812,7 +812,7 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
     let syncScheduled = false;
     let observer = null;
     let startupScanTimer = 0;
-    let historyHooksInstalled = false;
+    let lastKnownHref = window.location.href;
 
     function scheduleSync() {
         if (syncScheduled) {
@@ -869,34 +869,21 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
         startStartupScan();
     }
 
-    function installHistoryHooks() {
-        if (historyHooksInstalled || !window.history) {
-            return;
-        }
-
-        historyHooksInstalled = true;
-
-        ['pushState', 'replaceState'].forEach((methodName) => {
-            const original = window.history[methodName];
-            if (typeof original !== 'function') {
-                return;
-            }
-
-            window.history[methodName] = function patchedHistoryMethod() {
-                const result = original.apply(this, arguments);
-                scheduleSync();
-                startStartupScan();
-                return result;
-            };
-        });
-    }
-
     function scheduleAndScan() {
         scheduleSync();
         startStartupScan();
     }
 
-    installHistoryHooks();
+    function startRouteWatcher() {
+        window.setInterval(() => {
+            if (lastKnownHref === window.location.href) {
+                return;
+            }
+
+            lastKnownHref = window.location.href;
+            scheduleAndScan();
+        }, 1000);
+    }
 
     window.addEventListener('load', scheduleAndScan);
     window.addEventListener('pageshow', scheduleAndScan);
@@ -910,4 +897,5 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
     document.addEventListener('change', scheduleSync, true);
 
     startObserver();
+    startRouteWatcher();
 })();
