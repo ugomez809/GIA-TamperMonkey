@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.2
+// @version      1.3
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
-// @match        https://giainc.ricochet.me/dashboard/config/spam-guru
+// @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Admins/Spam%20Guru%20Risk%20Ratings/ricochet-spam-guru-risk-ratings.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Admins/Spam%20Guru%20Risk%20Ratings/ricochet-spam-guru-risk-ratings.user.js
 // @run-at       document-idle
@@ -15,22 +15,22 @@
 (function () {
   'use strict';
 
-  const EXACT_ORIGIN = 'https://giainc.ricochet.me';
-  const EXACT_PATH = '/dashboard/config/spam-guru';
+  const PAGE_ORIGIN = 'https://giainc.ricochet.me';
+  const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
 
   let enabled = false;
 
-  function isExactPage() {
+  function isSpamGuruPage() {
+    const path = String(location.pathname || '').replace(/\/+$/, '');
+
     return (
-      location.origin === EXACT_ORIGIN &&
-      location.pathname === EXACT_PATH &&
-      location.search === '' &&
-      location.hash === ''
+      String(location.origin || '').toLowerCase() === PAGE_ORIGIN &&
+      path === PAGE_PATH
     );
   }
 
-  if (!isExactPage()) return;
+  if (!isSpamGuruPage()) return;
 
   function textOf(el) {
     return String(el?.textContent || '').trim().replace(/\s+/g, ' ');
@@ -498,7 +498,7 @@
   }
 
   function attachSwitch() {
-    if (!isExactPage()) return;
+    if (!isSpamGuruPage()) return;
 
     const clock = document.querySelector('.rc-call-clock-value[data-rc-clock-value]');
     if (!clock) return;
@@ -537,7 +537,7 @@
   }
 
   document.addEventListener('keydown', (event) => {
-    if (!isExactPage()) return;
+    if (!isSpamGuruPage()) return;
     if (!event.altKey || !event.shiftKey) return;
 
     const key = event.key.toLowerCase();

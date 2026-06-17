@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Risk Ratings Updater
 // @namespace    local.ricochet-spam-guru-risk-ratings.updater
-// @version      1.1.0
+// @version      1.1.1
 // @description  Loads and auto-updates only the Ricochet Spam Guru Risk Ratings script from GitHub.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
@@ -202,9 +202,11 @@
   }
 
   function isSpamGuruPage() {
+    const path = String(location.pathname || '').replace(/\/+$/, '');
+
     return (
       String(location.origin || '').toLowerCase() === 'https://giainc.ricochet.me' &&
-      String(location.pathname || '') === '/dashboard/config/spam-guru'
+      path === '/dashboard/config/spam-guru'
     );
   }
 
