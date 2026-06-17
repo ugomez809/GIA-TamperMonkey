@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.5
+// @version      1.6
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
@@ -18,8 +18,10 @@
   const PAGE_ORIGIN = 'https://giainc.ricochet.me';
   const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
+  const FALLBACK_DELAY_MS = 3000;
 
   let enabled = false;
+  const startedAt = Date.now();
 
   function isSpamGuruPage() {
     const path = String(location.pathname || '').replace(/\/+$/, '');
@@ -307,7 +309,7 @@
       selectedMatches: selected.matches,
     });
 
-    flashLabel('On');
+    flashLabel(stateLabel());
   }
 
   function restoreRatings() {
@@ -321,7 +323,7 @@
       cell.removeAttribute('title');
     });
 
-    flashLabel('Off');
+    flashLabel(stateLabel());
   }
 
   function setEnabled(next) {
@@ -464,7 +466,7 @@
       }
 
       #${CONTROL_ID} .risk-switch-label {
-        min-width: 34px;
+        min-width: 58px;
         text-align: right;
       }
     `;
@@ -480,8 +482,12 @@
     window.clearTimeout(label._spamGuruTimer);
 
     label._spamGuruTimer = window.setTimeout(() => {
-      label.textContent = enabled ? 'On' : 'Off';
+      label.textContent = stateLabel();
     }, 1200);
+  }
+
+  function stateLabel() {
+    return enabled ? 'RMD On' : 'RMD Off';
   }
 
   function positionSwitch() {
@@ -540,6 +546,10 @@
   function attachSwitch() {
     if (!isSpamGuruPage()) return;
 
+    const target = getSwitchAnchor();
+    const fallbackReady = Date.now() - startedAt >= FALLBACK_DELAY_MS;
+    if (!target && !fallbackReady) return;
+
     addStyles();
 
     let label = document.getElementById(CONTROL_ID);
@@ -551,7 +561,7 @@
 
       const text = document.createElement('span');
       text.className = 'risk-switch-label';
-      text.textContent = enabled ? 'On' : 'Off';
+      text.textContent = stateLabel();
 
       const input = document.createElement('input');
       input.type = 'checkbox';
