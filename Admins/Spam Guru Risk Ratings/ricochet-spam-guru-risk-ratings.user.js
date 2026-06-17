@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.4
+// @version      1.5
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
@@ -488,11 +488,19 @@
     const control = document.getElementById(CONTROL_ID);
     const target = getSwitchAnchor();
 
-    if (!control || !target) return;
+    if (!control) return;
+
+    if (!target) {
+      control.style.left = '';
+      control.style.right = '12px';
+      control.style.top = '12px';
+      return;
+    }
 
     const rect = target.getBoundingClientRect();
     const controlRect = control.getBoundingClientRect();
 
+    control.style.right = '';
     control.style.left = `${Math.max(4, rect.left - controlRect.width - 10)}px`;
     control.style.top = `${rect.top + (rect.height - controlRect.height) / 2}px`;
   }
@@ -502,23 +510,35 @@
   }
 
   function getClockAnchor() {
-    return document.querySelector('.rc-call-clock-value[data-rc-clock-value]');
+    const clock = document.querySelector('.rc-call-clock-value[data-rc-clock-value]');
+    return isVisible(clock) ? clock : null;
   }
 
   function getHelpAnchor() {
     const links = document.querySelectorAll('a.dropdown-toggle[data-toggle="dropdown"]');
 
     for (const link of links) {
-      if (textOf(link).replace(/\s*$/, '') === 'Help') return link;
+      if (!isVisible(link)) continue;
+      if (/\bHelp\b/i.test(textOf(link))) return link;
     }
 
     return null;
   }
 
+  function isVisible(el) {
+    if (!el || !(el instanceof Element)) return false;
+
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
   function attachSwitch() {
     if (!isSpamGuruPage()) return;
-
-    if (!getSwitchAnchor()) return;
 
     addStyles();
 
