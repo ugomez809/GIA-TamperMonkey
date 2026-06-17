@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.8
+// @version      1.9
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
-// @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
+// @match        https://giainc.ricochet.me/*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Admins/Spam%20Guru%20Risk%20Ratings/ricochet-spam-guru-risk-ratings.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Admins/Spam%20Guru%20Risk%20Ratings/ricochet-spam-guru-risk-ratings.user.js
 // @run-at       document-idle
@@ -23,7 +23,8 @@
   let enabled = true;
   let defaultRevealPending = true;
   let attachQueued = false;
-  const startedAt = Date.now();
+  let onSpamGuruPage = false;
+  let spamGuruEnteredAt = 0;
 
   function isSpamGuruPage() {
     const path = String(location.pathname || '').replace(/\/+$/, '');
@@ -34,7 +35,7 @@
     );
   }
 
-  if (!isSpamGuruPage()) return;
+  syncRouteState();
 
   function textOf(el) {
     return String(el?.textContent || '').trim().replace(/\s+/g, ' ');
@@ -281,6 +282,11 @@
 
   function revealRatings(options = {}) {
     const rows = getPhoneRows();
+    if (!rows.length) {
+      if (!options.silentNoData) flashLabel('No data');
+      return false;
+    }
+
     const arrays = findPhoneArrays();
     const selected = choosePhoneArray(arrays, rows);
 
@@ -547,10 +553,10 @@
   }
 
   function attachSwitch() {
-    if (!isSpamGuruPage()) return;
+    if (!syncRouteState()) return;
 
     const target = getSwitchAnchor();
-    const fallbackReady = Date.now() - startedAt >= FALLBACK_DELAY_MS;
+    const fallbackReady = Date.now() - spamGuruEnteredAt >= FALLBACK_DELAY_MS;
     if (!target && !fallbackReady) return;
 
     addStyles();
@@ -590,6 +596,26 @@
     }
   }
 
+  function syncRouteState() {
+    const nextOnSpamGuruPage = isSpamGuruPage();
+
+    if (nextOnSpamGuruPage && !onSpamGuruPage) {
+      spamGuruEnteredAt = Date.now();
+      defaultRevealPending = true;
+    } else if (!nextOnSpamGuruPage && onSpamGuruPage) {
+      removeSwitch();
+      defaultRevealPending = true;
+    }
+
+    onSpamGuruPage = nextOnSpamGuruPage;
+    return onSpamGuruPage;
+  }
+
+  function removeSwitch() {
+    const control = document.getElementById(CONTROL_ID);
+    if (control) control.remove();
+  }
+
   function queueAttachSwitch() {
     if (attachQueued) return;
     attachQueued = true;
@@ -626,8 +652,25 @@
     );
   }
 
+  function patchHistoryForRouteChanges() {
+    ['pushState', 'replaceState'].forEach((methodName) => {
+      const original = history[methodName];
+      if (typeof original !== 'function') return;
+      if (original._spamGuruRiskPatched) return;
+
+      const patched = function (...args) {
+        const result = original.apply(this, args);
+        queueAttachSwitch();
+        return result;
+      };
+
+      patched._spamGuruRiskPatched = true;
+      history[methodName] = patched;
+    });
+  }
+
   document.addEventListener('keydown', (event) => {
-    if (!isSpamGuruPage()) return;
+    if (!syncRouteState()) return;
     if (!event.altKey || !event.shiftKey) return;
 
     const key = event.key.toLowerCase();
@@ -642,7 +685,10 @@
   });
 
   queueAttachSwitch();
+  patchHistoryForRouteChanges();
   observeSwitchAnchors();
+  window.addEventListener('popstate', queueAttachSwitch);
+  window.addEventListener('hashchange', queueAttachSwitch);
   window.addEventListener('resize', positionSwitch, { passive: true });
   window.addEventListener('scroll', positionSwitch, { passive: true });
   window.setTimeout(queueAttachSwitch, FALLBACK_DELAY_MS);
