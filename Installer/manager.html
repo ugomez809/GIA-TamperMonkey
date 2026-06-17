@@ -295,7 +295,7 @@
 
     <section class="panel">
       <h2>Positions and tags</h2>
-      <p class="status">Available employee positions: PRODUCER, CSR, SDR. Available script tags: Ulises Gomez, Carlos Perez.</p>
+      <p class="status">Available employee positions: PRODUCER, CSR, SDR, Admins. Available script tags: Ulises Gomez, Carlos Perez.</p>
     </section>
 
     <section class="panel">
@@ -331,7 +331,7 @@
     const CONFIG_PATH = 'Installer/installer-config.json';
     const CONFIG_URL = './installer-config.json';
     const GITHUB_CONTENTS_URL = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${encodeRepoPath(CONFIG_PATH)}`;
-    const REQUIRED_POSITIONS = ['PRODUCER', 'CSR', 'SDR'];
+    const REQUIRED_POSITIONS = ['PRODUCER', 'CSR', 'SDR', 'Admins'];
     const REQUIRED_TAGS = ['Ulises Gomez', 'Carlos Perez'];
     const TAG_ALIASES = {
       GIA: 'Ulises Gomez',
@@ -411,7 +411,7 @@
         return ['Config must be a JSON object.'];
       }
       if (JSON.stringify(config.positions || []) !== JSON.stringify(REQUIRED_POSITIONS)) {
-        errors.push('Positions must be PRODUCER, CSR, SDR.');
+        errors.push('Positions must be PRODUCER, CSR, SDR, Admins.');
       }
       if (JSON.stringify(config.tags || []) !== JSON.stringify(REQUIRED_TAGS)) {
         errors.push('Tags must be Ulises Gomez, Carlos Perez.');
