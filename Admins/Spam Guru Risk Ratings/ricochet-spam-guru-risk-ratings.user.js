@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.6
+// @version      1.7
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
@@ -20,7 +20,8 @@
   const CONTROL_ID = 'spam-guru-risk-switch';
   const FALLBACK_DELAY_MS = 3000;
 
-  let enabled = false;
+  let enabled = true;
+  let defaultRevealPending = true;
   const startedAt = Date.now();
 
   function isSpamGuruPage() {
@@ -277,14 +278,14 @@
     return current !== label;
   }
 
-  function revealRatings() {
+  function revealRatings(options = {}) {
     const rows = getPhoneRows();
     const arrays = findPhoneArrays();
     const selected = choosePhoneArray(arrays, rows);
 
     if (!selected) {
-      flashLabel('No data');
-      return;
+      if (!options.silentNoData) flashLabel('No data');
+      return false;
     }
 
     const maps = buildMaps(selected.records);
@@ -310,6 +311,7 @@
     });
 
     flashLabel(stateLabel());
+    return true;
   }
 
   function restoreRatings() {
@@ -581,6 +583,10 @@
     }
 
     positionSwitch();
+
+    if (enabled && defaultRevealPending) {
+      defaultRevealPending = !revealRatings({ silentNoData: true });
+    }
   }
 
   document.addEventListener('keydown', (event) => {
