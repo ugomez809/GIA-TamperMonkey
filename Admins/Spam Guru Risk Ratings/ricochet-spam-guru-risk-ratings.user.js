@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.7
+// @version      1.8
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
@@ -22,6 +22,7 @@
 
   let enabled = true;
   let defaultRevealPending = true;
+  let attachQueued = false;
   const startedAt = Date.now();
 
   function isSpamGuruPage() {
@@ -589,6 +590,42 @@
     }
   }
 
+  function queueAttachSwitch() {
+    if (attachQueued) return;
+    attachQueued = true;
+
+    window.requestAnimationFrame(() => {
+      attachQueued = false;
+      attachSwitch();
+    });
+  }
+
+  function observeSwitchAnchors() {
+    const root = document.documentElement || document.body;
+    if (!root || typeof MutationObserver !== 'function') return;
+
+    const observer = new MutationObserver((mutations) => {
+      if (mutations.every(isControlMutation)) return;
+      queueAttachSwitch();
+    });
+
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['class', 'data-rc-clock-value', 'hidden', 'style'],
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  function isControlMutation(mutation) {
+    const target = mutation && mutation.target;
+    return Boolean(
+      target &&
+      target instanceof Element &&
+      (target.id === CONTROL_ID || target.closest(`#${CONTROL_ID}`))
+    );
+  }
+
   document.addEventListener('keydown', (event) => {
     if (!isSpamGuruPage()) return;
     if (!event.altKey || !event.shiftKey) return;
@@ -604,8 +641,10 @@
     }
   });
 
-  attachSwitch();
+  queueAttachSwitch();
+  observeSwitchAnchors();
   window.addEventListener('resize', positionSwitch, { passive: true });
   window.addEventListener('scroll', positionSwitch, { passive: true });
-  window.setInterval(attachSwitch, 1500);
+  window.setTimeout(queueAttachSwitch, FALLBACK_DELAY_MS);
+  window.setInterval(queueAttachSwitch, 1500);
 })();
