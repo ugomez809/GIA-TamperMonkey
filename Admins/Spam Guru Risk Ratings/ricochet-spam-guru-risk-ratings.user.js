@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.3
+// @version      1.4
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/dashboard/config/spam-guru*
@@ -486,22 +486,39 @@
 
   function positionSwitch() {
     const control = document.getElementById(CONTROL_ID);
-    const clock = document.querySelector('.rc-call-clock-value[data-rc-clock-value]');
+    const target = getSwitchAnchor();
 
-    if (!control || !clock) return;
+    if (!control || !target) return;
 
-    const rect = clock.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
     const controlRect = control.getBoundingClientRect();
 
-    control.style.left = `${rect.left - controlRect.width - 10}px`;
+    control.style.left = `${Math.max(4, rect.left - controlRect.width - 10)}px`;
     control.style.top = `${rect.top + (rect.height - controlRect.height) / 2}px`;
+  }
+
+  function getSwitchAnchor() {
+    return getClockAnchor() || getHelpAnchor();
+  }
+
+  function getClockAnchor() {
+    return document.querySelector('.rc-call-clock-value[data-rc-clock-value]');
+  }
+
+  function getHelpAnchor() {
+    const links = document.querySelectorAll('a.dropdown-toggle[data-toggle="dropdown"]');
+
+    for (const link of links) {
+      if (textOf(link).replace(/\s*$/, '') === 'Help') return link;
+    }
+
+    return null;
   }
 
   function attachSwitch() {
     if (!isSpamGuruPage()) return;
 
-    const clock = document.querySelector('.rc-call-clock-value[data-rc-clock-value]');
-    if (!clock) return;
+    if (!getSwitchAnchor()) return;
 
     addStyles();
 

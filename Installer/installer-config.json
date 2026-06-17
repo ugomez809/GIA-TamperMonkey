@@ -98,7 +98,7 @@
       "details": "Adds daily Pick Ups and Hang Ups counters to Ricochet and can send the count/report payload to the configured webhook."
     },
     {
-      "path": "Admins/Spam Guru Risk Ratings/ricochet-spam-guru-risk-ratings-updater.user.js",
+      "path": "Admins/Spam Guru Risk Ratings/ricochet-spam-guru-risk-ratings.user.js",
       "positions": [
         "Admins"
       ],

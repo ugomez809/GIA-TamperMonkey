@@ -21,5 +21,6 @@ Read this before making changes in either GIA automation repository.
 - Treat `BackUps/` as an archive folder. Do not include scripts in `BackUps/` in active script inventories, updater-pair checks, installer pages, or automatic updater creation unless the user explicitly asks to work on backups.
 - The following active scripts intentionally do not have updater scripts right now:
   - `AgencyZoom/AI Follow-Up Composer/agencyzoom-ai-follow-up-composer.user.js`
+  - `Admins/Spam Guru Risk Ratings/ricochet-spam-guru-risk-ratings.user.js`
   - `PolicyCenter/Reconstruction Calculator/policycenter-reconstruction-button.user.js`
   - `PolicyCenter/Zillow & Google Maps Links/policycenter-zillow-googlemaps.user.js`

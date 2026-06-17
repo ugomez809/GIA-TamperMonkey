@@ -421,8 +421,8 @@
         return errors;
       }
       config.scripts.forEach((script) => {
-        if (!script.path || !script.path.endsWith('-updater.user.js')) {
-          errors.push(`Only updater scripts can be listed: ${script.path || '(missing path)'}`);
+        if (!isAllowedInstallerPath(script.path)) {
+          errors.push(`Only updater scripts or approved direct scripts can be listed: ${script.path || '(missing path)'}`);
         }
         if (!Array.isArray(script.positions)) {
           errors.push(`Positions must be an array: ${script.path}`);
@@ -444,6 +444,16 @@
         }
       });
       return errors;
+    }
+
+    function isAllowedInstallerPath(path) {
+      return (
+        typeof path === 'string' &&
+        (
+          path.endsWith('-updater.user.js') ||
+          path === 'Admins/Spam Guru Risk Ratings/ricochet-spam-guru-risk-ratings.user.js'
+        )
+      );
     }
 
     function readOutputConfig() {
