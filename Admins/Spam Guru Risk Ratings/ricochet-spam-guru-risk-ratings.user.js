@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.2
+// @version      4.3
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -20,6 +20,10 @@
   const CONTROL_ID = 'spam-guru-risk-switch';
   const INLINE_CELL_CLASS = 'spam-guru-risk-inline-cell';
   const CELL_ID_PREFIX = 'spam-guru-cell';
+  const PHONE_COL_INDEX = 1;
+  const HIYA_COL_INDEX = 5;
+  const TNS_COL_INDEX = 6;
+  const DECISION_COL_INDEX = 8;
   const FALLBACK_DELAY_MS = 3000;
 
   let enabled = true;
@@ -238,9 +242,9 @@
         /^(TH|TD)$/.test(cell.tagName)
       );
 
-      if (cells.length < 7) return;
+      if (cells.length <= DECISION_COL_INDEX) return;
 
-      const phone = normalizePhone(textOf(cells[1]));
+      const phone = normalizePhone(textOf(cells[PHONE_COL_INDEX]));
       if (phone.length !== 10) return;
 
       rows.push({
@@ -257,22 +261,57 @@
   }
 
   function getRowsSignature(rows) {
-    return rows.map((row) => row.key).join('||');
+    return rows.map((row) => `${row.key}|${getDecisionSignature(row)}`).join('||');
+  }
+
+  function getDecisionSignature(row) {
+    const cell = row.cells[DECISION_COL_INDEX];
+    if (!cell) return '';
+
+    return [
+      decisionTextOf(cell).toLowerCase(),
+      getDecisionState(cell),
+    ].join('|');
+  }
+
+  function decisionTextOf(cell) {
+    if (!cell || !(cell instanceof Element)) return '';
+
+    const select = cell.querySelector('select');
+    if (select) {
+      return Array.from(select.selectedOptions || [])
+        .map((option) => textOf(option))
+        .filter(Boolean)
+        .join(' ');
+    }
+
+    const checkedControl = cell.querySelector('input[type="checkbox"]:checked, input[type="radio"]:checked');
+    if (checkedControl) {
+      const label = checkedControl.closest('label');
+      if (label && cell.contains(label)) return textOf(label);
+      return checkedControl.value || 'on';
+    }
+
+    const visibleSelected = Array.from(
+      cell.querySelectorAll(
+        '.dropdown-toggle, button, [role="button"], .selected, .is-selected, [aria-selected="true"]'
+      )
+    ).find((el) => isVisible(el) && textOf(el));
+
+    if (visibleSelected) {
+      return textOf(visibleSelected).replace(/\b(caret|open|close)\b/gi, '').trim();
+    }
+
+    return textOf(cell);
   }
 
   function applyRowCellIds(row) {
     const phoneId = row.phone;
 
-    setManagedCellId(row.cells[1], `${CELL_ID_PREFIX}-${phoneId}-phone`, row, 'phone');
-    setManagedCellId(row.cells[5], `${CELL_ID_PREFIX}-${phoneId}-hiya`, row, 'hiya');
-    setManagedCellId(row.cells[6], `${CELL_ID_PREFIX}-${phoneId}-tns`, row, 'tns');
-
-    row.cells.forEach((cell, index) => {
-      if (!cell || !(cell instanceof Element)) return;
-
-      cell.dataset.spamGuruPhone = phoneId;
-      cell.dataset.spamGuruCellIndex = String(index);
-    });
+    setManagedCellId(row.cells[PHONE_COL_INDEX], `${CELL_ID_PREFIX}-${phoneId}-phone`, row, 'phone');
+    setManagedCellId(row.cells[HIYA_COL_INDEX], `${CELL_ID_PREFIX}-${phoneId}-hiya`, row, 'hiya');
+    setManagedCellId(row.cells[TNS_COL_INDEX], `${CELL_ID_PREFIX}-${phoneId}-tns`, row, 'tns');
+    setManagedCellId(row.cells[DECISION_COL_INDEX], `${CELL_ID_PREFIX}-${phoneId}-decision`, row, 'decision');
 
     if (row.tr && row.tr instanceof Element) {
       row.tr.dataset.spamGuruPhone = phoneId;
@@ -434,10 +473,18 @@
       '[role="checkbox"]',
       '[onclick]',
       '[tabindex]',
+      '[data-toggle]',
       '.switch',
       '.toggle',
       '.custom-control',
       '.bootstrap-switch',
+      '.dropdown',
+      '.dropdown-menu',
+      '.dropdown-toggle',
+      '.btn',
+      '.form-control',
+      '[role="option"]',
+      '[role="listbox"]',
     ].join(',');
 
     if (cell.matches(interactiveSelector) || cell.querySelector(interactiveSelector)) return false;
@@ -452,16 +499,68 @@
   function getRiskCells(row) {
     applyRowCellIds(row);
 
-    const fixedCells = [
-      isSafeRatingCell(row.cells[5], row, 'hiya') ? row.cells[5] : null,
-      isSafeRatingCell(row.cells[6], row, 'tns') ? row.cells[6] : null,
-    ].filter(Boolean);
+    return [
+      isSafeRatingCell(row.cells[HIYA_COL_INDEX], row, 'hiya') ? row.cells[HIYA_COL_INDEX] : null,
+      isSafeRatingCell(row.cells[TNS_COL_INDEX], row, 'tns') ? row.cells[TNS_COL_INDEX] : null,
+    ];
+  }
 
-    if (fixedCells.length === 2) return fixedCells;
+  function getDecisionRoles(row) {
+    const cell = row.cells[DECISION_COL_INDEX];
+    if (!cell || !(cell instanceof Element) || !isVisible(cell)) return [];
 
-    return row.cells
-      .filter((cell, index) => index > 1 && isSafeRatingCell(cell))
-      .slice(0, 2);
+    const state = getDecisionState(cell);
+    const text = decisionTextOf(cell).toLowerCase();
+    const hasHiya = /\bhiya\b/.test(text);
+    const hasTns = /\btns\b/.test(text);
+
+    if (hasHiya || hasTns) {
+      return [
+        hasHiya ? 'hiya' : null,
+        hasTns ? 'tns' : null,
+      ].filter(Boolean);
+    }
+
+    if (state === 'off') return [];
+    if (state === 'on') return ['hiya', 'tns'];
+
+    if (/\b(off|no|false|disabled|none|skip)\b/.test(text)) return [];
+    if (/\b(on|yes|true|enabled|both|all|rmd|remediate)\b/.test(text)) return ['hiya', 'tns'];
+
+    return [];
+  }
+
+  function getDecisionState(cell) {
+    const checkedControl = cell.querySelector('input[type="checkbox"], input[type="radio"]');
+    if (checkedControl) return checkedControl.checked ? 'on' : 'off';
+
+    const ariaControl = cell.querySelector('[aria-checked]');
+    const ariaChecked = ariaControl?.getAttribute('aria-checked');
+    if (ariaChecked === 'true') return 'on';
+    if (ariaChecked === 'false') return 'off';
+
+    const classText = String(cell.className || '').toLowerCase();
+    const descendantClasses = Array.from(cell.querySelectorAll('*'))
+      .filter((el) => isVisible(el))
+      .map((el) => String(el.className || '').toLowerCase())
+      .join(' ');
+    const classes = `${classText} ${descendantClasses}`;
+
+    if (/\b(bootstrap-switch-off|switch-off|toggle-off|is-off|unchecked|is-unchecked)\b/.test(classes)) return 'off';
+    if (/\b(bootstrap-switch-on|switch-on|toggle-on|is-on|checked|is-checked)\b/.test(classes)) return 'on';
+
+    return '';
+  }
+
+  function hasKnownDecision(row) {
+    const cell = row.cells[DECISION_COL_INDEX];
+    if (!cell) return false;
+
+    if (getDecisionState(cell)) return true;
+
+    return /\b(hiya|tns|off|no|false|disabled|none|skip|on|yes|true|enabled|both|all|rmd|remediate)\b/i.test(
+      decisionTextOf(cell)
+    );
   }
 
   function setRiskCellText(cell, label, sourceName, rawValue, row, role) {
@@ -593,6 +692,9 @@
 
     const recordIndex = buildRecordIndex(rankedArrays);
     let changed = 0;
+    let expected = 0;
+    let skippedByDecision = 0;
+    let unknownDecision = 0;
 
     clearRiskLabels();
 
@@ -603,13 +705,30 @@
       const hiyaLabel = riskLabel(record.hiya_risk_rating);
       const tnsLabel = riskLabel(record.tns_risk_rating);
       const riskCells = getRiskCells(row);
+      const decisionRoles = getDecisionRoles(row);
 
-      if (setRiskCellText(riskCells[0], hiyaLabel, 'Hiya', record.hiya_risk_rating, row, 'hiya')) changed += 1;
-      if (setRiskCellText(riskCells[1], tnsLabel, 'TNS', record.tns_risk_rating, row, 'tns')) changed += 1;
+      if (!decisionRoles.length) {
+        if (!hasKnownDecision(row)) unknownDecision += 1;
+        skippedByDecision += 1;
+        return;
+      }
+
+      if (decisionRoles.includes('hiya') && hiyaLabel) {
+        expected += 1;
+        if (setRiskCellText(riskCells[0], hiyaLabel, 'Hiya', record.hiya_risk_rating, row, 'hiya')) changed += 1;
+      }
+
+      if (decisionRoles.includes('tns') && tnsLabel) {
+        expected += 1;
+        if (setRiskCellText(riskCells[1], tnsLabel, 'TNS', record.tns_risk_rating, row, 'tns')) changed += 1;
+      }
     });
 
     console.log('[Spam Guru Reveal]', {
       changed,
+      expected,
+      skippedByDecision,
+      unknownDecision,
       rows: rows.length,
       selectedArray: selected.path,
       selectedLength: selected.records.length,
@@ -620,7 +739,7 @@
 
     flashLabel(changed ? stateLabel() : 'No labels');
     lastRevealSignature = getRowsSignature(rows);
-    lastRevealComplete = changed >= rows.length * 2;
+    lastRevealComplete = unknownDecision === 0 && changed >= expected;
     if (!lastRevealComplete) scheduleRevealRetries(lastRevealSignature);
     defaultRevealPending = false;
     return true;
@@ -683,13 +802,18 @@
         return {
           name: row.name,
           phoneLast4: row.phone.slice(-4),
-          domRating1: textOf(row.cells[5]),
-          domRating2: textOf(row.cells[6]),
-          phoneCellId: row.cells[1]?.id || null,
-          hiyaCellId: row.cells[5]?.id || null,
-          tnsCellId: row.cells[6]?.id || null,
-          hiyaCellPhone: row.cells[5]?.dataset?.spamGuruPhone || null,
-          tnsCellPhone: row.cells[6]?.dataset?.spamGuruPhone || null,
+          domRating1: textOf(row.cells[HIYA_COL_INDEX]),
+          domRating2: textOf(row.cells[TNS_COL_INDEX]),
+          decisionText: decisionTextOf(row.cells[DECISION_COL_INDEX]),
+          decisionFullText: textOf(row.cells[DECISION_COL_INDEX]),
+          decisionState: getDecisionState(row.cells[DECISION_COL_INDEX]),
+          decisionRoles: getDecisionRoles(row),
+          phoneCellId: row.cells[PHONE_COL_INDEX]?.id || null,
+          hiyaCellId: row.cells[HIYA_COL_INDEX]?.id || null,
+          tnsCellId: row.cells[TNS_COL_INDEX]?.id || null,
+          decisionCellId: row.cells[DECISION_COL_INDEX]?.id || null,
+          hiyaCellPhone: row.cells[HIYA_COL_INDEX]?.dataset?.spamGuruPhone || null,
+          tnsCellPhone: row.cells[TNS_COL_INDEX]?.dataset?.spamGuruPhone || null,
           safeRatingCells: riskCells.length,
           hiyaRaw: record?.hiya_risk_rating ?? null,
           hiyaLabel: record ? riskLabel(record.hiya_risk_rating) : null,
