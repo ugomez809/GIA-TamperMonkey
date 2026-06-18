@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      3.1
+// @version      3.2
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -260,25 +260,35 @@
   function isSafeOverlayCell(cell) {
     if (!cell || !(cell instanceof Element)) return false;
     if (!isVisible(cell)) return false;
-    if (textOf(cell) !== 'RMD') return false;
+    if (!/\bRMD\b/i.test(textOf(cell))) return false;
 
-    // Rating cells are plain text. Any child element could be a Vue control.
-    if (cell.childElementCount > 0) return false;
+    const interactiveSelector = [
+      'input',
+      'button',
+      'select',
+      'textarea',
+      'a',
+      '[role="button"]',
+      '[role="switch"]',
+      '[role="checkbox"]',
+      '[onclick]',
+      '[tabindex]',
+      '.switch',
+      '.toggle',
+      '.custom-control',
+      '.bootstrap-switch',
+    ].join(',');
 
-    return !cell.matches(
-      [
-        'input',
-        'button',
-        'select',
-        'textarea',
-        'a',
-        '[role="button"]',
-        '[role="switch"]',
-        '[role="checkbox"]',
-        '[onclick]',
-        '[tabindex]',
-      ].join(',')
-    );
+    return !cell.matches(interactiveSelector) && !cell.querySelector(interactiveSelector);
+  }
+
+  function getRiskCells(row) {
+    const fixedCells = [row.cells[5], row.cells[6]].filter(isSafeOverlayCell);
+    if (fixedCells.length === 2) return fixedCells;
+
+    return row.cells
+      .filter((cell, index) => index > 1 && isSafeOverlayCell(cell))
+      .slice(0, 2);
   }
 
   function makeOverlay(cell, label, sourceName, rawValue) {
@@ -368,9 +378,10 @@
 
       const hiyaLabel = riskLabel(record.hiya_risk_rating);
       const tnsLabel = riskLabel(record.tns_risk_rating);
+      const riskCells = getRiskCells(row);
 
-      if (makeOverlay(row.cells[5], hiyaLabel, 'Hiya', record.hiya_risk_rating)) changed += 1;
-      if (makeOverlay(row.cells[6], tnsLabel, 'TNS', record.tns_risk_rating)) changed += 1;
+      if (makeOverlay(riskCells[0], hiyaLabel, 'Hiya', record.hiya_risk_rating)) changed += 1;
+      if (makeOverlay(riskCells[1], tnsLabel, 'TNS', record.tns_risk_rating)) changed += 1;
     });
 
     console.log('[Spam Guru Reveal]', {
@@ -381,7 +392,7 @@
       selectedMatches: selected.matches,
     });
 
-    flashLabel(stateLabel());
+    flashLabel(changed ? stateLabel() : 'No labels');
     lastRevealSignature = getRowsSignature(rows);
     defaultRevealPending = false;
     return true;
