@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.1
+// @version      4.2
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -19,6 +19,7 @@
   const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
   const INLINE_CELL_CLASS = 'spam-guru-risk-inline-cell';
+  const CELL_ID_PREFIX = 'spam-guru-cell';
   const FALLBACK_DELAY_MS = 3000;
 
   let enabled = true;
@@ -259,6 +260,39 @@
     return rows.map((row) => row.key).join('||');
   }
 
+  function applyRowCellIds(row) {
+    const phoneId = row.phone;
+
+    setManagedCellId(row.cells[1], `${CELL_ID_PREFIX}-${phoneId}-phone`, row, 'phone');
+    setManagedCellId(row.cells[5], `${CELL_ID_PREFIX}-${phoneId}-hiya`, row, 'hiya');
+    setManagedCellId(row.cells[6], `${CELL_ID_PREFIX}-${phoneId}-tns`, row, 'tns');
+
+    row.cells.forEach((cell, index) => {
+      if (!cell || !(cell instanceof Element)) return;
+
+      cell.dataset.spamGuruPhone = phoneId;
+      cell.dataset.spamGuruCellIndex = String(index);
+    });
+
+    if (row.tr && row.tr instanceof Element) {
+      row.tr.dataset.spamGuruPhone = phoneId;
+      row.tr.dataset.spamGuruRowKey = row.key;
+    }
+  }
+
+  function setManagedCellId(cell, id, row, role) {
+    if (!cell || !(cell instanceof Element)) return;
+
+    if (!cell.id || cell.dataset.spamGuruManagedId === '1' || cell.id.startsWith(`${CELL_ID_PREFIX}-`)) {
+      cell.id = id;
+      cell.dataset.spamGuruManagedId = '1';
+    }
+
+    cell.dataset.spamGuruPhone = row.phone;
+    cell.dataset.spamGuruRowKey = row.key;
+    cell.dataset.spamGuruCellRole = role;
+  }
+
   function scoreCandidate(candidate, rows) {
     const phones = new Set(
       candidate.records.map((record) => normalizePhone(record.phone_number)).filter(Boolean)
@@ -362,10 +396,32 @@
     clearRiskLabels();
   }
 
-  function isSafeRatingCell(cell) {
+  function clearManagedCellIds() {
+    document.querySelectorAll('[data-spam-guru-phone]').forEach((cell) => {
+      if (!(cell instanceof Element)) return;
+
+      if (cell.dataset.spamGuruManagedId === '1' && cell.id.startsWith(`${CELL_ID_PREFIX}-`)) {
+        cell.removeAttribute('id');
+      }
+
+      delete cell.dataset.spamGuruManagedId;
+      delete cell.dataset.spamGuruPhone;
+      delete cell.dataset.spamGuruRowKey;
+      delete cell.dataset.spamGuruCellRole;
+      delete cell.dataset.spamGuruCellIndex;
+    });
+
+    document.querySelectorAll('[data-spam-guru-row-key]').forEach((row) => {
+      if (!(row instanceof Element)) return;
+
+      delete row.dataset.spamGuruPhone;
+      delete row.dataset.spamGuruRowKey;
+    });
+  }
+
+  function isSafeRatingCell(cell, row, role) {
     if (!cell || !(cell instanceof Element)) return false;
     if (!isVisible(cell)) return false;
-    if (!/\bRMD\b/i.test(textOf(cell))) return false;
 
     const interactiveSelector = [
       'input',
@@ -384,11 +440,23 @@
       '.bootstrap-switch',
     ].join(',');
 
-    return !cell.matches(interactiveSelector) && !cell.querySelector(interactiveSelector);
+    if (cell.matches(interactiveSelector) || cell.querySelector(interactiveSelector)) return false;
+
+    if (row && role && cell.dataset.spamGuruPhone === row.phone && cell.dataset.spamGuruCellRole === role) {
+      return true;
+    }
+
+    return /\bRMD\b/i.test(textOf(cell));
   }
 
   function getRiskCells(row) {
-    const fixedCells = [row.cells[5], row.cells[6]].filter(isSafeRatingCell);
+    applyRowCellIds(row);
+
+    const fixedCells = [
+      isSafeRatingCell(row.cells[5], row, 'hiya') ? row.cells[5] : null,
+      isSafeRatingCell(row.cells[6], row, 'tns') ? row.cells[6] : null,
+    ].filter(Boolean);
+
     if (fixedCells.length === 2) return fixedCells;
 
     return row.cells
@@ -396,29 +464,40 @@
       .slice(0, 2);
   }
 
-  function setRiskCellText(cell, label, sourceName, rawValue) {
-    if (!label || !isSafeRatingCell(cell)) return false;
+  function setRiskCellText(cell, label, sourceName, rawValue, row, role) {
+    if (!label || !isSafeRatingCell(cell, row, role)) return false;
 
-    const target = findRmdTextTarget(cell);
+    const target = findRiskTextTarget(cell);
     if (!target) return false;
+
+    const originalText = /\bRMD\b/i.test(target.originalText)
+      ? target.originalText
+      : 'RMD';
 
     inlineLabels.set(cell, {
       node: target.node,
-      originalText: target.originalText,
+      originalText,
       originalTitle: cell.getAttribute('title'),
+      phone: row?.phone || '',
+      role: role || '',
     });
 
-    setNodeText(target.node, target.originalText.replace(/\bRMD\b/i, label));
+    setNodeText(target.node, replaceRiskText(target.originalText, label));
     cell.classList.add(INLINE_CELL_CLASS, riskClass(label));
+    if (row) {
+      cell.dataset.spamGuruPhone = row.phone;
+      cell.dataset.spamGuruRowKey = row.key;
+    }
+    if (role) cell.dataset.spamGuruCellRole = role;
     cell.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
 
     return true;
   }
 
-  function findRmdTextTarget(cell) {
+  function findRiskTextTarget(cell) {
     const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
-        return /\bRMD\b/i.test(node.nodeValue || '')
+        return isRiskText(node.nodeValue)
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_SKIP;
       }
@@ -429,7 +508,35 @@
       return { node: textNode, originalText: textNode.nodeValue };
     }
 
+    const fallbackWalker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        return String(node.nodeValue || '').trim()
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP;
+      }
+    });
+
+    const fallbackNode = fallbackWalker.nextNode();
+    if (fallbackNode && cell.classList.contains(INLINE_CELL_CLASS)) {
+      return { node: fallbackNode, originalText: 'RMD' };
+    }
+
     return null;
+  }
+
+  function isRiskText(value) {
+    return /\b(RMD|Low Risk|Moderate Risk|High Risk)\b/i.test(String(value || ''));
+  }
+
+  function replaceRiskText(value, label) {
+    const text = String(value || '');
+
+    if (/\bRMD\b/i.test(text)) return text.replace(/\bRMD\b/i, label);
+    if (/\bLow Risk\b/i.test(text)) return text.replace(/\bLow Risk\b/i, label);
+    if (/\bModerate Risk\b/i.test(text)) return text.replace(/\bModerate Risk\b/i, label);
+    if (/\bHigh Risk\b/i.test(text)) return text.replace(/\bHigh Risk\b/i, label);
+
+    return label;
   }
 
   function setNodeText(node, value) {
@@ -497,8 +604,8 @@
       const tnsLabel = riskLabel(record.tns_risk_rating);
       const riskCells = getRiskCells(row);
 
-      if (setRiskCellText(riskCells[0], hiyaLabel, 'Hiya', record.hiya_risk_rating)) changed += 1;
-      if (setRiskCellText(riskCells[1], tnsLabel, 'TNS', record.tns_risk_rating)) changed += 1;
+      if (setRiskCellText(riskCells[0], hiyaLabel, 'Hiya', record.hiya_risk_rating, row, 'hiya')) changed += 1;
+      if (setRiskCellText(riskCells[1], tnsLabel, 'TNS', record.tns_risk_rating, row, 'tns')) changed += 1;
     });
 
     console.log('[Spam Guru Reveal]', {
@@ -521,6 +628,7 @@
 
   function restoreRatings(options = {}) {
     removeRiskLabels();
+    clearManagedCellIds();
     lastRevealSignature = '';
     lastRevealComplete = false;
     if (!options.skipLabel) flashLabel(stateLabel());
@@ -567,6 +675,8 @@
         .sort((a, b) => b.score - a.score)
         .slice(0, 10),
       sampleRows: rows.slice(0, 20).map((row) => {
+        applyRowCellIds(row);
+
         const record = getRecordForRow(row, recordIndex);
         const riskCells = getRiskCells(row);
 
@@ -575,6 +685,11 @@
           phoneLast4: row.phone.slice(-4),
           domRating1: textOf(row.cells[5]),
           domRating2: textOf(row.cells[6]),
+          phoneCellId: row.cells[1]?.id || null,
+          hiyaCellId: row.cells[5]?.id || null,
+          tnsCellId: row.cells[6]?.id || null,
+          hiyaCellPhone: row.cells[5]?.dataset?.spamGuruPhone || null,
+          tnsCellPhone: row.cells[6]?.dataset?.spamGuruPhone || null,
           safeRatingCells: riskCells.length,
           hiyaRaw: record?.hiya_risk_rating ?? null,
           hiyaLabel: record ? riskLabel(record.hiya_risk_rating) : null,
