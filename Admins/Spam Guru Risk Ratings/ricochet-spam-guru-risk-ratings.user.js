@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      3.0
+// @version      3.1
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -18,7 +18,7 @@
   const PAGE_ORIGIN = 'https://giainc.ricochet.me';
   const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
-  const OVERLAY_ID = 'spam-guru-risk-overlay';
+  const OVERLAY_CLASS = 'spam-guru-risk-overlay-label';
   const FALLBACK_DELAY_MS = 3000;
 
   let enabled = true;
@@ -249,27 +249,12 @@
     return maps.byPhone.get(row.phone) || maps.byName.get(row.nameKey) || null;
   }
 
-  function getOverlayLayer() {
-    let layer = document.getElementById(OVERLAY_ID);
-
-    if (!layer) {
-      layer = document.createElement('div');
-      layer.id = OVERLAY_ID;
-      layer.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(layer);
-    }
-
-    return layer;
-  }
-
   function clearRiskOverlays() {
-    const layer = document.getElementById(OVERLAY_ID);
-    if (layer) layer.textContent = '';
+    document.querySelectorAll(`.${OVERLAY_CLASS}`).forEach((overlay) => overlay.remove());
   }
 
   function removeRiskOverlays() {
-    const layer = document.getElementById(OVERLAY_ID);
-    if (layer) layer.remove();
+    clearRiskOverlays();
   }
 
   function isSafeOverlayCell(cell) {
@@ -300,12 +285,13 @@
     if (!label || !isSafeOverlayCell(cell)) return false;
 
     const overlay = document.createElement('span');
-    overlay.className = `spam-guru-risk-overlay-label ${riskClass(label)}`;
+    overlay.className = `${OVERLAY_CLASS} ${riskClass(label)}`;
     overlay.textContent = label;
     overlay.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
+    overlay.setAttribute('aria-hidden', 'true');
     overlay._spamGuruCell = cell;
 
-    getOverlayLayer().appendChild(overlay);
+    document.body.appendChild(overlay);
     positionOverlay(overlay);
 
     return true;
@@ -338,7 +324,7 @@
 
   function positionRiskOverlays() {
     document
-      .querySelectorAll(`#${OVERLAY_ID} .spam-guru-risk-overlay-label`)
+      .querySelectorAll(`.${OVERLAY_CLASS}`)
       .forEach(positionOverlay);
   }
 
@@ -551,15 +537,9 @@
         text-align: right;
       }
 
-      #${OVERLAY_ID} {
+      .${OVERLAY_CLASS} {
         position: fixed;
-        inset: 0;
         z-index: 999998;
-        pointer-events: none;
-      }
-
-      #${OVERLAY_ID} .spam-guru-risk-overlay-label {
-        position: fixed;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -570,15 +550,15 @@
         pointer-events: none;
       }
 
-      #${OVERLAY_ID} .spam-guru-risk-high {
+      .${OVERLAY_CLASS}.spam-guru-risk-high {
         color: #d9534f;
       }
 
-      #${OVERLAY_ID} .spam-guru-risk-moderate {
+      .${OVERLAY_CLASS}.spam-guru-risk-moderate {
         color: rgb(183, 183, 1);
       }
 
-      #${OVERLAY_ID} .spam-guru-risk-low {
+      .${OVERLAY_CLASS}.spam-guru-risk-low {
         color: inherit;
       }
     `;
@@ -763,7 +743,11 @@
     return Boolean(
       target &&
       target instanceof Element &&
-      (target.id === CONTROL_ID || target.closest(`#${CONTROL_ID}`))
+      (
+        target.id === CONTROL_ID ||
+        target.classList.contains(OVERLAY_CLASS) ||
+        target.closest(`#${CONTROL_ID}, .${OVERLAY_CLASS}`)
+      )
     );
   }
 
