@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      1.9
+// @version      2.0
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -25,6 +25,7 @@
   let attachQueued = false;
   let onSpamGuruPage = false;
   let spamGuruEnteredAt = 0;
+  let lastRevealSignature = '';
 
   function isSpamGuruPage() {
     const path = String(location.pathname || '').replace(/\/+$/, '');
@@ -186,10 +187,15 @@
         name: textOf(cells[0]),
         nameKey: normalizeName(textOf(cells[0])),
         phone,
+        key: `${phone}|${normalizeName(textOf(cells[0]))}`,
       });
     });
 
     return rows;
+  }
+
+  function getRowsSignature(rows) {
+    return rows.map((row) => row.key).join('||');
   }
 
   function scoreCandidate(candidate, rows) {
@@ -253,8 +259,52 @@
     }
   }
 
-  function setRiskCell(cell, label, sourceName, rawValue) {
-    if (!cell || !label) return false;
+  function restoreRiskCell(cell) {
+    if (!cell) return;
+
+    if (cell.dataset.spamGuruOriginalHtml) {
+      cell.innerHTML = cell.dataset.spamGuruOriginalHtml;
+    }
+
+    delete cell.dataset.spamGuruRiskRevealed;
+    delete cell.dataset.spamGuruOriginalHtml;
+    delete cell.dataset.spamGuruRiskRowKey;
+    cell.removeAttribute('title');
+  }
+
+  function clearStaleReveals(rows) {
+    const activeCells = new WeakSet();
+
+    rows.forEach((row) => {
+      [row.cells[5], row.cells[6]].forEach((cell) => {
+        if (!cell) return;
+        activeCells.add(cell);
+
+        if (
+          cell.dataset.spamGuruRiskRevealed === '1' &&
+          cell.dataset.spamGuruRiskRowKey !== row.key
+        ) {
+          restoreRiskCell(cell);
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-spam-guru-risk-revealed="1"]').forEach((cell) => {
+      if (!activeCells.has(cell)) restoreRiskCell(cell);
+    });
+  }
+
+  function setRiskCell(cell, label, sourceName, rawValue, rowKey) {
+    if (!cell) return false;
+
+    if (
+      cell.dataset.spamGuruRiskRevealed === '1' &&
+      cell.dataset.spamGuruRiskRowKey !== rowKey
+    ) {
+      restoreRiskCell(cell);
+    }
+
+    if (!label) return false;
 
     const current = textOf(cell);
     if (current !== 'RMD' && cell.dataset.spamGuruRiskRevealed !== '1') return false;
@@ -275,17 +325,20 @@
     styleSpan(span, label);
 
     cell.dataset.spamGuruRiskRevealed = '1';
+    cell.dataset.spamGuruRiskRowKey = rowKey;
     cell.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
 
     return current !== label;
   }
 
   function revealRatings(options = {}) {
-    const rows = getPhoneRows();
+    const rows = options.rows || getPhoneRows();
     if (!rows.length) {
       if (!options.silentNoData) flashLabel('No data');
       return false;
     }
+
+    clearStaleReveals(rows);
 
     const arrays = findPhoneArrays();
     const selected = choosePhoneArray(arrays, rows);
@@ -305,8 +358,8 @@
       const hiyaLabel = riskLabel(record.hiya_risk_rating);
       const tnsLabel = riskLabel(record.tns_risk_rating);
 
-      if (setRiskCell(row.cells[5], hiyaLabel, 'Hiya', record.hiya_risk_rating)) changed += 1;
-      if (setRiskCell(row.cells[6], tnsLabel, 'TNS', record.tns_risk_rating)) changed += 1;
+      if (setRiskCell(row.cells[5], hiyaLabel, 'Hiya', record.hiya_risk_rating, row.key)) changed += 1;
+      if (setRiskCell(row.cells[6], tnsLabel, 'TNS', record.tns_risk_rating, row.key)) changed += 1;
     });
 
     console.log('[Spam Guru Reveal]', {
@@ -318,21 +371,18 @@
     });
 
     flashLabel(stateLabel());
+    lastRevealSignature = getRowsSignature(rows);
+    defaultRevealPending = false;
     return true;
   }
 
-  function restoreRatings() {
+  function restoreRatings(options = {}) {
     document.querySelectorAll('[data-spam-guru-risk-revealed="1"]').forEach((cell) => {
-      if (cell.dataset.spamGuruOriginalHtml) {
-        cell.innerHTML = cell.dataset.spamGuruOriginalHtml;
-      }
-
-      delete cell.dataset.spamGuruRiskRevealed;
-      delete cell.dataset.spamGuruOriginalHtml;
-      cell.removeAttribute('title');
+      restoreRiskCell(cell);
     });
 
-    flashLabel(stateLabel());
+    lastRevealSignature = '';
+    if (!options.skipLabel) flashLabel(stateLabel());
   }
 
   function setEnabled(next) {
@@ -591,9 +641,18 @@
 
     positionSwitch();
 
-    if (enabled && defaultRevealPending) {
-      defaultRevealPending = !revealRatings({ silentNoData: true });
-    }
+    maybeRevealRatings();
+  }
+
+  function maybeRevealRatings() {
+    if (!enabled) return;
+
+    const rows = getPhoneRows();
+    const signature = getRowsSignature(rows);
+
+    if (!defaultRevealPending && signature && signature === lastRevealSignature) return;
+
+    revealRatings({ rows, silentNoData: true });
   }
 
   function syncRouteState() {
@@ -602,9 +661,12 @@
     if (nextOnSpamGuruPage && !onSpamGuruPage) {
       spamGuruEnteredAt = Date.now();
       defaultRevealPending = true;
+      lastRevealSignature = '';
     } else if (!nextOnSpamGuruPage && onSpamGuruPage) {
+      restoreRatings({ skipLabel: true });
       removeSwitch();
       defaultRevealPending = true;
+      lastRevealSignature = '';
     }
 
     onSpamGuruPage = nextOnSpamGuruPage;
