@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      3.3
+// @version      4.0
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -18,7 +18,7 @@
   const PAGE_ORIGIN = 'https://giainc.ricochet.me';
   const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
-  const OVERLAY_CLASS = 'spam-guru-risk-overlay-label';
+  const INLINE_CELL_CLASS = 'spam-guru-risk-inline-cell';
   const FALLBACK_DELAY_MS = 3000;
 
   let enabled = true;
@@ -27,6 +27,7 @@
   let onSpamGuruPage = false;
   let spamGuruEnteredAt = 0;
   let lastRevealSignature = '';
+  const inlineLabels = new Map();
 
   function isSpamGuruPage() {
     const path = String(location.pathname || '').replace(/\/+$/, '');
@@ -249,15 +250,18 @@
     return maps.byPhone.get(row.phone) || maps.byName.get(row.nameKey) || null;
   }
 
-  function clearRiskOverlays() {
-    document.querySelectorAll(`.${OVERLAY_CLASS}`).forEach((overlay) => overlay.remove());
+  function clearRiskLabels() {
+    inlineLabels.forEach((entry, cell) => {
+      restoreInlineLabel(cell, entry);
+    });
+    inlineLabels.clear();
   }
 
-  function removeRiskOverlays() {
-    clearRiskOverlays();
+  function removeRiskLabels() {
+    clearRiskLabels();
   }
 
-  function isSafeOverlayCell(cell) {
+  function isSafeRatingCell(cell) {
     if (!cell || !(cell instanceof Element)) return false;
     if (!isVisible(cell)) return false;
     if (!/\bRMD\b/i.test(textOf(cell))) return false;
@@ -283,96 +287,84 @@
   }
 
   function getRiskCells(row) {
-    const fixedCells = [row.cells[5], row.cells[6]].filter(isSafeOverlayCell);
+    const fixedCells = [row.cells[5], row.cells[6]].filter(isSafeRatingCell);
     if (fixedCells.length === 2) return fixedCells;
 
     return row.cells
-      .filter((cell, index) => index > 1 && isSafeOverlayCell(cell))
+      .filter((cell, index) => index > 1 && isSafeRatingCell(cell))
       .slice(0, 2);
   }
 
-  function makeOverlay(cell, label, sourceName, rawValue) {
-    if (!label || !isSafeOverlayCell(cell)) return false;
+  function setRiskCellText(cell, label, sourceName, rawValue) {
+    if (!label || !isSafeRatingCell(cell)) return false;
 
-    const overlay = document.createElement('span');
-    overlay.className = `${OVERLAY_CLASS} ${riskClass(label)}`;
-    overlay.textContent = label;
-    overlay.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay._spamGuruCell = cell;
+    const target = findRmdTextTarget(cell);
+    if (!target) return false;
 
-    document.body.appendChild(overlay);
-    positionOverlay(overlay);
+    inlineLabels.set(cell, {
+      node: target.node,
+      originalText: target.originalText,
+      originalTitle: cell.getAttribute('title'),
+    });
+
+    setNodeText(target.node, target.originalText.replace(/\bRMD\b/i, label));
+    cell.classList.add(INLINE_CELL_CLASS, riskClass(label));
+    cell.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
 
     return true;
+  }
+
+  function findRmdTextTarget(cell) {
+    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        return /\bRMD\b/i.test(node.nodeValue || '')
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP;
+      }
+    });
+
+    const textNode = walker.nextNode();
+    if (textNode) {
+      return { node: textNode, originalText: textNode.nodeValue };
+    }
+
+    return null;
+  }
+
+  function setNodeText(node, value) {
+    if (!node) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      node.nodeValue = value;
+    } else {
+      node.textContent = value;
+    }
+  }
+
+  function restoreInlineLabel(cell, entry) {
+    if (!cell || !entry) return;
+
+    if (entry.node && cell.contains(entry.node)) {
+      setNodeText(entry.node, entry.originalText);
+    }
+
+    cell.classList.remove(
+      INLINE_CELL_CLASS,
+      'spam-guru-risk-high',
+      'spam-guru-risk-moderate',
+      'spam-guru-risk-low'
+    );
+
+    if (entry.originalTitle == null) {
+      cell.removeAttribute('title');
+    } else {
+      cell.setAttribute('title', entry.originalTitle);
+    }
   }
 
   function riskClass(label) {
     if (label === 'High Risk') return 'spam-guru-risk-high';
     if (label === 'Moderate Risk') return 'spam-guru-risk-moderate';
     return 'spam-guru-risk-low';
-  }
-
-  function positionOverlay(overlay) {
-    const cell = overlay?._spamGuruCell;
-
-    if (!cell || !document.documentElement.contains(cell) || !isSafeOverlayCell(cell)) {
-      if (overlay) overlay.remove();
-      return;
-    }
-
-    const rect = cell.getBoundingClientRect();
-    const style = getComputedStyle(cell);
-
-    overlay.style.left = `${rect.left}px`;
-    overlay.style.top = `${rect.top}px`;
-    overlay.style.width = `${rect.width}px`;
-    overlay.style.height = `${rect.height}px`;
-    overlay.style.font = style.font;
-    overlay.style.backgroundColor = solidBackgroundFor(cell);
-    overlay.style.visibility = intersectsPriorityBar(rect) ? 'hidden' : 'visible';
-  }
-
-  function positionRiskOverlays() {
-    document
-      .querySelectorAll(`.${OVERLAY_CLASS}`)
-      .forEach(positionOverlay);
-  }
-
-  function intersectsPriorityBar(rect) {
-    const bars = document.querySelectorAll(
-      '.navbar-collapse.collapse, .topbar-gamification-notices'
-    );
-
-    for (const bar of bars) {
-      if (!isVisible(bar)) continue;
-
-      const barRect = bar.getBoundingClientRect();
-      if (
-        rect.right > barRect.left &&
-        rect.left < barRect.right &&
-        rect.bottom > barRect.top &&
-        rect.top < barRect.bottom
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  function solidBackgroundFor(el) {
-    let node = el;
-
-    while (node && node instanceof Element) {
-      const color = getComputedStyle(node).backgroundColor;
-      if (color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') {
-        return color;
-      }
-      node = node.parentElement;
-    }
-
-    return '#fff';
   }
 
   function revealRatings(options = {}) {
@@ -393,7 +385,7 @@
     const maps = buildMaps(selected.records);
     let changed = 0;
 
-    clearRiskOverlays();
+    clearRiskLabels();
 
     rows.forEach((row) => {
       const record = getRecordForRow(row, maps);
@@ -403,8 +395,8 @@
       const tnsLabel = riskLabel(record.tns_risk_rating);
       const riskCells = getRiskCells(row);
 
-      if (makeOverlay(riskCells[0], hiyaLabel, 'Hiya', record.hiya_risk_rating)) changed += 1;
-      if (makeOverlay(riskCells[1], tnsLabel, 'TNS', record.tns_risk_rating)) changed += 1;
+      if (setRiskCellText(riskCells[0], hiyaLabel, 'Hiya', record.hiya_risk_rating)) changed += 1;
+      if (setRiskCellText(riskCells[1], tnsLabel, 'TNS', record.tns_risk_rating)) changed += 1;
     });
 
     console.log('[Spam Guru Reveal]', {
@@ -422,7 +414,7 @@
   }
 
   function restoreRatings(options = {}) {
-    removeRiskOverlays();
+    removeRiskLabels();
     lastRevealSignature = '';
     if (!options.skipLabel) flashLabel(stateLabel());
   }
@@ -571,28 +563,19 @@
         text-align: right;
       }
 
-      .${OVERLAY_CLASS} {
-        position: fixed;
-        z-index: 800;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-sizing: border-box;
-        overflow: hidden;
+      .${INLINE_CELL_CLASS} {
         white-space: nowrap;
-        padding: 0 4px;
-        pointer-events: none;
       }
 
-      .${OVERLAY_CLASS}.spam-guru-risk-high {
-        color: #d9534f;
+      .${INLINE_CELL_CLASS}.spam-guru-risk-high {
+        color: #d9534f !important;
       }
 
-      .${OVERLAY_CLASS}.spam-guru-risk-moderate {
-        color: rgb(183, 183, 1);
+      .${INLINE_CELL_CLASS}.spam-guru-risk-moderate {
+        color: rgb(183, 183, 1) !important;
       }
 
-      .${OVERLAY_CLASS}.spam-guru-risk-low {
+      .${INLINE_CELL_CLASS}.spam-guru-risk-low {
         color: inherit;
       }
 
@@ -779,14 +762,15 @@
   }
 
   function isControlMutation(mutation) {
-    const target = mutation && mutation.target;
+    const rawTarget = mutation && mutation.target;
+    const target = rawTarget instanceof Element ? rawTarget : rawTarget?.parentElement;
+
     return Boolean(
       target &&
-      target instanceof Element &&
       (
         target.id === CONTROL_ID ||
-        target.classList.contains(OVERLAY_CLASS) ||
-        target.closest(`#${CONTROL_ID}, .${OVERLAY_CLASS}`)
+        target.classList.contains(INLINE_CELL_CLASS) ||
+        target.closest(`#${CONTROL_ID}, .${INLINE_CELL_CLASS}`)
       )
     );
   }
@@ -828,14 +812,8 @@
   observeSwitchAnchors();
   window.addEventListener('popstate', queueAttachSwitch);
   window.addEventListener('hashchange', queueAttachSwitch);
-  window.addEventListener('resize', () => {
-    positionSwitch();
-    positionRiskOverlays();
-  }, { passive: true });
-  window.addEventListener('scroll', () => {
-    positionSwitch();
-    positionRiskOverlays();
-  }, { passive: true });
+  window.addEventListener('resize', positionSwitch, { passive: true });
+  window.addEventListener('scroll', positionSwitch, { passive: true });
   window.setTimeout(queueAttachSwitch, FALLBACK_DELAY_MS);
   window.setInterval(queueAttachSwitch, 1500);
 })();
