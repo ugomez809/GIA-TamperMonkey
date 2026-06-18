@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.4
+// @version      4.5
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -472,7 +472,6 @@
       '[role="switch"]',
       '[role="checkbox"]',
       '[onclick]',
-      '[tabindex]',
       '[data-toggle]',
       '.switch',
       '.toggle',
@@ -524,16 +523,17 @@
     if (state === 'off') return [];
     if (state === 'on') return ['hiya', 'tns'];
 
-    if (/\b(off|no|false|disabled|none|skip)\b/.test(text)) return [];
+    if (/^(off|no|false|disabled|none|skip)$/i.test(text.trim())) return [];
     if (/\b(on|yes|true|enabled|both|all|rmd|remediate)\b/.test(text)) return ['hiya', 'tns'];
-    if (hasDecisionSignal(cell)) return ['hiya', 'tns'];
-
-    return [];
+    return ['hiya', 'tns'];
   }
 
   function getDecisionState(cell) {
     const checkedControl = cell.querySelector('input[type="checkbox"], input[type="radio"]');
-    if (checkedControl) return checkedControl.checked ? 'on' : 'off';
+    if (checkedControl) {
+      if (checkedControl.checked) return 'on';
+      if (isVisible(checkedControl)) return 'off';
+    }
 
     const ariaControl = cell.querySelector('[aria-checked]');
     const ariaChecked = ariaControl?.getAttribute('aria-checked');
