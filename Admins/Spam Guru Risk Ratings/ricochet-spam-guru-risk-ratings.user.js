@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      3.2
+// @version      3.3
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -330,12 +330,35 @@
     overlay.style.height = `${rect.height}px`;
     overlay.style.font = style.font;
     overlay.style.backgroundColor = solidBackgroundFor(cell);
+    overlay.style.visibility = intersectsPriorityBar(rect) ? 'hidden' : 'visible';
   }
 
   function positionRiskOverlays() {
     document
       .querySelectorAll(`.${OVERLAY_CLASS}`)
       .forEach(positionOverlay);
+  }
+
+  function intersectsPriorityBar(rect) {
+    const bars = document.querySelectorAll(
+      '.navbar-collapse.collapse, .topbar-gamification-notices'
+    );
+
+    for (const bar of bars) {
+      if (!isVisible(bar)) continue;
+
+      const barRect = bar.getBoundingClientRect();
+      if (
+        rect.right > barRect.left &&
+        rect.left < barRect.right &&
+        rect.bottom > barRect.top &&
+        rect.top < barRect.bottom
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function solidBackgroundFor(el) {
@@ -497,7 +520,7 @@
     style.textContent = `
       #${CONTROL_ID} {
         position: fixed;
-        z-index: 999999;
+        z-index: 900;
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -550,7 +573,7 @@
 
       .${OVERLAY_CLASS} {
         position: fixed;
-        z-index: 999998;
+        z-index: 800;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -571,6 +594,12 @@
 
       .${OVERLAY_CLASS}.spam-guru-risk-low {
         color: inherit;
+      }
+
+      .navbar-collapse.collapse,
+      .navbar-collapse.collapse .topbar-gamification-notices {
+        position: relative;
+        z-index: 1100;
       }
     `;
 
