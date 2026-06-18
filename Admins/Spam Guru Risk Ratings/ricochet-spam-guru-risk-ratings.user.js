@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      2.0
+// @version      2.1
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -249,7 +249,7 @@
   }
 
   function styleSpan(span, label) {
-    span.className = '';
+    span.className = 'spam-guru-risk-text';
     span.removeAttribute('style');
 
     if (label === 'High Risk') {
@@ -261,13 +261,14 @@
 
   function restoreRiskCell(cell) {
     if (!cell) return;
+    if (isInteractiveCell(cell)) return;
 
-    if (cell.dataset.spamGuruOriginalHtml) {
-      cell.innerHTML = cell.dataset.spamGuruOriginalHtml;
-    }
+    const marker = cell.querySelector('.spam-guru-risk-text');
+    if (marker) marker.remove();
+
+    cell.textContent = 'RMD';
 
     delete cell.dataset.spamGuruRiskRevealed;
-    delete cell.dataset.spamGuruOriginalHtml;
     delete cell.dataset.spamGuruRiskRowKey;
     cell.removeAttribute('title');
   }
@@ -296,6 +297,7 @@
 
   function setRiskCell(cell, label, sourceName, rawValue, rowKey) {
     if (!cell) return false;
+    if (isInteractiveCell(cell)) return false;
 
     if (
       cell.dataset.spamGuruRiskRevealed === '1' &&
@@ -309,11 +311,7 @@
     const current = textOf(cell);
     if (current !== 'RMD' && cell.dataset.spamGuruRiskRevealed !== '1') return false;
 
-    if (!cell.dataset.spamGuruOriginalHtml) {
-      cell.dataset.spamGuruOriginalHtml = cell.innerHTML;
-    }
-
-    let span = cell.querySelector('span');
+    let span = cell.querySelector('.spam-guru-risk-text');
 
     if (!span) {
       cell.textContent = '';
@@ -329,6 +327,27 @@
     cell.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
 
     return current !== label;
+  }
+
+  function isInteractiveCell(cell) {
+    return Boolean(
+      cell &&
+      cell.querySelector(
+        [
+          'input',
+          'button',
+          'select',
+          'textarea',
+          'a',
+          '[role="switch"]',
+          '[role="checkbox"]',
+          '.switch',
+          '.toggle',
+          '.custom-control',
+          '.bootstrap-switch',
+        ].join(',')
+      )
+    );
   }
 
   function revealRatings(options = {}) {
