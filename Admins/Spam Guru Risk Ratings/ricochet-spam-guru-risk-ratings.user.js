@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.0
+// @version      4.1
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -27,7 +27,10 @@
   let onSpamGuruPage = false;
   let spamGuruEnteredAt = 0;
   let lastRevealSignature = '';
+  let lastRevealComplete = false;
+  let lastRetrySignature = '';
   const inlineLabels = new Map();
+  const retryTimers = [];
 
   function isSpamGuruPage() {
     const path = String(location.pathname || '').replace(/\/+$/, '');
@@ -147,7 +150,9 @@
 
   function findPhoneArrays() {
     const seen = new WeakSet();
+    const seenObjects = new WeakSet();
     const arrays = [];
+    let scannedObjects = 0;
 
     function addArray(records, path) {
       if (!Array.isArray(records)) return;
@@ -158,6 +163,34 @@
       arrays.push({ path, records });
     }
 
+    function scan(value, path, depth) {
+      if (!value || typeof value !== 'object') return;
+      if (value instanceof Element || value === window || value === document) return;
+      if (seenObjects.has(value)) return;
+      if (scannedObjects > 3000) return;
+
+      seenObjects.add(value);
+      scannedObjects += 1;
+
+      if (Array.isArray(value)) {
+        addArray(value, path);
+        if (depth <= 0) return;
+
+        value.slice(0, 50).forEach((item, index) => {
+          scan(item, `${path}[${index}]`, depth - 1);
+        });
+
+        return;
+      }
+
+      if (depth <= 0) return;
+
+      for (const [key, child] of safeEntries(value)) {
+        if (shouldSkipScanKey(key, child)) continue;
+        scan(child, `${path}.${key}`, depth - 1);
+      }
+    }
+
     getVueObjects().forEach((obj, index) => {
       addArray(obj.phones, `vue${index}.phones`);
       addArray(obj.phones_for_flag_cases, `vue${index}.phones_for_flag_cases`);
@@ -165,9 +198,35 @@
       for (const [key, value] of safeEntries(obj)) {
         addArray(value, `vue${index}.${key}`);
       }
+
+      scan(obj, `vue${index}`, 3);
     });
 
     return arrays;
+  }
+
+  function shouldSkipScanKey(key, value) {
+    if (!value || typeof value !== 'object') return true;
+    if (typeof value === 'function') return true;
+    if (value instanceof Element || value === window || value === document) return true;
+
+    return [
+      '$el',
+      '$parent',
+      '$root',
+      '$children',
+      '$refs',
+      '$vnode',
+      '_vnode',
+      'vnode',
+      'subTree',
+      'parent',
+      'root',
+      'appContext',
+      'provides',
+      'effect',
+      'scope',
+    ].includes(key);
   }
 
   function getPhoneRows() {
@@ -223,31 +282,73 @@
   }
 
   function choosePhoneArray(arrays, rows) {
+    return rankPhoneArrays(arrays, rows)[0];
+  }
+
+  function rankPhoneArrays(arrays, rows) {
     return arrays
-      .map((candidate) => ({
+      .map((candidate, order) => ({
         ...candidate,
+        order,
         ...scoreCandidate(candidate, rows),
       }))
-      .sort((a, b) => b.score - a.score)[0];
+      .sort((a, b) => b.score - a.score || a.order - b.order);
   }
 
-  function buildMaps(records) {
-    const byPhone = new Map();
-    const byName = new Map();
+  function buildRecordIndex(candidates) {
+    const seen = new WeakSet();
+    const records = [];
 
-    records.forEach((record) => {
-      const phone = normalizePhone(record.phone_number);
-      const name = normalizeName(record.phone_name);
+    candidates.forEach((candidate) => {
+      candidate.records.forEach((record) => {
+        if (!isPhoneRecord(record)) return;
+        if (seen.has(record)) return;
 
-      if (phone) byPhone.set(phone, record);
-      if (name) byName.set(name, record);
+        seen.add(record);
+        records.push({
+          record,
+          sourcePath: candidate.path,
+          sourceScore: candidate.score,
+          sourceMatches: candidate.matches,
+        });
+      });
     });
 
-    return { byPhone, byName };
+    return records;
   }
 
-  function getRecordForRow(row, maps) {
-    return maps.byPhone.get(row.phone) || maps.byName.get(row.nameKey) || null;
+  function getRecordForRow(row, recordIndex) {
+    let best = null;
+
+    recordIndex.forEach((item) => {
+      const score = scoreRecordForRow(row, item);
+      if (!score) return;
+      if (!best || score > best.score) best = { ...item, score };
+    });
+
+    return best ? best.record : null;
+  }
+
+  function scoreRecordForRow(row, item) {
+    const record = item.record;
+    const phone = normalizePhone(record.phone_number);
+    const name = normalizeName(record.phone_name);
+
+    let score = 0;
+
+    if (phone && phone === row.phone) score += 10000;
+    if (name && name === row.nameKey) score += 1000;
+    if (!score) return 0;
+
+    if (riskLabel(record.hiya_risk_rating)) score += 50;
+    if (riskLabel(record.tns_risk_rating)) score += 50;
+    if (item.sourcePath.endsWith('.phones')) score += 25;
+    if (item.sourcePath.includes('phones_for_flag_cases')) score -= 10;
+
+    score += Math.min(Number(item.sourceScore) || 0, 500);
+    score += Math.min(Number(item.sourceMatches) || 0, 25);
+
+    return score;
   }
 
   function clearRiskLabels() {
@@ -375,20 +476,21 @@
     }
 
     const arrays = findPhoneArrays();
-    const selected = choosePhoneArray(arrays, rows);
+    const rankedArrays = rankPhoneArrays(arrays, rows);
+    const selected = rankedArrays[0];
 
     if (!selected) {
       if (!options.silentNoData) flashLabel('No data');
       return false;
     }
 
-    const maps = buildMaps(selected.records);
+    const recordIndex = buildRecordIndex(rankedArrays);
     let changed = 0;
 
     clearRiskLabels();
 
     rows.forEach((row) => {
-      const record = getRecordForRow(row, maps);
+      const record = getRecordForRow(row, recordIndex);
       if (!record) return;
 
       const hiyaLabel = riskLabel(record.hiya_risk_rating);
@@ -405,10 +507,14 @@
       selectedArray: selected.path,
       selectedLength: selected.records.length,
       selectedMatches: selected.matches,
+      sourceCount: rankedArrays.length,
+      recordCount: recordIndex.length,
     });
 
     flashLabel(changed ? stateLabel() : 'No labels');
     lastRevealSignature = getRowsSignature(rows);
+    lastRevealComplete = changed >= rows.length * 2;
+    if (!lastRevealComplete) scheduleRevealRetries(lastRevealSignature);
     defaultRevealPending = false;
     return true;
   }
@@ -416,6 +522,7 @@
   function restoreRatings(options = {}) {
     removeRiskLabels();
     lastRevealSignature = '';
+    lastRevealComplete = false;
     if (!options.skipLabel) flashLabel(stateLabel());
   }
 
@@ -435,8 +542,9 @@
   function makeDebugPayload() {
     const rows = getPhoneRows();
     const arrays = findPhoneArrays();
-    const selected = choosePhoneArray(arrays, rows);
-    const maps = selected ? buildMaps(selected.records) : null;
+    const rankedArrays = rankPhoneArrays(arrays, rows);
+    const selected = rankedArrays[0];
+    const recordIndex = buildRecordIndex(rankedArrays);
 
     return {
       url: location.href,
@@ -459,13 +567,15 @@
         .sort((a, b) => b.score - a.score)
         .slice(0, 10),
       sampleRows: rows.slice(0, 20).map((row) => {
-        const record = maps ? getRecordForRow(row, maps) : null;
+        const record = getRecordForRow(row, recordIndex);
+        const riskCells = getRiskCells(row);
 
         return {
           name: row.name,
           phoneLast4: row.phone.slice(-4),
           domRating1: textOf(row.cells[5]),
           domRating2: textOf(row.cells[6]),
+          safeRatingCells: riskCells.length,
           hiyaRaw: record?.hiya_risk_rating ?? null,
           hiyaLabel: record ? riskLabel(record.hiya_risk_rating) : null,
           tnsRaw: record?.tns_risk_rating ?? null,
@@ -706,9 +816,48 @@
     const rows = getPhoneRows();
     const signature = getRowsSignature(rows);
 
-    if (!defaultRevealPending && signature && signature === lastRevealSignature) return;
+    if (signature && signature !== lastRevealSignature) {
+      scheduleRevealRetries(signature);
+    }
+
+    if (
+      !defaultRevealPending &&
+      signature &&
+      signature === lastRevealSignature &&
+      lastRevealComplete
+    ) {
+      return;
+    }
 
     revealRatings({ rows, silentNoData: true });
+  }
+
+  function scheduleRevealRetries(signature) {
+    if (!signature || signature === lastRetrySignature) return;
+
+    clearRevealRetries();
+    lastRetrySignature = signature;
+
+    [120, 400, 900, 1600].forEach((delay) => {
+      const timer = window.setTimeout(() => {
+        if (!enabled || !syncRouteState()) return;
+
+        const rows = getPhoneRows();
+        if (getRowsSignature(rows) !== signature) return;
+
+        revealRatings({ rows, silentNoData: true });
+      }, delay);
+
+      retryTimers.push(timer);
+    });
+  }
+
+  function clearRevealRetries() {
+    while (retryTimers.length) {
+      window.clearTimeout(retryTimers.pop());
+    }
+
+    lastRetrySignature = '';
   }
 
   function syncRouteState() {
@@ -718,11 +867,15 @@
       spamGuruEnteredAt = Date.now();
       defaultRevealPending = true;
       lastRevealSignature = '';
+      lastRevealComplete = false;
+      clearRevealRetries();
     } else if (!nextOnSpamGuruPage && onSpamGuruPage) {
       restoreRatings({ skipLabel: true });
       removeSwitch();
       defaultRevealPending = true;
       lastRevealSignature = '';
+      lastRevealComplete = false;
+      clearRevealRetries();
     }
 
     onSpamGuruPage = nextOnSpamGuruPage;
