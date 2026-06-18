@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      2.2
+// @version      3.0
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -18,6 +18,7 @@
   const PAGE_ORIGIN = 'https://giainc.ricochet.me';
   const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
+  const OVERLAY_ID = 'spam-guru-risk-overlay';
   const FALLBACK_DELAY_MS = 3000;
 
   let enabled = true;
@@ -248,106 +249,111 @@
     return maps.byPhone.get(row.phone) || maps.byName.get(row.nameKey) || null;
   }
 
-  function styleSpan(span, label) {
-    span.className = 'spam-guru-risk-text';
-    span.removeAttribute('style');
+  function getOverlayLayer() {
+    let layer = document.getElementById(OVERLAY_ID);
 
-    if (label === 'High Risk') {
-      span.classList.add('red-text');
-    } else if (label === 'Moderate Risk') {
-      span.style.color = 'rgb(183, 183, 1)';
-    }
-  }
-
-  function restoreRiskCell(cell) {
-    if (!cell) return;
-    if (isInteractiveCell(cell)) return;
-
-    const marker = cell.querySelector('.spam-guru-risk-text');
-    if (marker) marker.remove();
-
-    cell.textContent = 'RMD';
-
-    delete cell.dataset.spamGuruRiskRevealed;
-    delete cell.dataset.spamGuruRiskRowKey;
-    cell.removeAttribute('title');
-  }
-
-  function clearStaleReveals(rows) {
-    const activeCells = new WeakSet();
-
-    rows.forEach((row) => {
-      [row.cells[5], row.cells[6]].forEach((cell) => {
-        if (!cell) return;
-        activeCells.add(cell);
-
-        if (
-          cell.dataset.spamGuruRiskRevealed === '1' &&
-          cell.dataset.spamGuruRiskRowKey !== row.key
-        ) {
-          restoreRiskCell(cell);
-        }
-      });
-    });
-
-    document.querySelectorAll('[data-spam-guru-risk-revealed="1"]').forEach((cell) => {
-      if (!activeCells.has(cell)) restoreRiskCell(cell);
-    });
-  }
-
-  function setRiskCell(cell, label, sourceName, rawValue, rowKey) {
-    if (!cell) return false;
-    if (isInteractiveCell(cell)) return false;
-
-    if (
-      cell.dataset.spamGuruRiskRevealed === '1' &&
-      cell.dataset.spamGuruRiskRowKey !== rowKey
-    ) {
-      restoreRiskCell(cell);
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = OVERLAY_ID;
+      layer.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(layer);
     }
 
-    if (!label) return false;
-
-    const current = textOf(cell);
-    if (current !== 'RMD' && cell.dataset.spamGuruRiskRevealed !== '1') return false;
-
-    let span = cell.querySelector('.spam-guru-risk-text');
-
-    if (!span) {
-      cell.textContent = '';
-      span = document.createElement('span');
-      cell.appendChild(span);
-    }
-
-    span.textContent = label;
-    styleSpan(span, label);
-
-    cell.dataset.spamGuruRiskRevealed = '1';
-    cell.dataset.spamGuruRiskRowKey = rowKey;
-    cell.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
-
-    return current !== label;
+    return layer;
   }
 
-  function isInteractiveCell(cell) {
-    return Boolean(
-      cell &&
-      cell.querySelector(
-        [
-          'input',
-          'button',
-          'select',
-          'textarea',
-          'a',
-          '[role="switch"]',
-          '[role="checkbox"]',
-          '.switch',
-          '.toggle',
-          '.custom-control',
-          '.bootstrap-switch',
-        ].join(',')
-      )
+  function clearRiskOverlays() {
+    const layer = document.getElementById(OVERLAY_ID);
+    if (layer) layer.textContent = '';
+  }
+
+  function removeRiskOverlays() {
+    const layer = document.getElementById(OVERLAY_ID);
+    if (layer) layer.remove();
+  }
+
+  function isSafeOverlayCell(cell) {
+    if (!cell || !(cell instanceof Element)) return false;
+    if (!isVisible(cell)) return false;
+    if (textOf(cell) !== 'RMD') return false;
+
+    // Rating cells are plain text. Any child element could be a Vue control.
+    if (cell.childElementCount > 0) return false;
+
+    return !cell.matches(
+      [
+        'input',
+        'button',
+        'select',
+        'textarea',
+        'a',
+        '[role="button"]',
+        '[role="switch"]',
+        '[role="checkbox"]',
+        '[onclick]',
+        '[tabindex]',
+      ].join(',')
     );
+  }
+
+  function makeOverlay(cell, label, sourceName, rawValue) {
+    if (!label || !isSafeOverlayCell(cell)) return false;
+
+    const overlay = document.createElement('span');
+    overlay.className = `spam-guru-risk-overlay-label ${riskClass(label)}`;
+    overlay.textContent = label;
+    overlay.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
+    overlay._spamGuruCell = cell;
+
+    getOverlayLayer().appendChild(overlay);
+    positionOverlay(overlay);
+
+    return true;
+  }
+
+  function riskClass(label) {
+    if (label === 'High Risk') return 'spam-guru-risk-high';
+    if (label === 'Moderate Risk') return 'spam-guru-risk-moderate';
+    return 'spam-guru-risk-low';
+  }
+
+  function positionOverlay(overlay) {
+    const cell = overlay?._spamGuruCell;
+
+    if (!cell || !document.documentElement.contains(cell) || !isSafeOverlayCell(cell)) {
+      if (overlay) overlay.remove();
+      return;
+    }
+
+    const rect = cell.getBoundingClientRect();
+    const style = getComputedStyle(cell);
+
+    overlay.style.left = `${rect.left}px`;
+    overlay.style.top = `${rect.top}px`;
+    overlay.style.width = `${rect.width}px`;
+    overlay.style.height = `${rect.height}px`;
+    overlay.style.font = style.font;
+    overlay.style.backgroundColor = solidBackgroundFor(cell);
+  }
+
+  function positionRiskOverlays() {
+    document
+      .querySelectorAll(`#${OVERLAY_ID} .spam-guru-risk-overlay-label`)
+      .forEach(positionOverlay);
+  }
+
+  function solidBackgroundFor(el) {
+    let node = el;
+
+    while (node && node instanceof Element) {
+      const color = getComputedStyle(node).backgroundColor;
+      if (color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') {
+        return color;
+      }
+      node = node.parentElement;
+    }
+
+    return '#fff';
   }
 
   function revealRatings(options = {}) {
@@ -356,8 +362,6 @@
       if (!options.silentNoData) flashLabel('No data');
       return false;
     }
-
-    clearStaleReveals(rows);
 
     const arrays = findPhoneArrays();
     const selected = choosePhoneArray(arrays, rows);
@@ -370,6 +374,8 @@
     const maps = buildMaps(selected.records);
     let changed = 0;
 
+    clearRiskOverlays();
+
     rows.forEach((row) => {
       const record = getRecordForRow(row, maps);
       if (!record) return;
@@ -377,8 +383,8 @@
       const hiyaLabel = riskLabel(record.hiya_risk_rating);
       const tnsLabel = riskLabel(record.tns_risk_rating);
 
-      if (setRiskCell(row.cells[5], hiyaLabel, 'Hiya', record.hiya_risk_rating, row.key)) changed += 1;
-      if (setRiskCell(row.cells[6], tnsLabel, 'TNS', record.tns_risk_rating, row.key)) changed += 1;
+      if (makeOverlay(row.cells[5], hiyaLabel, 'Hiya', record.hiya_risk_rating)) changed += 1;
+      if (makeOverlay(row.cells[6], tnsLabel, 'TNS', record.tns_risk_rating)) changed += 1;
     });
 
     console.log('[Spam Guru Reveal]', {
@@ -396,10 +402,7 @@
   }
 
   function restoreRatings(options = {}) {
-    document.querySelectorAll('[data-spam-guru-risk-revealed="1"]').forEach((cell) => {
-      restoreRiskCell(cell);
-    });
-
+    removeRiskOverlays();
     lastRevealSignature = '';
     if (!options.skipLabel) flashLabel(stateLabel());
   }
@@ -546,6 +549,37 @@
       #${CONTROL_ID} .risk-switch-label {
         min-width: 58px;
         text-align: right;
+      }
+
+      #${OVERLAY_ID} {
+        position: fixed;
+        inset: 0;
+        z-index: 999998;
+        pointer-events: none;
+      }
+
+      #${OVERLAY_ID} .spam-guru-risk-overlay-label {
+        position: fixed;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        overflow: hidden;
+        white-space: nowrap;
+        padding: 0 4px;
+        pointer-events: none;
+      }
+
+      #${OVERLAY_ID} .spam-guru-risk-high {
+        color: #d9534f;
+      }
+
+      #${OVERLAY_ID} .spam-guru-risk-moderate {
+        color: rgb(183, 183, 1);
+      }
+
+      #${OVERLAY_ID} .spam-guru-risk-low {
+        color: inherit;
       }
     `;
 
@@ -770,8 +804,14 @@
   observeSwitchAnchors();
   window.addEventListener('popstate', queueAttachSwitch);
   window.addEventListener('hashchange', queueAttachSwitch);
-  window.addEventListener('resize', positionSwitch, { passive: true });
-  window.addEventListener('scroll', positionSwitch, { passive: true });
+  window.addEventListener('resize', () => {
+    positionSwitch();
+    positionRiskOverlays();
+  }, { passive: true });
+  window.addEventListener('scroll', () => {
+    positionSwitch();
+    positionRiskOverlays();
+  }, { passive: true });
   window.setTimeout(queueAttachSwitch, FALLBACK_DELAY_MS);
   window.setInterval(queueAttachSwitch, 1500);
 })();
