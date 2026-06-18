@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.3
+// @version      4.4
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -526,6 +526,7 @@
 
     if (/\b(off|no|false|disabled|none|skip)\b/.test(text)) return [];
     if (/\b(on|yes|true|enabled|both|all|rmd|remediate)\b/.test(text)) return ['hiya', 'tns'];
+    if (hasDecisionSignal(cell)) return ['hiya', 'tns'];
 
     return [];
   }
@@ -557,10 +558,33 @@
     if (!cell) return false;
 
     if (getDecisionState(cell)) return true;
+    if (hasDecisionSignal(cell)) return true;
 
     return /\b(hiya|tns|off|no|false|disabled|none|skip|on|yes|true|enabled|both|all|rmd|remediate)\b/i.test(
       decisionTextOf(cell)
     );
+  }
+
+  function hasDecisionSignal(cell) {
+    if (!cell || !(cell instanceof Element) || !isVisible(cell)) return false;
+    if (decisionTextOf(cell)) return true;
+
+    return Array.from(
+      cell.querySelectorAll(
+        [
+          'select',
+          'input',
+          'button',
+          '[role="switch"]',
+          '[role="checkbox"]',
+          '[aria-checked]',
+          '.bootstrap-switch',
+          '.switch',
+          '.toggle',
+          '.custom-control',
+        ].join(',')
+      )
+    ).some((el) => isVisible(el));
   }
 
   function setRiskCellText(cell, label, sourceName, rawValue, row, role) {
@@ -807,6 +831,7 @@
           decisionText: decisionTextOf(row.cells[DECISION_COL_INDEX]),
           decisionFullText: textOf(row.cells[DECISION_COL_INDEX]),
           decisionState: getDecisionState(row.cells[DECISION_COL_INDEX]),
+          decisionHasSignal: hasDecisionSignal(row.cells[DECISION_COL_INDEX]),
           decisionRoles: getDecisionRoles(row),
           phoneCellId: row.cells[PHONE_COL_INDEX]?.id || null,
           hiyaCellId: row.cells[HIYA_COL_INDEX]?.id || null,
