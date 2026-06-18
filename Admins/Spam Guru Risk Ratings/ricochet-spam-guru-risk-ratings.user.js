@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.6
+// @version      4.7
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -34,6 +34,7 @@
   let lastRevealSignature = '';
   let lastRevealComplete = false;
   let lastRetrySignature = '';
+  let lastRerenderSignature = '';
   const inlineLabels = new Map();
   const retryTimers = [];
 
@@ -606,6 +607,7 @@
     });
 
     setNodeText(target.node, replaceRiskText(target.originalText, label));
+    cell.classList.remove('spam-guru-risk-high', 'spam-guru-risk-moderate', 'spam-guru-risk-low');
     cell.classList.add(INLINE_CELL_CLASS, riskClass(label));
     if (row) {
       cell.dataset.spamGuruPhone = row.phone;
@@ -753,6 +755,7 @@
       expected,
       skippedByDecision,
       unknownDecision,
+      managedRmdCells: countManagedRmdCells(),
       rows: rows.length,
       selectedArray: selected.path,
       selectedLength: selected.records.length,
@@ -764,6 +767,7 @@
     flashLabel(changed ? stateLabel() : 'No labels');
     lastRevealSignature = getRowsSignature(rows);
     lastRevealComplete = unknownDecision === 0 && changed >= expected;
+    scheduleManagedCellCheck(lastRevealSignature);
     if (!lastRevealComplete) scheduleRevealRetries(lastRevealSignature);
     defaultRevealPending = false;
     return true;
@@ -774,6 +778,7 @@
     clearManagedCellIds();
     lastRevealSignature = '';
     lastRevealComplete = false;
+    lastRerenderSignature = '';
     if (!options.skipLabel) flashLabel(stateLabel());
   }
 
@@ -1119,6 +1124,35 @@
     });
   }
 
+  function scheduleManagedCellCheck(signature) {
+    if (!signature) return;
+    if (signature === lastRerenderSignature) return;
+
+    [80, 250, 700].forEach((delay) => {
+      window.setTimeout(() => {
+        if (!enabled || !syncRouteState()) return;
+
+        const rows = getPhoneRows();
+        if (getRowsSignature(rows) !== signature) return;
+        if (!hasManagedRmdCells()) return;
+
+        lastRevealComplete = false;
+        lastRerenderSignature = signature;
+        revealRatings({ rows, silentNoData: true });
+      }, delay);
+    });
+  }
+
+  function hasManagedRmdCells() {
+    return countManagedRmdCells() > 0;
+  }
+
+  function countManagedRmdCells() {
+    return Array.from(document.querySelectorAll(`.${INLINE_CELL_CLASS}`)).filter((cell) =>
+      /\bRMD\b/i.test(textOf(cell))
+    ).length;
+  }
+
   function clearRevealRetries() {
     while (retryTimers.length) {
       window.clearTimeout(retryTimers.pop());
@@ -1135,6 +1169,7 @@
       defaultRevealPending = true;
       lastRevealSignature = '';
       lastRevealComplete = false;
+      lastRerenderSignature = '';
       clearRevealRetries();
     } else if (!nextOnSpamGuruPage && onSpamGuruPage) {
       restoreRatings({ skipLabel: true });
@@ -1142,6 +1177,7 @@
       defaultRevealPending = true;
       lastRevealSignature = '';
       lastRevealComplete = false;
+      lastRerenderSignature = '';
       clearRevealRetries();
     }
 
@@ -1169,6 +1205,12 @@
     if (!root || typeof MutationObserver !== 'function') return;
 
     const observer = new MutationObserver((mutations) => {
+      if (mutations.some(isManagedRmdMutation)) {
+        lastRevealComplete = false;
+        queueAttachSwitch();
+        return;
+      }
+
       if (mutations.every(isControlMutation)) return;
       queueAttachSwitch();
     });
@@ -1176,14 +1218,30 @@
     observer.observe(root, {
       attributes: true,
       attributeFilter: ['class', 'data-rc-clock-value', 'hidden', 'style'],
+      characterData: true,
       childList: true,
       subtree: true,
     });
   }
 
-  function isControlMutation(mutation) {
+  function mutationElement(mutation) {
     const rawTarget = mutation && mutation.target;
-    const target = rawTarget instanceof Element ? rawTarget : rawTarget?.parentElement;
+    return rawTarget instanceof Element ? rawTarget : rawTarget?.parentElement;
+  }
+
+  function isManagedRmdMutation(mutation) {
+    const target = mutationElement(mutation);
+    const cell = target?.closest?.(`.${INLINE_CELL_CLASS}`);
+
+    return Boolean(
+      cell &&
+      ['hiya', 'tns'].includes(cell.dataset.spamGuruCellRole) &&
+      /\bRMD\b/i.test(textOf(cell))
+    );
+  }
+
+  function isControlMutation(mutation) {
+    const target = mutationElement(mutation);
 
     return Boolean(
       target &&
