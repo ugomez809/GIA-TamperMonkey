@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.7
+// @version      4.8
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -20,6 +20,11 @@
   const CONTROL_ID = 'spam-guru-risk-switch';
   const INLINE_CELL_CLASS = 'spam-guru-risk-inline-cell';
   const CELL_ID_PREFIX = 'spam-guru-cell';
+  const RISK_CLASS_NAMES = [
+    'spam-guru-risk-high',
+    'spam-guru-risk-moderate',
+    'spam-guru-risk-low',
+  ];
   const PHONE_COL_INDEX = 1;
   const HIYA_COL_INDEX = 5;
   const TNS_COL_INDEX = 6;
@@ -430,10 +435,38 @@
       restoreInlineLabel(cell, entry);
     });
     inlineLabels.clear();
+    clearRiskClassResidues();
   }
 
   function removeRiskLabels() {
     clearRiskLabels();
+  }
+
+  function clearRiskClassResidues(root = document) {
+    const selector = [
+      `.${INLINE_CELL_CLASS}`,
+      ...RISK_CLASS_NAMES.map((className) => `.${className}`),
+    ].join(',');
+
+    root.querySelectorAll(selector).forEach((cell) => {
+      clearRiskCellVisualState(cell);
+    });
+  }
+
+  function clearRiskCellVisualState(cell) {
+    if (!cell || !(cell instanceof Element)) return;
+
+    clearRiskClasses(cell);
+    cell.classList.remove(INLINE_CELL_CLASS);
+
+    if (/\bvisual only\b/i.test(cell.getAttribute('title') || '')) {
+      cell.removeAttribute('title');
+    }
+  }
+
+  function clearRiskClasses(cell) {
+    if (!cell || !(cell instanceof Element)) return;
+    cell.classList.remove(...RISK_CLASS_NAMES);
   }
 
   function clearManagedCellIds() {
@@ -607,13 +640,17 @@
     });
 
     setNodeText(target.node, replaceRiskText(target.originalText, label));
-    cell.classList.remove('spam-guru-risk-high', 'spam-guru-risk-moderate', 'spam-guru-risk-low');
-    cell.classList.add(INLINE_CELL_CLASS, riskClass(label));
+    clearRiskClasses(cell);
+    cell.classList.add(INLINE_CELL_CLASS);
     if (row) {
       cell.dataset.spamGuruPhone = row.phone;
       cell.dataset.spamGuruRowKey = row.key;
     }
     if (role) cell.dataset.spamGuruCellRole = role;
+
+    if (!hasVisibleRiskLabel(cell, label)) return false;
+
+    cell.classList.add(riskClass(label));
     cell.title = `${sourceName}: ${rawValue || '(blank/none)'} -> ${label} (visual only)`;
 
     return true;
@@ -680,12 +717,8 @@
       setNodeText(entry.node, entry.originalText);
     }
 
-    cell.classList.remove(
-      INLINE_CELL_CLASS,
-      'spam-guru-risk-high',
-      'spam-guru-risk-moderate',
-      'spam-guru-risk-low'
-    );
+    clearRiskClasses(cell);
+    cell.classList.remove(INLINE_CELL_CLASS);
 
     if (entry.originalTitle == null) {
       cell.removeAttribute('title');
@@ -698,6 +731,15 @@
     if (label === 'High Risk') return 'spam-guru-risk-high';
     if (label === 'Moderate Risk') return 'spam-guru-risk-moderate';
     return 'spam-guru-risk-low';
+  }
+
+  function hasVisibleRiskLabel(cell, label) {
+    const escapedLabel = escapeRegExp(label);
+    return new RegExp(`\\b${escapedLabel}\\b`, 'i').test(textOf(cell));
+  }
+
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   function revealRatings(options = {}) {
@@ -734,6 +776,8 @@
       const decisionRoles = getDecisionRoles(row);
 
       if (!decisionRoles.length) {
+        clearRiskCellVisualState(row.cells[HIYA_COL_INDEX]);
+        clearRiskCellVisualState(row.cells[TNS_COL_INDEX]);
         if (!hasKnownDecision(row)) unknownDecision += 1;
         skippedByDecision += 1;
         return;
@@ -1148,9 +1192,16 @@
   }
 
   function countManagedRmdCells() {
-    return Array.from(document.querySelectorAll(`.${INLINE_CELL_CLASS}`)).filter((cell) =>
-      /\bRMD\b/i.test(textOf(cell))
-    ).length;
+    let count = 0;
+
+    document.querySelectorAll(`.${INLINE_CELL_CLASS}`).forEach((cell) => {
+      if (!/\bRMD\b/i.test(textOf(cell))) return;
+
+      clearRiskClasses(cell);
+      count += 1;
+    });
+
+    return count;
   }
 
   function clearRevealRetries() {
@@ -1232,12 +1283,15 @@
   function isManagedRmdMutation(mutation) {
     const target = mutationElement(mutation);
     const cell = target?.closest?.(`.${INLINE_CELL_CLASS}`);
-
-    return Boolean(
+    const changedBackToRmd = Boolean(
       cell &&
       ['hiya', 'tns'].includes(cell.dataset.spamGuruCellRole) &&
       /\bRMD\b/i.test(textOf(cell))
     );
+
+    if (changedBackToRmd) clearRiskClasses(cell);
+
+    return changedBackToRmd;
   }
 
   function isControlMutation(mutation) {
