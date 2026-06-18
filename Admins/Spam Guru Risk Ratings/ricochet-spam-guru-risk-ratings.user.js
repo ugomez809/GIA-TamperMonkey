@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.5
+// @version      4.6
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -941,15 +941,18 @@
         white-space: nowrap;
       }
 
-      .${INLINE_CELL_CLASS}.spam-guru-risk-high {
+      .${INLINE_CELL_CLASS}.spam-guru-risk-high,
+      .${INLINE_CELL_CLASS}.spam-guru-risk-high * {
         color: #d9534f !important;
       }
 
-      .${INLINE_CELL_CLASS}.spam-guru-risk-moderate {
+      .${INLINE_CELL_CLASS}.spam-guru-risk-moderate,
+      .${INLINE_CELL_CLASS}.spam-guru-risk-moderate * {
         color: rgb(183, 183, 1) !important;
       }
 
-      .${INLINE_CELL_CLASS}.spam-guru-risk-low {
+      .${INLINE_CELL_CLASS}.spam-guru-risk-low,
+      .${INLINE_CELL_CLASS}.spam-guru-risk-low * {
         color: inherit;
       }
 
