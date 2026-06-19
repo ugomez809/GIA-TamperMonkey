@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      1.66
+// @version      1.84
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -13,14 +13,24 @@
 // @grant        GM_setValue
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
+// @connect      docs.google.com
+// @connect      spreadsheets.google.com
+// @connect      drive.google.com
+// @connect      accounts.google.com
+// @connect      *.googleusercontent.com
 // @run-at       document-idle
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '1.66';
+  const SCRIPT_VERSION = '1.84';
   const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxxPdfKXKPbhBTUg2mlM9ZP3CpO70_gGMSYpNY8AQ5Ikn7SFPZez7-J954KfnqnlXTtng/exec';
+  const DEFAULT_VM_ROUTING_URL = 'https://script.google.com/macros/s/AKfycbxAJWax-LOjK1_3-Caf0ZfzFenma9jtzxiG3wBav3w1hkjXHgnekq6E0zFDRLjeLs2Q/exec';
+  const DEFAULT_VM_ROUTING_CSV_URLS = [
+    'https://docs.google.com/spreadsheets/d/1u4eFoyKGE5j3iKl_PuGg54ftwni4OSnHT1N5Sc_xkLE/gviz/tq?tqx=out:csv&gid=0',
+    'https://docs.google.com/spreadsheets/d/1u4eFoyKGE5j3iKl_PuGg54ftwni4OSnHT1N5Sc_xkLE/export?format=csv&gid=0'
+  ];
   const DEFAULT_SDR_NAME = '';
   const LOOP_MS = 250;
   const CLOSE_CONFIRM_MISSES = 2;
@@ -29,9 +39,17 @@
   const SEND_COOLDOWN_MS = 10000;
   const SEND_DELAY_MS = 3000;
   const OUTBOUND_ADDRESS_PLACEHOLDER = '.';
+  const DEFAULT_VM_GROUP = 'call';
+  const DEFAULT_VM_GROUP_LABEL = 'Call';
+  const VM_ROUTING_REFRESH_MS = 5 * 60 * 1000;
+  const VM_ORIGINAL_TEXT_DATA = 'tmRicochetVmOriginalText';
+  const VM_ORIGINAL_LABEL_DATA = 'tmRicochetVmOriginalLabel';
+  const VM_HAD_LABEL_DATA = 'tmRicochetVmHadLabel';
 
   const KEYS = {
     url: 'tm_ricochet_webapp_url_v1',
+    vmRoutingUrl: 'tm_ricochet_vm_routing_url_v1',
+    vmRoutingCache: 'tm_ricochet_vm_routing_cache_v6',
     queue: 'tm_ricochet_queue_v1',
     stop: 'tm_ricochet_stop_session_v1',
     recent: 'tm_ricochet_recent_send_sigs_v1'
@@ -44,7 +62,23 @@
     closeMisses: 0,
     activeSession: null,
     badge: null,
-    loopHandle: null
+    versionBox: null,
+    loopHandle: null,
+    vmFilterSignature: '',
+    vmAutoSelectSignature: '',
+    vmAutoSelectLastAt: 0,
+    vmAutoSelectSettleTimer: null,
+    vmRoutingBusy: false,
+    vmRoutingLastCheck: 0,
+    vmRoutingRequestId: 0,
+    vmRoutingErrors: [],
+    vmRoutesByVendor: Object.create(null),
+    vmRouteSourcesByVendor: Object.create(null),
+    vmRoutingSource: '',
+    vmRoutingStatus: '',
+    vmRoutesLoadedAt: 0,
+    vmRouteDebug: '',
+    vmOptionStores: new WeakMap()
   };
 
   init();
@@ -54,7 +88,11 @@
       localStorage.setItem(KEYS.url, DEFAULT_WEB_APP_URL);
     }
 
+    loadVoicemailRoutingCache();
+    refreshVoicemailRouting(true);
+
     createBadge();
+    createVersionBox();
     registerMenu();
     bindEvents();
 
@@ -103,6 +141,14 @@
       }
     } catch (err) {
       log(`Loop error: ${err && err.message ? err.message : err}`);
+    }
+
+    if (state.running) {
+      try {
+        applyVoicemailFilter();
+      } catch (err) {
+        log(`Voicemail filter error: ${err && err.message ? err.message : err}`);
+      }
     }
 
     processQueue();
@@ -359,6 +405,9 @@
     }
 
     state.activeSession = null;
+    state.vmAutoSelectSignature = '';
+    state.vmAutoSelectLastAt = 0;
+    clearVoicemailAutoSelectSettleTimer();
   }
 
   function isSessionLocked(session) {
@@ -435,6 +484,7 @@
         }
 
         if (isVoicemailWindowOpen()) {
+          applyVoicemailFilter();
           state.activeSession.payload.voicemailBoxOpened = 'Yes';
           state.activeSession.lastTouched = Date.now();
           log('Voicemail box opened');
@@ -459,7 +509,7 @@
       state.activeSession = createSessionFromFresh(fresh);
     }
 
-    const optionText = normalizeSpace(select.options[select.selectedIndex]?.text || '');
+    const optionText = getVoicemailOptionDisplayText(select.options[select.selectedIndex]);
     state.activeSession.payload.voicemailBoxOpened = 'Yes';
     state.activeSession.payload.voicemailNameUsed =
       optionText && optionText.toLowerCase() !== 'choose' ? optionText : '';
@@ -658,13 +708,773 @@
     return isVisible(select) || isVisible(playBtn);
   }
 
+  function applyVoicemailFilter() {
+    const select = document.querySelector('select.vm_btn[ng-model="perfect_voicemail"]');
+
+    if (!select || !isVisible(select)) {
+      state.vmFilterSignature = '';
+      state.vmAutoSelectSignature = '';
+      state.vmAutoSelectLastAt = 0;
+      clearVoicemailAutoSelectSettleTimer();
+      return;
+    }
+
+    refreshVoicemailRouting(false);
+
+    const vendor = getCurrentVendorForVoicemailFilter();
+    const route = getVoicemailRouteForVendor(vendor);
+    const requestedGroup = route.group;
+    const optionStore = getVoicemailOptionStore(select);
+    const items = optionStore.options.map((option) => {
+      const originalText = getOriginalVoicemailOptionText(option);
+      return {
+        option,
+        originalText,
+        ...getVoicemailOptionMeta(originalText)
+      };
+    });
+
+    const hasRequestedGroup = items.some((item) => !item.placeholder && item.group === requestedGroup);
+    const blockMissingSheetGroup = route.fromSheet && requestedGroup !== DEFAULT_VM_GROUP && !hasRequestedGroup;
+    const activeGroup = hasRequestedGroup || blockMissingSheetGroup ? requestedGroup : DEFAULT_VM_GROUP;
+    const targetVmCount = getCurrentVoicemailTargetCount();
+    const selectedOption = select.options[select.selectedIndex] || null;
+    let selectedStillVisible = false;
+
+    for (const item of items) {
+      const matchesTargetVm = !!targetVmCount &&
+        getVoicemailCallCount(item.originalText || item.displayText) === Number(targetVmCount);
+      item.visible = item.placeholder || (!blockMissingSheetGroup && item.group === activeGroup && matchesTargetVm);
+
+      if (item.visible) {
+        setVoicemailOptionLabel(item.option, item.displayText);
+      } else {
+        restoreVoicemailOptionLabel(item.option);
+      }
+
+      if (item.option === selectedOption && item.visible) {
+        selectedStillVisible = true;
+      }
+    }
+
+    rebuildVoicemailSelectOptions(select, items);
+
+    if (!selectedStillVisible) {
+      selectPreferredVisibleVoicemailOption(select);
+    }
+
+    const signature = [
+      normalizeVendorKey(vendor),
+      requestedGroup,
+      activeGroup,
+      blockMissingSheetGroup ? 'blocked' : '',
+      targetVmCount ? `vm-${targetVmCount}` : 'no-vm-needed',
+      state.vmRoutesLoadedAt,
+      items.map((item) => item.originalText).join('\u001f')
+    ].join('|');
+
+    if (targetVmCount) {
+      autoSelectVoicemailForCallCount(select, items, targetVmCount, `${signature}|${targetVmCount}`);
+    }
+
+    if (signature !== state.vmFilterSignature) {
+      state.vmFilterSignature = signature;
+      logVoicemailFilter(vendor, requestedGroup, activeGroup, blockMissingSheetGroup);
+    }
+
+    state.vmRouteDebug = [
+      normalizeSpace(vendor) || 'no vendor',
+      route.source || 'default',
+      requestedGroup,
+      blockMissingSheetGroup ? 'missing group' : 'ok',
+      state.vmRoutingStatus || ''
+    ].join(' | ');
+    updateVersionBox();
+  }
+
+  function setVoicemailRoutingStatus(value) {
+    state.vmRoutingStatus = normalizeSpace(value);
+    updateVersionBox();
+  }
+
+  function refreshVoicemailRouting(force = false) {
+    const url = getVoicemailRoutingUrl();
+    const csvUrls = DEFAULT_VM_ROUTING_CSV_URLS.filter(Boolean);
+    if (!url && !csvUrls.length) return;
+    if (state.vmRoutingBusy && !force) return;
+
+    const now = Date.now();
+    if (!force && now - state.vmRoutingLastCheck < VM_ROUTING_REFRESH_MS) return;
+
+    const requestId = state.vmRoutingRequestId + 1;
+    state.vmRoutingRequestId = requestId;
+    state.vmRoutingBusy = true;
+    state.vmRoutingLastCheck = now;
+    state.vmRoutingErrors = [];
+    setVoicemailRoutingStatus(force ? 'force refreshing routing' : 'loading routing');
+
+    if (force) {
+      clearVoicemailRouting('force refresh');
+      localStorage.removeItem(KEYS.vmRoutingCache);
+    }
+
+    const loadCsvFallback = (reason, index = 0) => {
+      if (requestId !== state.vmRoutingRequestId) return;
+
+      if (index >= csvUrls.length) {
+        state.vmRoutingBusy = false;
+        const errorSummary = getVoicemailRoutingErrorSummary(reason);
+        setVoicemailRoutingStatus(`routing load failed: ${errorSummary}`);
+        log(`Voicemail routing load failed: ${errorSummary}`);
+        return;
+      }
+
+      const csvUrl = csvUrls[index];
+      const sourceLabel = `Sheet CSV ${index + 1}`;
+      setVoicemailRoutingStatus(`trying ${sourceLabel}`);
+
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url: addCacheBust(csvUrl),
+        headers: getNoCacheHeaders(),
+        timeout: 30000,
+        onload: (res) => {
+          if (requestId !== state.vmRoutingRequestId) return;
+
+          if (res.status < 200 || res.status >= 300) {
+            addVoicemailRoutingError(`${sourceLabel} HTTP ${res.status}: ${getRoutingResponsePreview(res.responseText)}`);
+            log(`Voicemail routing ${sourceLabel} failed after ${reason}: HTTP ${res.status}`);
+            loadCsvFallback(`${sourceLabel} HTTP ${res.status}`, index + 1);
+            return;
+          }
+
+          const routes = parseVoicemailRoutingCsv(res.responseText);
+          if (!routes) {
+            addVoicemailRoutingError(`${sourceLabel} invalid: ${getRoutingResponsePreview(res.responseText)}`);
+            log(`Voicemail routing ${sourceLabel} failed after ${reason}: invalid response`);
+            loadCsvFallback(`${sourceLabel} invalid response`, index + 1);
+            return;
+          }
+
+          state.vmRoutingBusy = false;
+          applyVoicemailRouting(routes, sourceLabel);
+        },
+        onerror: () => {
+          if (requestId !== state.vmRoutingRequestId) return;
+          addVoicemailRoutingError(`${sourceLabel} network error`);
+          log(`Voicemail routing ${sourceLabel} failed after ${reason}: network error`);
+          loadCsvFallback(`${sourceLabel} network error`, index + 1);
+        },
+        ontimeout: () => {
+          if (requestId !== state.vmRoutingRequestId) return;
+          addVoicemailRoutingError(`${sourceLabel} timeout`);
+          log(`Voicemail routing ${sourceLabel} failed after ${reason}: timeout`);
+          loadCsvFallback(`${sourceLabel} timeout`, index + 1);
+        }
+      });
+    };
+
+    if (!url) {
+      loadCsvFallback('no Apps Script URL');
+      return;
+    }
+
+    GM_xmlhttpRequest({
+      method: 'GET',
+      url: addCacheBust(url),
+      headers: getNoCacheHeaders(),
+      timeout: 30000,
+      onload: (res) => {
+        if (requestId !== state.vmRoutingRequestId) return;
+
+        if (res.status < 200 || res.status >= 300) {
+          addVoicemailRoutingError(`Apps Script HTTP ${res.status}: ${getRoutingResponsePreview(res.responseText)}`);
+          loadCsvFallback(`Apps Script HTTP ${res.status}`);
+          return;
+        }
+
+        const body = safeJsonParse(res.responseText);
+        if (!body || body.ok === false || !Array.isArray(body.routes)) {
+          addVoicemailRoutingError(`Apps Script invalid: ${getRoutingResponsePreview(res.responseText)}`);
+          loadCsvFallback('Apps Script invalid response');
+          return;
+        }
+
+        state.vmRoutingBusy = false;
+        applyVoicemailRouting(body.routes, 'remote');
+      },
+      onerror: () => {
+        if (requestId !== state.vmRoutingRequestId) return;
+        addVoicemailRoutingError('Apps Script network error');
+        loadCsvFallback('Apps Script network error');
+      },
+      ontimeout: () => {
+        if (requestId !== state.vmRoutingRequestId) return;
+        addVoicemailRoutingError('Apps Script timeout');
+        loadCsvFallback('Apps Script timeout');
+      }
+    });
+  }
+
+  function addVoicemailRoutingError(message) {
+    const clean = normalizeSpace(message);
+    if (clean) {
+      state.vmRoutingErrors.push(clean);
+    }
+  }
+
+  function getVoicemailRoutingErrorSummary(fallback) {
+    const details = state.vmRoutingErrors.filter(Boolean);
+    return details.length ? details.join(' / ') : fallback;
+  }
+
+  function getRoutingResponsePreview(text) {
+    const clean = normalizeSpace(String(text || '').replace(/<[^>]+>/g, ' '));
+    return clean ? clean.slice(0, 90) : 'empty response';
+  }
+
+  function clearVoicemailRouting(source) {
+    state.vmRoutesByVendor = Object.create(null);
+    state.vmRouteSourcesByVendor = Object.create(null);
+    state.vmRoutingSource = source || '';
+    state.vmRoutesLoadedAt = Date.now();
+    state.vmFilterSignature = '';
+  }
+
+  function getNoCacheHeaders() {
+    return {
+      'Cache-Control': 'no-cache, no-store, max-age=0',
+      Pragma: 'no-cache',
+      Expires: '0'
+    };
+  }
+
+  function parseVoicemailRoutingCsv(text) {
+    const rows = parseCsvRows(text);
+    if (!rows.length) return null;
+
+    const headers = rows[0].map((value) => normalizeSpace(value).toLowerCase());
+    const vendorIndex = headers.indexOf('vendor');
+    const groupIndex = headers.indexOf('group');
+    const activeIndex = headers.indexOf('active');
+
+    if (vendorIndex === -1 || groupIndex === -1) return null;
+
+    const routes = [];
+
+    for (const row of rows.slice(1)) {
+      const vendor = normalizeSpace(row[vendorIndex] || '');
+      const group = normalizeSpace(row[groupIndex] || '');
+      const active = activeIndex === -1 ? 'TRUE' : row[activeIndex];
+
+      if (!vendor || !group || !isActiveVoicemailRoute(active)) continue;
+
+      routes.push({
+        vendor,
+        group
+      });
+    }
+
+    return routes;
+  }
+
+  function parseCsvRows(text) {
+    const rows = [];
+    let row = [];
+    let value = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < String(text || '').length; i += 1) {
+      const char = text[i];
+      const next = text[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && next === '"') {
+          value += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (char === ',' && !inQuotes) {
+        row.push(value);
+        value = '';
+        continue;
+      }
+
+      if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (char === '\r' && next === '\n') i += 1;
+        row.push(value);
+        if (row.some((cell) => normalizeSpace(cell))) rows.push(row);
+        row = [];
+        value = '';
+        continue;
+      }
+
+      value += char;
+    }
+
+    row.push(value);
+    if (row.some((cell) => normalizeSpace(cell))) rows.push(row);
+
+    return rows;
+  }
+
+  function isActiveVoicemailRoute(value) {
+    const clean = normalizeSpace(value).toLowerCase();
+    return clean === 'true' || clean === 'yes' || clean === '1';
+  }
+
+  function applyVoicemailRouting(routes, source) {
+    const routesByVendor = Object.create(null);
+    const routeSourcesByVendor = Object.create(null);
+
+    for (const route of routes) {
+      if (!route || typeof route !== 'object') continue;
+
+      const vendorKey = normalizeVendorKey(route.vendor);
+      const group = normalizeVoicemailGroup(route.group);
+
+      if (vendorKey && group) {
+        routesByVendor[vendorKey] = group;
+        routeSourcesByVendor[vendorKey] = source;
+
+        const compactVendorKey = normalizeVendorCompactKey(route.vendor);
+        if (compactVendorKey && compactVendorKey !== vendorKey) {
+          routesByVendor[compactVendorKey] = group;
+          routeSourcesByVendor[compactVendorKey] = source;
+        }
+      }
+    }
+
+    state.vmRoutesByVendor = routesByVendor;
+    state.vmRouteSourcesByVendor = routeSourcesByVendor;
+    state.vmRoutingSource = source;
+    state.vmRoutesLoadedAt = Date.now();
+    state.vmFilterSignature = '';
+
+    saveVoicemailRoutingCache(routes);
+    setVoicemailRoutingStatus(`loaded from ${source}; Commercial=${getLoadedCommercialGroupLabel()}`);
+    log(`Voicemail routing loaded from ${source}: ${Object.keys(routesByVendor).length} active route(s)`);
+  }
+
+  function getLoadedCommercialGroupLabel() {
+    return state.vmRoutesByVendor[normalizeVendorKey('Commercial_WC_Contractors')] || 'missing';
+  }
+
+  function loadVoicemailRoutingCache() {
+    const cached = loadVoicemailRoutingCachePayload();
+    if (!cached || !Array.isArray(cached.routes)) return;
+
+    const routesByVendor = Object.create(null);
+    const routeSourcesByVendor = Object.create(null);
+
+    for (const route of cached.routes) {
+      const vendorKey = normalizeVendorKey(route && route.vendor);
+      const group = normalizeVoicemailGroup(route && route.group);
+
+      if (vendorKey && group) {
+        routesByVendor[vendorKey] = group;
+        routeSourcesByVendor[vendorKey] = 'cache';
+
+        const compactVendorKey = normalizeVendorCompactKey(route && route.vendor);
+        if (compactVendorKey && compactVendorKey !== vendorKey) {
+          routesByVendor[compactVendorKey] = group;
+          routeSourcesByVendor[compactVendorKey] = 'cache';
+        }
+      }
+    }
+
+    state.vmRoutesByVendor = routesByVendor;
+    state.vmRouteSourcesByVendor = routeSourcesByVendor;
+    state.vmRoutingSource = 'cache';
+    state.vmRoutesLoadedAt = Number(cached.loadedAt) || 0;
+    state.vmRoutingStatus = `loaded from cache; Commercial=${getLoadedCommercialGroupLabel()}`;
+  }
+
+  function loadVoicemailRoutingCachePayload() {
+    try {
+      const raw = localStorage.getItem(KEYS.vmRoutingCache);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveVoicemailRoutingCache(routes) {
+    try {
+      localStorage.setItem(KEYS.vmRoutingCache, JSON.stringify({
+        loadedAt: state.vmRoutesLoadedAt || Date.now(),
+        routes: Array.isArray(routes) ? routes : []
+      }));
+    } catch (_) {}
+  }
+
+  function getVoicemailRouteForVendor(vendor) {
+    const vendorKey = normalizeVendorKey(vendor);
+    const compactVendorKey = normalizeVendorCompactKey(vendor);
+    const matchedKey =
+      vendorKey && state.vmRoutesByVendor[vendorKey]
+        ? vendorKey
+        : compactVendorKey && state.vmRoutesByVendor[compactVendorKey]
+          ? compactVendorKey
+          : '';
+
+    if (matchedKey) {
+      return {
+        group: state.vmRoutesByVendor[matchedKey],
+        fromSheet: true,
+        source: state.vmRouteSourcesByVendor[matchedKey] || state.vmRoutingSource || 'route'
+      };
+    }
+
+    return {
+      group: DEFAULT_VM_GROUP,
+      fromSheet: false,
+      source: 'default'
+    };
+  }
+
+  function getCurrentVendorForVoicemailFilter() {
+    const freshVendor = buildCurrentPayload().vendor || '';
+    if (normalizeSpace(freshVendor)) {
+      return freshVendor;
+    }
+
+    const activeVendor = state.activeSession && state.activeSession.payload
+      ? state.activeSession.payload.vendor
+      : '';
+
+    if (normalizeSpace(activeVendor)) {
+      return activeVendor;
+    }
+
+    return buildCurrentPayload().vendor || '';
+  }
+
+  function getVoicemailRoutingUrl() {
+    return (localStorage.getItem(KEYS.vmRoutingUrl) || DEFAULT_VM_ROUTING_URL || '').trim();
+  }
+
+  function addCacheBust(url) {
+    const joiner = url.includes('?') ? '&' : '?';
+    return `${url}${joiner}t=${Date.now()}`;
+  }
+
+  function setVoicemailRoutingUrl() {
+    const value = window.prompt('Paste your deployed Voicemail Routing Apps Script Web App URL', getVoicemailRoutingUrl());
+    if (value === null) return;
+
+    const clean = value.trim();
+    if (clean) {
+      localStorage.setItem(KEYS.vmRoutingUrl, clean);
+      log('Voicemail Routing URL saved');
+    } else {
+      localStorage.removeItem(KEYS.vmRoutingUrl);
+      localStorage.removeItem(KEYS.vmRoutingCache);
+      state.vmRoutesByVendor = Object.create(null);
+      state.vmRoutesLoadedAt = 0;
+      state.vmFilterSignature = '';
+      log('Voicemail Routing URL cleared; using Sheet CSV fallback');
+      return;
+    }
+
+    refreshVoicemailRouting(true);
+  }
+
+  function getOriginalVoicemailOptionText(option) {
+    rememberOriginalVoicemailOption(option);
+    return normalizeSpace(option.dataset[VM_ORIGINAL_TEXT_DATA] || option.textContent || '');
+  }
+
+  function getVoicemailOptionStore(select) {
+    let store = state.vmOptionStores.get(select);
+    const currentOptions = [...select.options];
+    const shouldRefresh =
+      !store ||
+      currentOptions.length > store.options.length ||
+      currentOptions.some((option) => !store.optionSet.has(option));
+
+    if (shouldRefresh) {
+      const options = currentOptions.map((option) => {
+        rememberOriginalVoicemailOption(option);
+        return option;
+      });
+
+      store = {
+        options,
+        optionSet: new Set(options)
+      };
+
+      state.vmOptionStores.set(select, store);
+    }
+
+    return store;
+  }
+
+  function rememberOriginalVoicemailOption(option) {
+    if (!option || !option.dataset) return;
+
+    if (!Object.prototype.hasOwnProperty.call(option.dataset, VM_ORIGINAL_TEXT_DATA)) {
+      option.dataset[VM_ORIGINAL_TEXT_DATA] = normalizeSpace(option.textContent || '');
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(option.dataset, VM_HAD_LABEL_DATA)) {
+      option.dataset[VM_HAD_LABEL_DATA] = option.hasAttribute('label') ? '1' : '0';
+      option.dataset[VM_ORIGINAL_LABEL_DATA] = option.getAttribute('label') || '';
+    }
+  }
+
+  function getVoicemailOptionMeta(text) {
+    const clean = normalizeSpace(text);
+
+    if (isVoicemailPlaceholder(clean)) {
+      return {
+        placeholder: true,
+        group: '',
+        displayText: clean
+      };
+    }
+
+    const dashIndex = clean.indexOf('-');
+    if (dashIndex > 0) {
+      const prefix = normalizeSpace(clean.slice(0, dashIndex));
+      const rest = normalizeSpace(clean.slice(dashIndex + 1));
+
+      if (rest && isValidVoicemailGroupPrefix(prefix)) {
+        const group = normalizeVoicemailGroup(prefix);
+        return {
+          placeholder: false,
+          group,
+          displayText: group === DEFAULT_VM_GROUP
+            ? normalizeSpace(`${DEFAULT_VM_GROUP_LABEL} ${rest}`)
+            : clean
+        };
+      }
+    }
+
+    return {
+      placeholder: false,
+      group: DEFAULT_VM_GROUP,
+      displayText: clean
+    };
+  }
+
+  function isValidVoicemailGroupPrefix(value) {
+    const clean = normalizeSpace(value);
+    return !!clean && !/\s/.test(clean);
+  }
+
+  function normalizeVoicemailGroup(value) {
+    return normalizeSpace(value).toLowerCase();
+  }
+
+  function normalizeVendorKey(value) {
+    return normalizeSpace(value).toLowerCase();
+  }
+
+  function normalizeVendorCompactKey(value) {
+    return normalizeVendorKey(value).replace(/\s+/g, '');
+  }
+
+  function isVoicemailPlaceholder(value) {
+    return normalizeSpace(value).toLowerCase() === 'choose';
+  }
+
+  function setVoicemailOptionVisibility(option, visible) {
+    option.hidden = !visible;
+    option.disabled = !visible;
+    option.style.display = visible ? '' : 'none';
+  }
+
+  function setVoicemailOptionLabel(option, label) {
+    rememberOriginalVoicemailOption(option);
+    const clean = normalizeSpace(label);
+    option.textContent = clean;
+    option.setAttribute('label', clean);
+  }
+
+  function restoreVoicemailOptionLabel(option) {
+    rememberOriginalVoicemailOption(option);
+    option.textContent = option.dataset[VM_ORIGINAL_TEXT_DATA] || option.textContent || '';
+
+    if (option.dataset[VM_HAD_LABEL_DATA] === '1') {
+      option.setAttribute('label', option.dataset[VM_ORIGINAL_LABEL_DATA] || '');
+      return;
+    }
+
+    option.removeAttribute('label');
+  }
+
+  function rebuildVoicemailSelectOptions(select, items) {
+    const fragment = document.createDocumentFragment();
+
+    for (const item of items) {
+      setVoicemailOptionVisibility(item.option, item.visible);
+
+      if (item.visible) {
+        fragment.appendChild(item.option);
+      }
+    }
+
+    select.replaceChildren(fragment);
+  }
+
+  function selectPreferredVisibleVoicemailOption(select) {
+    const options = [...select.options];
+    const visibleOptions = options.filter((option) => !option.hidden && !option.disabled);
+    const preferred =
+      visibleOptions.find((option) => isVoicemailPlaceholder(getOriginalVoicemailOptionText(option))) ||
+      visibleOptions[0];
+
+    if (preferred) {
+      select.selectedIndex = options.indexOf(preferred);
+    }
+  }
+
+  function getCurrentVoicemailTargetCount() {
+    const fresh = buildCurrentPayload();
+    const freshOutbound = fresh.outboundCallAmount;
+    const sessionOutbound = state.activeSession && state.activeSession.payload
+      ? state.activeSession.payload.outboundCallAmount
+      : '';
+    const count = normalizeOutboundForSend(
+      freshOutbound !== '' && freshOutbound != null ? freshOutbound : sessionOutbound
+    );
+
+    return VM_COUNTS.has(Number(count)) ? Number(count) : '';
+  }
+
+  function autoSelectVoicemailForCallCount(select, items, targetCount, signature) {
+    const targetItem = items.find((item) =>
+      item.visible &&
+      !item.placeholder &&
+      getVoicemailCallCount(item.originalText || item.displayText) === Number(targetCount)
+    );
+
+    if (!targetItem || !targetItem.option) return false;
+
+    const selectedOption = select.options[select.selectedIndex] || null;
+    if (selectedOption === targetItem.option) {
+      state.vmAutoSelectSignature = signature;
+      state.vmAutoSelectLastAt = Date.now();
+      return true;
+    }
+
+    const selectedText = selectedOption ? getOriginalVoicemailOptionText(selectedOption) : '';
+    const selectedIsPlaceholder = isVoicemailPlaceholder(selectedText);
+    const selectedCount = getVoicemailCallCount(selectedText);
+    const recentScriptSelection = state.vmAutoSelectSignature === signature &&
+      Date.now() - state.vmAutoSelectLastAt < 2000;
+
+    if (!selectedIsPlaceholder && state.vmAutoSelectSignature === signature && !recentScriptSelection && selectedCount !== Number(targetCount)) {
+      return false;
+    }
+
+    if (!selectVoicemailOption(select, targetItem.option)) return false;
+    state.vmAutoSelectSignature = signature;
+    state.vmAutoSelectLastAt = Date.now();
+    captureSelectedVoicemailName();
+    select.dispatchEvent(new Event('input', { bubbles: true }));
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    scheduleVoicemailAutoSelectSettle(select, targetItem.option, signature, targetCount);
+    log(`Voicemail auto-selected for outbound ${targetCount}: ${getVoicemailOptionDisplayText(targetItem.option)}`);
+    return true;
+  }
+
+  function selectVoicemailOption(select, option) {
+    const options = [...select.options];
+    const nextIndex = options.indexOf(option);
+    if (nextIndex < 0) return false;
+
+    for (const item of options) {
+      item.selected = false;
+    }
+
+    option.selected = true;
+    select.selectedIndex = nextIndex;
+
+    if (option.value != null) {
+      select.value = option.value;
+    }
+
+    return select.selectedIndex === nextIndex;
+  }
+
+  function scheduleVoicemailAutoSelectSettle(select, option, signature, targetCount) {
+    clearVoicemailAutoSelectSettleTimer();
+
+    state.vmAutoSelectSettleTimer = setTimeout(() => {
+      state.vmAutoSelectSettleTimer = null;
+
+      if (!isVisible(select)) return;
+      if (![...select.options].includes(option)) return;
+
+      const selectedOption = select.options[select.selectedIndex] || null;
+      const selectedCount = selectedOption ? getVoicemailCallCount(getOriginalVoicemailOptionText(selectedOption)) : '';
+      if (selectedOption === option && selectedCount === Number(targetCount)) return;
+
+      if (!selectVoicemailOption(select, option)) return;
+
+      state.vmAutoSelectSignature = signature;
+      state.vmAutoSelectLastAt = Date.now();
+      captureSelectedVoicemailName();
+      log(`Voicemail auto-select settled for outbound ${targetCount}: ${getVoicemailOptionDisplayText(option)}`);
+    }, 150);
+  }
+
+  function clearVoicemailAutoSelectSettleTimer() {
+    if (!state.vmAutoSelectSettleTimer) return;
+    clearTimeout(state.vmAutoSelectSettleTimer);
+    state.vmAutoSelectSettleTimer = null;
+  }
+
+  function getVoicemailCallCount(text) {
+    const clean = normalizeSpace(text);
+    const dashIndex = clean.indexOf('-');
+    const label = dashIndex > 0 ? normalizeSpace(clean.slice(dashIndex + 1)) : clean;
+    const match =
+      label.match(/\bcall\s*[-#]?\s*0*(\d+)\b/i) ||
+      label.match(/\b0*(\d+)\s*vm\b/i);
+
+    if (!match) return '';
+
+    const count = Number(match[1]);
+    return VM_COUNTS.has(count) ? count : '';
+  }
+
+  function getVoicemailOptionDisplayText(option) {
+    if (!option) return '';
+    return normalizeSpace(option.label || option.textContent || '');
+  }
+
+  function logVoicemailFilter(vendor, requestedGroup, activeGroup, blockMissingSheetGroup) {
+    if (blockMissingSheetGroup) {
+      const vendorLabel = normalizeSpace(vendor) || 'no vendor';
+      log(`Voicemail filter: ${vendorLabel} -> ${requestedGroup} (no matching voicemails found)`);
+      return;
+    }
+
+    const fallbackLabel = activeGroup === DEFAULT_VM_GROUP ? DEFAULT_VM_GROUP_LABEL : activeGroup;
+    const fallbackReason =
+      requestedGroup && requestedGroup !== DEFAULT_VM_GROUP && activeGroup === DEFAULT_VM_GROUP
+        ? ` (fallback from ${requestedGroup})`
+        : '';
+    const vendorLabel = normalizeSpace(vendor) || 'no vendor';
+
+    log(`Voicemail filter: ${vendorLabel} -> ${fallbackLabel}${fallbackReason}`);
+  }
+
   function captureSelectedVoicemailName() {
     if (!state.activeSession) return;
 
     const select = document.querySelector('select.vm_btn[ng-model="perfect_voicemail"]');
     if (!select || !isVisible(select)) return;
 
-    const optionText = normalizeSpace(select.options[select.selectedIndex]?.text || '');
+    const optionText = getVoicemailOptionDisplayText(select.options[select.selectedIndex]);
     if (optionText && optionText.toLowerCase() !== 'choose') {
       state.activeSession.payload.voicemailNameUsed = optionText;
     }
@@ -749,6 +1559,45 @@
 
     document.body.appendChild(badge);
     state.badge = badge;
+  }
+
+  function createVersionBox() {
+    const box = document.createElement('div');
+    box.id = 'tm-ricochet-version-box-v1';
+    box.style.cssText = [
+      'position:fixed',
+      'left:10px',
+      'bottom:10px',
+      'z-index:2147483647',
+      'max-width:320px',
+      'padding:6px 8px',
+      'border-radius:6px',
+      'background:rgba(17,24,39,.86)',
+      'border:1px solid rgba(255,255,255,.18)',
+      'box-shadow:0 4px 14px rgba(0,0,0,.25)',
+      'font:700 11px/1.35 Arial,sans-serif',
+      'color:#fff',
+      'letter-spacing:0',
+      'white-space:pre-line',
+      'word-break:break-word',
+      'pointer-events:none',
+      'user-select:none'
+    ].join(';');
+
+    document.body.appendChild(box);
+    state.versionBox = box;
+    updateVersionBox();
+  }
+
+  function updateVersionBox() {
+    if (!state.versionBox) return;
+
+    const lines = [`VM Lead Watcher v${SCRIPT_VERSION}`];
+    if (state.vmRouteDebug) {
+      lines.push(state.vmRouteDebug);
+    }
+
+    state.versionBox.textContent = lines.join('\n');
   }
 
   function hideBadge() {
@@ -982,6 +1831,8 @@
 
   function registerMenu() {
     registerMenuCommandSafe('Set Web App URL', setWebAppUrl);
+    registerMenuCommandSafe('Set Voicemail Routing URL', setVoicemailRoutingUrl);
+    registerMenuCommandSafe('Refresh Voicemail Routing', () => refreshVoicemailRouting(true));
     registerMenuCommandSafe('Set / Change SDR Name', () => promptForCallerName(true));
     registerMenuCommandSafe('Start', startRunning);
     registerMenuCommandSafe('Stop', stopRunning);
