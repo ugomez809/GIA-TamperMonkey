@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.8
+// @version      4.9
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -547,6 +547,8 @@
     const hasHiya = /\bhiya\b/.test(text);
     const hasTns = /\btns\b/.test(text);
 
+    if (state === 'off') return [];
+
     if (hasHiya || hasTns) {
       return [
         hasHiya ? 'hiya' : null,
@@ -554,25 +556,40 @@
       ].filter(Boolean);
     }
 
-    if (state === 'off') return [];
     if (state === 'on') return ['hiya', 'tns'];
 
-    if (/^(off|no|false|disabled|none|skip)$/i.test(text.trim())) return [];
-    if (/\b(on|yes|true|enabled|both|all|rmd|remediate)\b/.test(text)) return ['hiya', 'tns'];
-    return ['hiya', 'tns'];
+    const trimmedText = text.trim();
+    if (/^(off|no|false|disabled|none|skip|0)$/i.test(trimmedText)) return [];
+    if (/^(on|yes|true|enabled|both|all|1)$/i.test(trimmedText)) return ['hiya', 'tns'];
+
+    if (
+      /\b(on|yes|true|enabled|both|all)\b/.test(text) &&
+      !/\b(off|no|false|disabled|none|skip)\b/.test(text)
+    ) {
+      return ['hiya', 'tns'];
+    }
+
+    return [];
   }
 
   function getDecisionState(cell) {
+    const ariaControl = cell.querySelector('[aria-checked]');
+    const ariaChecked = String(ariaControl?.getAttribute('aria-checked') || '').toLowerCase();
+    if (['true', '1', 'on', 'yes'].includes(ariaChecked)) return 'on';
+    if (['false', '0', 'off', 'no'].includes(ariaChecked)) return 'off';
+
+    const switchLabelText = Array.from(cell.querySelectorAll('.v-switch-label'))
+      .filter((el) => isVisible(el))
+      .map((el) => textOf(el).toLowerCase())
+      .find(Boolean);
+    if (switchLabelText === 'on') return 'on';
+    if (switchLabelText === 'off') return 'off';
+
     const checkedControl = cell.querySelector('input[type="checkbox"], input[type="radio"]');
     if (checkedControl) {
       if (checkedControl.checked) return 'on';
       if (isVisible(checkedControl)) return 'off';
     }
-
-    const ariaControl = cell.querySelector('[aria-checked]');
-    const ariaChecked = ariaControl?.getAttribute('aria-checked');
-    if (ariaChecked === 'true') return 'on';
-    if (ariaChecked === 'false') return 'off';
 
     const classText = String(cell.className || '').toLowerCase();
     const descendantClasses = Array.from(cell.querySelectorAll('*'))
@@ -713,7 +730,10 @@
   function restoreInlineLabel(cell, entry) {
     if (!cell || !entry) return;
 
-    if (entry.node && cell.contains(entry.node)) {
+    const currentPhone = getCellRowPhone(cell);
+    const isSameRow = !entry.phone || !currentPhone || currentPhone === entry.phone;
+
+    if (isSameRow && entry.node && cell.contains(entry.node)) {
       setNodeText(entry.node, entry.originalText);
     }
 
@@ -725,6 +745,17 @@
     } else {
       cell.setAttribute('title', entry.originalTitle);
     }
+  }
+
+  function getCellRowPhone(cell) {
+    const row = cell?.closest?.('tr');
+    if (!row) return '';
+
+    const cells = Array.from(row.children).filter((candidate) =>
+      /^(TH|TD)$/.test(candidate.tagName)
+    );
+
+    return normalizePhone(textOf(cells[PHONE_COL_INDEX]));
   }
 
   function riskClass(label) {
@@ -879,6 +910,11 @@
           domRating2: textOf(row.cells[TNS_COL_INDEX]),
           decisionText: decisionTextOf(row.cells[DECISION_COL_INDEX]),
           decisionFullText: textOf(row.cells[DECISION_COL_INDEX]),
+          decisionAriaChecked: row.cells[DECISION_COL_INDEX]?.querySelector('[aria-checked]')?.getAttribute('aria-checked') ?? null,
+          decisionSwitchLabel: Array.from(row.cells[DECISION_COL_INDEX]?.querySelectorAll('.v-switch-label') || [])
+            .map((el) => textOf(el))
+            .filter(Boolean)
+            .join(' '),
           decisionState: getDecisionState(row.cells[DECISION_COL_INDEX]),
           decisionHasSignal: hasDecisionSignal(row.cells[DECISION_COL_INDEX]),
           decisionRoles: getDecisionRoles(row),
