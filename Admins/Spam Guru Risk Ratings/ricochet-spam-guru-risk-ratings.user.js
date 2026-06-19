@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.9
+// @version      4.11
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -18,6 +18,7 @@
   const PAGE_ORIGIN = 'https://giainc.ricochet.me';
   const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
+  const FLOATING_CONTROL_CLASS = 'spam-guru-risk-floating';
   const INLINE_CELL_CLASS = 'spam-guru-risk-inline-cell';
   const CELL_ID_PREFIX = 'spam-guru-cell';
   const RISK_CLASS_NAMES = [
@@ -970,20 +971,36 @@
     style.id = `${CONTROL_ID}-style`;
     style.textContent = `
       #${CONTROL_ID} {
-        position: fixed;
-        z-index: 900;
+        position: relative;
         display: inline-flex;
         align-items: center;
         gap: 6px;
+        margin: 0 10px;
         font: 12px Arial, sans-serif;
         color: #fff;
         user-select: none;
+        vertical-align: middle;
+        white-space: nowrap;
+        line-height: 18px;
+        pointer-events: auto;
+      }
+
+      #${CONTROL_ID}.${FLOATING_CONTROL_CLASS} {
+        position: fixed;
+        z-index: 900;
+        margin: 0;
+        pointer-events: none;
       }
 
       #${CONTROL_ID} input {
         position: absolute;
         opacity: 0;
         pointer-events: none;
+      }
+
+      #${CONTROL_ID}.${FLOATING_CONTROL_CLASS} .risk-switch-label,
+      #${CONTROL_ID}.${FLOATING_CONTROL_CLASS} .risk-switch-track {
+        pointer-events: auto;
       }
 
       #${CONTROL_ID} .risk-switch-track {
@@ -1040,12 +1057,6 @@
       .${INLINE_CELL_CLASS}.spam-guru-risk-low * {
         color: inherit;
       }
-
-      .navbar-collapse.collapse,
-      .navbar-collapse.collapse .topbar-gamification-notices {
-        position: relative;
-        z-index: 1100;
-      }
     `;
 
     document.head.appendChild(style);
@@ -1074,18 +1085,27 @@
     if (!control) return;
 
     if (!target) {
+      if (control.parentElement !== document.body) {
+        document.body.appendChild(control);
+      }
+
+      control.classList.add(FLOATING_CONTROL_CLASS);
       control.style.left = '';
       control.style.right = '12px';
       control.style.top = '12px';
       return;
     }
 
-    const rect = target.getBoundingClientRect();
-    const controlRect = control.getBoundingClientRect();
-
+    control.classList.remove(FLOATING_CONTROL_CLASS);
+    control.style.left = '';
     control.style.right = '';
-    control.style.left = `${Math.max(4, rect.left - controlRect.width - 10)}px`;
-    control.style.top = `${rect.top + (rect.height - controlRect.height) / 2}px`;
+    control.style.top = '';
+
+    if (isClockAnchor(target)) {
+      insertAfter(control, target);
+    } else {
+      target.parentNode?.insertBefore(control, target);
+    }
   }
 
   function getSwitchAnchor() {
@@ -1095,6 +1115,18 @@
   function getClockAnchor() {
     const clock = document.querySelector('.rc-call-clock-value[data-rc-clock-value]');
     return isVisible(clock) ? clock : null;
+  }
+
+  function isClockAnchor(target) {
+    return Boolean(
+      target?.matches?.('.rc-call-clock-value[data-rc-clock-value]')
+    );
+  }
+
+  function insertAfter(node, referenceNode) {
+    if (!node || !referenceNode?.parentNode) return;
+    if (referenceNode.nextSibling === node) return;
+    referenceNode.parentNode.insertBefore(node, referenceNode.nextSibling);
   }
 
   function getHelpAnchor() {
@@ -1148,7 +1180,15 @@
       const track = document.createElement('span');
       track.className = 'risk-switch-track';
 
+      const toggleFromClick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setEnabled(!enabled);
+      };
+
       input.addEventListener('change', () => setEnabled(input.checked));
+      text.addEventListener('click', toggleFromClick);
+      track.addEventListener('click', toggleFromClick);
 
       label.appendChild(text);
       label.appendChild(input);
