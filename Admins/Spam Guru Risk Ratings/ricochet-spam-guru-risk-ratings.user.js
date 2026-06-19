@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.11
+// @version      4.12
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -860,15 +860,24 @@
 
   function setEnabled(next) {
     enabled = Boolean(next);
-
-    const input = document.querySelector(`#${CONTROL_ID} input`);
-    if (input) input.checked = enabled;
+    updateControlState();
 
     if (enabled) {
       revealRatings();
     } else {
       restoreRatings();
     }
+  }
+
+  function updateControlState() {
+    const control = document.getElementById(CONTROL_ID);
+    if (!control) return;
+
+    control.dataset.enabled = enabled ? '1' : '0';
+    control.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+
+    const label = control.querySelector('.risk-switch-label');
+    if (label) label.textContent = stateLabel();
   }
 
   function makeDebugPayload() {
@@ -976,31 +985,37 @@
         align-items: center;
         gap: 6px;
         margin: 0 10px;
+        padding: 0;
+        border: 0;
+        background: transparent;
         font: 12px Arial, sans-serif;
         color: #fff;
+        cursor: pointer;
         user-select: none;
         vertical-align: middle;
         white-space: nowrap;
         line-height: 18px;
         pointer-events: auto;
+        box-sizing: border-box;
       }
 
       #${CONTROL_ID}.${FLOATING_CONTROL_CLASS} {
         position: fixed;
         z-index: 900;
         margin: 0;
+      }
+
+      #${CONTROL_ID} * {
         pointer-events: none;
       }
 
-      #${CONTROL_ID} input {
-        position: absolute;
-        opacity: 0;
-        pointer-events: none;
+      #${CONTROL_ID}:focus {
+        outline: none;
       }
 
-      #${CONTROL_ID}.${FLOATING_CONTROL_CLASS} .risk-switch-label,
-      #${CONTROL_ID}.${FLOATING_CONTROL_CLASS} .risk-switch-track {
-        pointer-events: auto;
+      #${CONTROL_ID}:focus-visible {
+        outline: 2px solid rgba(117, 199, 145, .85);
+        outline-offset: 3px;
       }
 
       #${CONTROL_ID} .risk-switch-track {
@@ -1026,11 +1041,11 @@
         box-shadow: 0 1px 3px rgba(0,0,0,.25);
       }
 
-      #${CONTROL_ID} input:checked + .risk-switch-track {
+      #${CONTROL_ID}[data-enabled="1"] .risk-switch-track {
         background: #75c791;
       }
 
-      #${CONTROL_ID} input:checked + .risk-switch-track::after {
+      #${CONTROL_ID}[data-enabled="1"] .risk-switch-track::after {
         transform: translateX(18px);
       }
 
@@ -1164,18 +1179,15 @@
     let label = document.getElementById(CONTROL_ID);
 
     if (!label) {
-      label = document.createElement('label');
+      label = document.createElement('button');
       label.id = CONTROL_ID;
+      label.type = 'button';
       label.title = 'Reveal actual Spam Guru risk ratings. Shortcut: Alt+Shift+R. Debug copy: Alt+Shift+D.';
+      label.setAttribute('aria-label', 'Reveal actual Spam Guru risk ratings');
 
       const text = document.createElement('span');
       text.className = 'risk-switch-label';
       text.textContent = stateLabel();
-
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = enabled;
-      input.setAttribute('aria-label', 'Reveal actual Spam Guru risk ratings');
 
       const track = document.createElement('span');
       track.className = 'risk-switch-track';
@@ -1186,17 +1198,15 @@
         setEnabled(!enabled);
       };
 
-      input.addEventListener('change', () => setEnabled(input.checked));
-      text.addEventListener('click', toggleFromClick);
-      track.addEventListener('click', toggleFromClick);
+      label.addEventListener('click', toggleFromClick);
 
       label.appendChild(text);
-      label.appendChild(input);
       label.appendChild(track);
 
       document.body.appendChild(label);
     }
 
+    updateControlState();
     positionSwitch();
 
     maybeRevealRatings();
