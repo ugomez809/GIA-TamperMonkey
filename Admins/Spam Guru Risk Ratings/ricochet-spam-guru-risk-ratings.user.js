@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Spam Guru Reveal Actual Risk Ratings
 // @namespace    local.ricochet.spam-guru-risk
-// @version      4.12
+// @version      4.13
 // @description  Visually reveal Hiya/TNS risk ratings hidden behind RMD without changing Remediate.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -18,6 +18,7 @@
   const PAGE_ORIGIN = 'https://giainc.ricochet.me';
   const PAGE_PATH = '/dashboard/config/spam-guru';
   const CONTROL_ID = 'spam-guru-risk-switch';
+  const CONTROL_NAV_ITEM_ID = `${CONTROL_ID}-nav-item`;
   const FLOATING_CONTROL_CLASS = 'spam-guru-risk-floating';
   const INLINE_CELL_CLASS = 'spam-guru-risk-inline-cell';
   const CELL_ID_PREFIX = 'spam-guru-cell';
@@ -1005,6 +1006,16 @@
         margin: 0;
       }
 
+      #${CONTROL_NAV_ITEM_ID} {
+        display: inline-flex;
+        align-items: center;
+        list-style: none;
+      }
+
+      .navbar-nav > #${CONTROL_NAV_ITEM_ID} {
+        float: left;
+      }
+
       #${CONTROL_ID} * {
         pointer-events: none;
       }
@@ -1100,10 +1111,7 @@
     if (!control) return;
 
     if (!target) {
-      if (control.parentElement !== document.body) {
-        document.body.appendChild(control);
-      }
-
+      moveControlToBody(control);
       control.classList.add(FLOATING_CONTROL_CLASS);
       control.style.left = '';
       control.style.right = '12px';
@@ -1117,9 +1125,10 @@
     control.style.top = '';
 
     if (isClockAnchor(target)) {
+      removeEmptyControlNavItem(control);
       insertAfter(control, target);
     } else {
-      target.parentNode?.insertBefore(control, target);
+      insertBeforeHelpNavItem(control, target);
     }
   }
 
@@ -1142,6 +1151,46 @@
     if (!node || !referenceNode?.parentNode) return;
     if (referenceNode.nextSibling === node) return;
     referenceNode.parentNode.insertBefore(node, referenceNode.nextSibling);
+  }
+
+  function moveControlToBody(control) {
+    const navItem = document.getElementById(CONTROL_NAV_ITEM_ID);
+    if (control.parentElement !== document.body) {
+      document.body.appendChild(control);
+    }
+
+    if (navItem && !navItem.contains(control)) navItem.remove();
+  }
+
+  function removeEmptyControlNavItem(control) {
+    const navItem = document.getElementById(CONTROL_NAV_ITEM_ID);
+    if (!navItem) return;
+
+    if (navItem.contains(control)) {
+      navItem.parentNode?.insertBefore(control, navItem);
+    }
+
+    navItem.remove();
+  }
+
+  function insertBeforeHelpNavItem(control, helpAnchor) {
+    const helpItem = helpAnchor?.closest?.('li') || helpAnchor;
+    const parent = helpItem?.parentNode;
+    if (!parent) return;
+
+    let navItem = document.getElementById(CONTROL_NAV_ITEM_ID);
+    if (!navItem) {
+      navItem = document.createElement('li');
+      navItem.id = CONTROL_NAV_ITEM_ID;
+    }
+
+    if (!navItem.contains(control)) {
+      navItem.appendChild(control);
+    }
+
+    if (navItem.parentNode !== parent || navItem.nextSibling !== helpItem) {
+      parent.insertBefore(navItem, helpItem);
+    }
   }
 
   function getHelpAnchor() {
@@ -1323,7 +1372,13 @@
   }
 
   function removeSwitch() {
+    const navItem = document.getElementById(CONTROL_NAV_ITEM_ID);
     const control = document.getElementById(CONTROL_ID);
+    if (navItem) {
+      navItem.remove();
+      return;
+    }
+
     if (control) control.remove();
   }
 
@@ -1387,8 +1442,9 @@
       target &&
       (
         target.id === CONTROL_ID ||
+        target.id === CONTROL_NAV_ITEM_ID ||
         target.classList.contains(INLINE_CELL_CLASS) ||
-        target.closest(`#${CONTROL_ID}, .${INLINE_CELL_CLASS}`)
+        target.closest(`#${CONTROL_ID}, #${CONTROL_NAV_ITEM_ID}, .${INLINE_CELL_CLASS}`)
       )
     );
   }
