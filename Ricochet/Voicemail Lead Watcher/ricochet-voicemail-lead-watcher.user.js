@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      1.84
+// @version      1.85
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -24,7 +24,6 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '1.84';
   const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxxPdfKXKPbhBTUg2mlM9ZP3CpO70_gGMSYpNY8AQ5Ikn7SFPZez7-J954KfnqnlXTtng/exec';
   const DEFAULT_VM_ROUTING_URL = 'https://script.google.com/macros/s/AKfycbxAJWax-LOjK1_3-Caf0ZfzFenma9jtzxiG3wBav3w1hkjXHgnekq6E0zFDRLjeLs2Q/exec';
   const DEFAULT_VM_ROUTING_CSV_URLS = [
@@ -62,7 +61,6 @@
     closeMisses: 0,
     activeSession: null,
     badge: null,
-    versionBox: null,
     loopHandle: null,
     vmFilterSignature: '',
     vmAutoSelectSignature: '',
@@ -77,7 +75,6 @@
     vmRoutingSource: '',
     vmRoutingStatus: '',
     vmRoutesLoadedAt: 0,
-    vmRouteDebug: '',
     vmOptionStores: new WeakMap()
   };
 
@@ -92,7 +89,6 @@
     refreshVoicemailRouting(true);
 
     createBadge();
-    createVersionBox();
     registerMenu();
     bindEvents();
 
@@ -782,19 +778,10 @@
       logVoicemailFilter(vendor, requestedGroup, activeGroup, blockMissingSheetGroup);
     }
 
-    state.vmRouteDebug = [
-      normalizeSpace(vendor) || 'no vendor',
-      route.source || 'default',
-      requestedGroup,
-      blockMissingSheetGroup ? 'missing group' : 'ok',
-      state.vmRoutingStatus || ''
-    ].join(' | ');
-    updateVersionBox();
   }
 
   function setVoicemailRoutingStatus(value) {
     state.vmRoutingStatus = normalizeSpace(value);
-    updateVersionBox();
   }
 
   function refreshVoicemailRouting(force = false) {
@@ -1559,45 +1546,6 @@
 
     document.body.appendChild(badge);
     state.badge = badge;
-  }
-
-  function createVersionBox() {
-    const box = document.createElement('div');
-    box.id = 'tm-ricochet-version-box-v1';
-    box.style.cssText = [
-      'position:fixed',
-      'left:10px',
-      'bottom:10px',
-      'z-index:2147483647',
-      'max-width:320px',
-      'padding:6px 8px',
-      'border-radius:6px',
-      'background:rgba(17,24,39,.86)',
-      'border:1px solid rgba(255,255,255,.18)',
-      'box-shadow:0 4px 14px rgba(0,0,0,.25)',
-      'font:700 11px/1.35 Arial,sans-serif',
-      'color:#fff',
-      'letter-spacing:0',
-      'white-space:pre-line',
-      'word-break:break-word',
-      'pointer-events:none',
-      'user-select:none'
-    ].join(';');
-
-    document.body.appendChild(box);
-    state.versionBox = box;
-    updateVersionBox();
-  }
-
-  function updateVersionBox() {
-    if (!state.versionBox) return;
-
-    const lines = [`VM Lead Watcher v${SCRIPT_VERSION}`];
-    if (state.vmRouteDebug) {
-      lines.push(state.vmRouteDebug);
-    }
-
-    state.versionBox.textContent = lines.join('\n');
   }
 
   function hideBadge() {
