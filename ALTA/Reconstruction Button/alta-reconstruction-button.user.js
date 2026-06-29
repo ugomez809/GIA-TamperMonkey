@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button
 // @namespace    GPG_Scripts
-// @version      0.3
-// @description  Add one Reconstruction Calculator button to ALTA Home features
+// @version      0.5
+// @description  Add Reconstruction Calculator links next to ALTA Google Maps links
 // @match        https://alta.farmers.com/quote/*
 // @run-at       document-idle
 // @grant        none
@@ -24,17 +24,31 @@
     const GOOGLE_MAPS_TEXT_COLOR = '#188038';
 
     const HOME_FEATURES_PATH = '/quote/home/home-features';
-    const MOUNT_SELECTORS = [
-        'app-home-features .map-links-section',
-        '.home-feature-wrapper .map-links-section',
-        '.titleAndAddress .map-links-section',
-        '[data-test-id="Near_Maps_Launch"]'
-    ];
+    const CACHE_STORAGE_KEY = 'gpg.alta.reconstruction.lookupCache.v1';
+    const GOOGLE_MAPS_LABEL = 'google maps';
+    const GOOGLE_MAPS_SELECTOR = '[data-test-id="Google_Maps_Launch"]';
+    const CLICKABLE_SELECTORS = [
+        'a',
+        'button',
+        '[role="button"]',
+        '[href]',
+        '[onclick]',
+        '[data-test-id]'
+    ].join(',');
+    const MOUNT_SCOPE_SELECTORS = [
+        '.map-links-section',
+        'app-home-features',
+        '.home-feature-wrapper',
+        '.titleAndAddress',
+        '[class*="map" i]',
+        '[class*="link" i]',
+        '[class*="action" i]'
+    ].join(',');
     const ADDRESS_SELECTORS = [
         'app-home-features .address-line',
         '.home-feature-wrapper .address-line',
         '.titleAndAddress .address-line',
-        '[data-test-id="Google_Maps_Launch"]',
+        GOOGLE_MAPS_SELECTOR,
         '[data-test-id="Zillow_Launch"]'
     ];
     const DIRECT_SQUARE_FOOTAGE_SELECTORS = [
@@ -91,6 +105,50 @@
 
     const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 
+    const decodeValue = (value) => {
+        const text = String(value || '').replace(/\+/g, ' ');
+        try {
+            return decodeURIComponent(text);
+        } catch (_error) {
+            return text;
+        }
+    };
+
+    const isHomeFeaturesPage = () => window.location.pathname.startsWith(HOME_FEATURES_PATH);
+
+    const readCacheState = () => {
+        try {
+            const parsed = JSON.parse(window.sessionStorage.getItem(CACHE_STORAGE_KEY) || '{}');
+            return {
+                activeKey: parsed && typeof parsed.activeKey === 'string' ? parsed.activeKey : '',
+                entries: parsed && parsed.entries && typeof parsed.entries === 'object' ? parsed.entries : {}
+            };
+        } catch (_error) {
+            return {
+                activeKey: '',
+                entries: {}
+            };
+        }
+    };
+
+    const writeCacheState = (state) => {
+        try {
+            window.sessionStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(state));
+        } catch (_error) {
+            // sessionStorage can be unavailable in locked-down browser contexts.
+        }
+    };
+
+    const hashText = (value) => {
+        let hash = 0;
+        const text = String(value || '');
+        for (let index = 0; index < text.length; index += 1) {
+            hash = (hash * 31 + text.charCodeAt(index)) | 0;
+        }
+
+        return Math.abs(hash).toString(36);
+    };
+
     const ensureLinkTextColors = () => {
         let style = document.getElementById(STYLE_ID);
         if (!style) {
@@ -100,6 +158,9 @@
         }
 
         style.textContent = `
+[data-test-id="Reconstruction_Calculator_Launch"],
+[data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text,
+[data-test-id="Reconstruction_Calculator_Launch"] mat-icon,
 app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_Launch"],
 app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] .launch-icon-text,
 app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_Launch"] mat-icon,
@@ -112,6 +173,9 @@ app-home-features .map-links-section [data-test-id="Reconstruction_Calculator_La
     color: ${RECONSTRUCTION_TEXT_COLOR} !important;
 }
 
+[data-test-id="Zillow_Launch"],
+[data-test-id="Zillow_Launch"] .launch-icon-text,
+[data-test-id="Zillow_Launch"] mat-icon,
 app-home-features .map-links-section [data-test-id="Zillow_Launch"],
 app-home-features .map-links-section [data-test-id="Zillow_Launch"] .launch-icon-text,
 app-home-features .map-links-section [data-test-id="Zillow_Launch"] mat-icon,
@@ -124,6 +188,9 @@ app-home-features .map-links-section [data-test-id="Zillow_Launch"] mat-icon,
     color: ${ZILLOW_TEXT_COLOR} !important;
 }
 
+${GOOGLE_MAPS_SELECTOR},
+${GOOGLE_MAPS_SELECTOR} .launch-icon-text,
+${GOOGLE_MAPS_SELECTOR} mat-icon,
 app-home-features .map-links-section [data-test-id="Google_Maps_Launch"],
 app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] .launch-icon-text,
 app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-icon,
@@ -193,26 +260,63 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
         );
     };
 
-    const isHomeFeaturesPage = () => window.location.pathname.startsWith(HOME_FEATURES_PATH);
-
-    const findMountElement = () => {
-        for (const selector of MOUNT_SELECTORS) {
-            const element = document.querySelector(selector);
-            if (!element) {
-                continue;
-            }
-
-            if (element.matches && element.matches('.map-links-section')) {
-                return element;
-            }
-
-            const mapLinksSection = element.closest('.map-links-section');
-            if (mapLinksSection) {
-                return mapLinksSection;
-            }
+    const isGoogleMapsLaunch = (element) => {
+        if (!element || !element.matches) {
+            return false;
         }
 
-        return null;
+        if (element.matches(GOOGLE_MAPS_SELECTOR)) {
+            return true;
+        }
+
+        const label = element.querySelector && element.querySelector('.launch-icon-text');
+        return Boolean(label && normalizeText(label.textContent).toLowerCase() === GOOGLE_MAPS_LABEL);
+    };
+
+    const findGoogleMapsLaunches = () => {
+        const launches = uniqueElements([GOOGLE_MAPS_SELECTOR]);
+
+        document.querySelectorAll('.launch-icon-text').forEach((label) => {
+            if (normalizeText(label.textContent).toLowerCase() !== GOOGLE_MAPS_LABEL) {
+                return;
+            }
+
+            const launch = label.closest(CLICKABLE_SELECTORS);
+            if (launch && !launches.includes(launch)) {
+                launches.push(launch);
+            }
+        });
+
+        return launches.filter(isGoogleMapsLaunch);
+    };
+
+    const getDirectChildWithin = (ancestor, element) => {
+        if (!ancestor || !element || !ancestor.contains(element)) {
+            return null;
+        }
+
+        let current = element;
+        while (current.parentElement && current.parentElement !== ancestor) {
+            current = current.parentElement;
+        }
+
+        return current.parentElement === ancestor ? current : null;
+    };
+
+    const getButtonTarget = (googleMapsLaunch) => {
+        const closestMount = googleMapsLaunch.closest(MOUNT_SCOPE_SELECTORS);
+        const mountElement = closestMount && closestMount !== googleMapsLaunch ? closestMount : googleMapsLaunch.parentElement;
+        const insertionElement = getDirectChildWithin(mountElement, googleMapsLaunch) || googleMapsLaunch;
+
+        if (!mountElement || !insertionElement) {
+            return null;
+        }
+
+        return {
+            googleMapsLaunch,
+            mountElement,
+            insertionElement
+        };
     };
 
     const normalizeZipCode = (value) => {
@@ -220,7 +324,7 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
             return '';
         }
 
-        const decodedValue = decodeURIComponent(String(value).replace(/\+/g, ' '));
+        const decodedValue = decodeValue(value);
         const caMatch = decodedValue.match(/\bCA\s+(\d{5})(?:-\d{4})?\b/i);
         if (caMatch) {
             return caMatch[1];
@@ -230,10 +334,15 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
         return zipMatches && zipMatches.length ? zipMatches[zipMatches.length - 1].slice(0, 5) : '';
     };
 
-    const findZipCode = () => {
-        const candidates = uniqueElements(ADDRESS_SELECTORS);
+    const findZipCodeInElements = (elements) => {
+        const seen = new Set();
 
-        for (const element of candidates) {
+        for (const element of elements) {
+            if (!element || seen.has(element)) {
+                continue;
+            }
+
+            seen.add(element);
             const zipCode = normalizeZipCode(readElementValue(element));
             if (zipCode) {
                 return zipCode;
@@ -241,6 +350,148 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
         }
 
         return '';
+    };
+
+    const findZipCode = (googleMapsLaunch) => {
+        const localCandidates = [];
+
+        if (googleMapsLaunch) {
+            localCandidates.push(googleMapsLaunch);
+
+            if (googleMapsLaunch.querySelectorAll) {
+                localCandidates.push(...uniqueElements(['[href]', '[aria-label]', '[value]', '.launch-icon-text'], googleMapsLaunch));
+            }
+
+            const addressScope =
+                googleMapsLaunch.closest('app-home-features, .home-feature-wrapper, .titleAndAddress, form, section') ||
+                googleMapsLaunch.parentElement;
+            if (addressScope) {
+                localCandidates.push(...uniqueElements(ADDRESS_SELECTORS, addressScope));
+            }
+        }
+
+        return findZipCodeInElements(localCandidates) || findZipCodeInElements(uniqueElements(ADDRESS_SELECTORS));
+    };
+
+    const getElementSignatureValues = (element) => {
+        if (!element) {
+            return [];
+        }
+
+        const values = [
+            readElementValue(element),
+            element.textContent || ''
+        ];
+
+        if (element.getAttribute) {
+            values.push(
+                element.getAttribute('href'),
+                element.getAttribute('aria-label'),
+                element.getAttribute('title'),
+                element.getAttribute('value')
+            );
+        }
+
+        if (element.querySelectorAll) {
+            uniqueElements(['[href]', '[aria-label]', '[title]', '[value]'], element).forEach((child) => {
+                values.push(readElementValue(child));
+            });
+        }
+
+        return values
+            .map((value) => normalizeText(decodeValue(value)).toLowerCase())
+            .filter((value) => value && (normalizeZipCode(value) || /\d{3,}/.test(value)));
+    };
+
+    const getUrlIdentifierKey = () => {
+        const params = new URLSearchParams(`${window.location.search || ''}&${(window.location.hash || '').replace(/^#/, '')}`);
+        const idNames = [
+            'quoteId',
+            'quoteID',
+            'quote',
+            'applicationId',
+            'customerId',
+            'accountId',
+            'policyId',
+            'submissionId',
+            'sessionId',
+            'id'
+        ];
+
+        for (const name of idNames) {
+            const value = params.get(name);
+            if (value && value.length >= 5) {
+                return `url:${name}:${hashText(value)}`;
+            }
+        }
+
+        const routeMatch = window.location.href.match(/\b(?:quote|customer|account|submission|policy|application)[=/:-]+([a-z0-9-]{5,})/i);
+        return routeMatch ? `url:route:${hashText(routeMatch[1])}` : '';
+    };
+
+    const getCacheKey = (googleMapsLaunch) => {
+        const candidates = [];
+
+        if (googleMapsLaunch) {
+            candidates.push(googleMapsLaunch);
+
+            const addressScope =
+                googleMapsLaunch.closest('app-home-features, .home-feature-wrapper, .titleAndAddress, form, section') ||
+                googleMapsLaunch.parentElement;
+            if (addressScope) {
+                candidates.push(...uniqueElements(ADDRESS_SELECTORS, addressScope));
+            }
+        }
+
+        for (const candidate of candidates) {
+            const signature = getElementSignatureValues(candidate)[0];
+            if (signature) {
+                return `customer:${hashText(signature)}`;
+            }
+        }
+
+        return getUrlIdentifierKey() || 'tab';
+    };
+
+    const saveLookupCache = (googleMapsLaunch, zipCode, squareFootage) => {
+        if (!zipCode || !squareFootage || !squareFootage.value) {
+            return null;
+        }
+
+        const key = getCacheKey(googleMapsLaunch);
+        const state = readCacheState();
+        const entry = {
+            key,
+            zipCode,
+            squareFootage: {
+                value: squareFootage.value,
+                rawValue: squareFootage.rawValue || squareFootage.value
+            },
+            sourcePath: window.location.pathname,
+            source: isHomeFeaturesPage() ? 'home-features' : 'live-page',
+            updatedAt: Date.now()
+        };
+
+        state.activeKey = key;
+        state.entries[key] = entry;
+        writeCacheState(state);
+        return entry;
+    };
+
+    const readLookupCache = (googleMapsLaunch, liveZipCode) => {
+        const state = readCacheState();
+        const key = getCacheKey(googleMapsLaunch);
+        const entry = state.entries[key] || (state.activeKey ? state.entries[state.activeKey] : null);
+
+        if (!entry) {
+            return null;
+        }
+
+        if (liveZipCode && entry.zipCode && liveZipCode !== entry.zipCode) {
+            return null;
+        }
+
+        return entry;
     };
 
     const normalizeSquareFootage = (value) => {
@@ -382,14 +633,31 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
 
     const findSquareFootage = () => findSquareFootageByDirectSelectors() || findSquareFootageByLabels();
 
-    const getReconstructionLookup = () => {
-        const zipCode = findZipCode();
-        const squareFootage = findSquareFootage();
+    const getReconstructionLookup = (googleMapsLaunch) => {
+        const liveZipCode = findZipCode(googleMapsLaunch);
+        const liveSquareFootage = findSquareFootage();
+
+        if (liveZipCode && liveSquareFootage) {
+            saveLookupCache(googleMapsLaunch, liveZipCode, liveSquareFootage);
+        }
+
+        const cachedLookup = readLookupCache(googleMapsLaunch, liveZipCode);
+        const zipCode = liveZipCode || (cachedLookup ? cachedLookup.zipCode : '');
+        const squareFootage =
+            liveSquareFootage ||
+            (cachedLookup && cachedLookup.squareFootage && cachedLookup.squareFootage.value
+                ? {
+                      value: cachedLookup.squareFootage.value,
+                      rawValue: cachedLookup.squareFootage.rawValue || cachedLookup.squareFootage.value,
+                      cached: true
+                  }
+                : null);
 
         if (!zipCode || !squareFootage) {
             return {
                 zipCode,
                 squareFootage,
+                cachedLookup,
                 url: null
             };
         }
@@ -397,6 +665,7 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
         return {
             zipCode,
             squareFootage,
+            cachedLookup,
             url: `${RECONSTRUCTION_BASE_URL}?zipcode=${encodeURIComponent(zipCode)}&squareFootage=${encodeURIComponent(
                 squareFootage.value
             )}`
@@ -413,7 +682,7 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
         return icon;
     };
 
-    const createReconstructionLink = () => {
+    const createReconstructionLink = (googleMapsLaunch) => {
         const link = document.createElement('a');
         link.href = '#';
         link.target = '_blank';
@@ -448,14 +717,14 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
             }
             lastOpenAt = now;
 
-            const lookup = getReconstructionLookup();
+            const lookup = getReconstructionLookup(googleMapsLaunch);
             if (!lookup.url) {
                 scheduleSync();
                 console.warn('[ALTA Reconstruction Calculator] Missing data', {
                     zipCode: lookup.zipCode || '',
                     squareFootage: lookup.squareFootage ? lookup.squareFootage.value : ''
                 });
-                window.alert('Reconstruction Calculator needs ZIP code and square footage before it can open.');
+                window.alert('Reconstruction Calculator needs ZIP code and square footage. Visit Home Features once so the script can save them for this tab.');
                 lastOpenAt = 0;
                 return;
             }
@@ -470,23 +739,31 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
             window.open(lookup.url, '_blank', 'noopener');
         };
 
-        link.addEventListener('click', openCalculator, true);
+        ['pointerdown', 'mousedown', 'click'].forEach((eventName) => {
+            link.addEventListener(eventName, openCalculator, true);
+        });
 
         return link;
     };
 
-    const isRootMountedOnTarget = (root, mountElement) => root && mountElement && root.parentElement === mountElement;
+    const isRootMountedOnTarget = (root, target) =>
+        root &&
+        target &&
+        root.parentElement === target.mountElement &&
+        root.previousElementSibling === target.insertionElement;
 
-    const getExistingRoot = (mountElement) =>
-        Array.from(document.querySelectorAll(`[${ROOT_ATTR}="true"]`)).find((root) => isRootMountedOnTarget(root, mountElement)) || null;
+    const getExistingRoot = (target) => {
+        const nextElement = target.insertionElement.nextElementSibling;
+        return nextElement && nextElement.getAttribute(ROOT_ATTR) === 'true' ? nextElement : null;
+    };
 
-    const refreshButtonState = (root) => {
+    const refreshButtonState = (root, googleMapsLaunch) => {
         const link = root ? root.querySelector(`[${LINK_ATTR}="true"]`) : null;
         if (!link) {
             return;
         }
 
-        const lookup = getReconstructionLookup();
+        const lookup = getReconstructionLookup(googleMapsLaunch);
         const hasUrl = Boolean(lookup.url);
         link.href = hasUrl ? lookup.url : '#';
         link.style.opacity = hasUrl ? '' : '0.65';
@@ -494,41 +771,42 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
         link.setAttribute('aria-disabled', hasUrl ? 'false' : 'true');
         link.title = hasUrl
             ? 'opens Reconstruction Calculator in a new window'
-            : 'Click to re-check ZIP code and square footage';
+            : 'Visit Home Features once so ZIP code and square footage can be saved for this tab';
     };
 
-    const removeStaleRoots = (mountElement) => {
+    const removeStaleRoots = (targets) => {
         document.querySelectorAll(`[${ROOT_ATTR}="true"]`).forEach((root) => {
-            if (!isRootMountedOnTarget(root, mountElement)) {
+            if (!targets.some((target) => isRootMountedOnTarget(root, target))) {
                 root.remove();
             }
         });
     };
 
-    const ensureButton = () => {
+    const ensureButtons = () => {
         ensureLinkTextColors();
 
-        if (!isHomeFeaturesPage()) {
-            removeStaleRoots(null);
+        const targets = findGoogleMapsLaunches()
+            .map(getButtonTarget)
+            .filter(Boolean);
+
+        if (!targets.length) {
+            removeStaleRoots([]);
             return;
         }
 
-        const mountElement = findMountElement();
-        if (!mountElement) {
-            return;
-        }
+        removeStaleRoots(targets);
 
-        removeStaleRoots(mountElement);
+        targets.forEach((target) => {
+            let root = getExistingRoot(target);
+            if (!root) {
+                root = document.createElement('div');
+                root.setAttribute(ROOT_ATTR, 'true');
+                root.appendChild(createReconstructionLink(target.googleMapsLaunch));
+                target.mountElement.insertBefore(root, target.insertionElement.nextSibling);
+            }
 
-        let root = getExistingRoot(mountElement);
-        if (!root) {
-            root = document.createElement('div');
-            root.setAttribute(ROOT_ATTR, 'true');
-            root.appendChild(createReconstructionLink());
-            mountElement.appendChild(root);
-        }
-
-        refreshButtonState(root);
+            refreshButtonState(root, target.googleMapsLaunch);
+        });
     };
 
     let syncScheduled = false;
@@ -542,7 +820,7 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
 
         window.setTimeout(() => {
             syncScheduled = false;
-            ensureButton();
+            ensureButtons();
         }, SYNC_DELAY_MS);
     }
 
