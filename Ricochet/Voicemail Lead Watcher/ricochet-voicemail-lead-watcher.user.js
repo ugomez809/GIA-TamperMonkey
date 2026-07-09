@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      1.85
+// @version      1.89
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -1345,9 +1345,13 @@
     if (!targetItem || !targetItem.option) return false;
 
     const selectedOption = select.options[select.selectedIndex] || null;
+    const alreadySyncedSignature = state.vmAutoSelectSignature === signature;
     if (selectedOption === targetItem.option) {
       state.vmAutoSelectSignature = signature;
       state.vmAutoSelectLastAt = Date.now();
+      if (!alreadySyncedSignature) {
+        syncSelectedVoicemailWithRicochet(select, targetItem.option, targetCount);
+      }
       return true;
     }
 
@@ -1365,8 +1369,7 @@
     state.vmAutoSelectSignature = signature;
     state.vmAutoSelectLastAt = Date.now();
     captureSelectedVoicemailName();
-    select.dispatchEvent(new Event('input', { bubbles: true }));
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    syncSelectedVoicemailWithRicochet(select, targetItem.option, targetCount);
     scheduleVoicemailAutoSelectSettle(select, targetItem.option, signature, targetCount);
     log(`Voicemail auto-selected for outbound ${targetCount}: ${getVoicemailOptionDisplayText(targetItem.option)}`);
     return true;
@@ -1409,8 +1412,83 @@
       state.vmAutoSelectSignature = signature;
       state.vmAutoSelectLastAt = Date.now();
       captureSelectedVoicemailName();
+      syncSelectedVoicemailWithRicochet(select, option, targetCount);
       log(`Voicemail auto-select settled for outbound ${targetCount}: ${getVoicemailOptionDisplayText(option)}`);
     }, 150);
+  }
+
+  function syncSelectedVoicemailWithRicochet(select, option, targetCount) {
+    dispatchVoicemailSelectEvents(select);
+    if (Number(targetCount) === 2) {
+      syncAngularVoicemailModel(select, option);
+    }
+  }
+
+  function dispatchVoicemailSelectEvents(select) {
+    const view = select && select.ownerDocument && select.ownerDocument.defaultView;
+    const EventCtor = view && typeof view.Event === 'function' ? view.Event : Event;
+    select.dispatchEvent(new EventCtor('input', { bubbles: true, cancelable: true }));
+    select.dispatchEvent(new EventCtor('change', { bubbles: true, cancelable: true }));
+  }
+
+  function syncAngularVoicemailModel(select, option) {
+    const view = select && select.ownerDocument && select.ownerDocument.defaultView;
+    const angular = view && view.angular;
+    const modelPath = normalizeSpace(select && select.getAttribute && select.getAttribute('ng-model'));
+
+    if (!angular || typeof angular.element !== 'function' || !modelPath) return false;
+
+    const wrapped = angular.element(select);
+    const scope = getAngularScope(wrapped);
+    if (!scope) return false;
+
+    const value = option && option.value != null ? option.value : select.value;
+    if (!assignScopePath(scope, modelPath, value)) return false;
+
+    if (wrapped && typeof wrapped.triggerHandler === 'function') {
+      wrapped.triggerHandler('change');
+    }
+
+    if (typeof scope.$applyAsync === 'function') {
+      scope.$applyAsync();
+    } else if (typeof scope.$apply === 'function' && !scope.$$phase) {
+      scope.$apply();
+    } else if (typeof scope.$digest === 'function' && !scope.$$phase) {
+      scope.$digest();
+    }
+
+    return true;
+  }
+
+  function getAngularScope(wrapped) {
+    if (!wrapped) return null;
+    if (typeof wrapped.scope === 'function') {
+      const scope = wrapped.scope();
+      if (scope) return scope;
+    }
+    if (typeof wrapped.isolateScope === 'function') {
+      return wrapped.isolateScope();
+    }
+    return null;
+  }
+
+  function assignScopePath(scope, path, value) {
+    const parts = normalizeSpace(path).split('.').filter(Boolean);
+    if (!parts.length || parts.some((part) => !/^[A-Za-z_$][\w$]*$/.test(part))) {
+      return false;
+    }
+
+    let cursor = scope;
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      const part = parts[i];
+      if (!cursor[part] || typeof cursor[part] !== 'object') {
+        cursor[part] = {};
+      }
+      cursor = cursor[part];
+    }
+
+    cursor[parts[parts.length - 1]] = value;
+    return true;
   }
 
   function clearVoicemailAutoSelectSettleTimer() {
