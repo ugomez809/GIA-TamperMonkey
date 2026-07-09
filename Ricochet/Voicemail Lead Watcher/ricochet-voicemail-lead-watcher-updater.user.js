@@ -27,7 +27,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '1.1.0';
+  const LOADER_VERSION = '1.1.1';
   const TARGET_ID = 'ricochet-voicemail-lead-watcher';
   const TARGET_LABEL = 'Ricochet Voicemail Lead Watcher';
   const TARGET_FILE = 'ricochet-voicemail-lead-watcher.user.js';
