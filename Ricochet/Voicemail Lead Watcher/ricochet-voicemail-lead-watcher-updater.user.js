@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher Updater
 // @namespace    local.ricochet-voicemail-lead-watcher.updater
-// @version      1.1.0
+// @version      1.1.1
 // @description  Loads and auto-updates only the Ricochet Voicemail Lead Watcher script from GitHub.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -15,6 +15,11 @@
 // @connect      raw.githubusercontent.com
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
+// @connect      docs.google.com
+// @connect      spreadsheets.google.com
+// @connect      drive.google.com
+// @connect      accounts.google.com
+// @connect      *.googleusercontent.com
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Voicemail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Voicemail%20Lead%20Watcher/ricochet-voicemail-lead-watcher-updater.user.js
 // ==/UserScript==
