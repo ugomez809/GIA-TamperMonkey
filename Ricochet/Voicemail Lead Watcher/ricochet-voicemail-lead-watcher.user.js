@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      1.89
+// @version      1.90
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -40,6 +40,7 @@
   const OUTBOUND_ADDRESS_PLACEHOLDER = '.';
   const DEFAULT_VM_GROUP = 'call';
   const DEFAULT_VM_GROUP_LABEL = 'Call';
+  const DEFAULT_SHOW_REMINDER = true;
   const VM_ROUTING_REFRESH_MS = 5 * 60 * 1000;
   const VM_ORIGINAL_TEXT_DATA = 'tmRicochetVmOriginalText';
   const VM_ORIGINAL_LABEL_DATA = 'tmRicochetVmOriginalLabel';
@@ -72,6 +73,7 @@
     vmRoutingErrors: [],
     vmRoutesByVendor: Object.create(null),
     vmRouteSourcesByVendor: Object.create(null),
+    vmReminderByVendor: Object.create(null),
     vmRoutingSource: '',
     vmRoutingStatus: '',
     vmRoutesLoadedAt: 0,
@@ -805,11 +807,16 @@
       localStorage.removeItem(KEYS.vmRoutingCache);
     }
 
-    const loadCsvFallback = (reason, index = 0) => {
+    const loadCsvFallback = (reason, index = 0, fallbackRoutes = null) => {
       if (requestId !== state.vmRoutingRequestId) return;
 
       if (index >= csvUrls.length) {
         state.vmRoutingBusy = false;
+        if (Array.isArray(fallbackRoutes)) {
+          addVoicemailRoutingError(`CSV fallback failed after ${reason}; using Apps Script routes without Show Reminder`);
+          applyVoicemailRouting(fallbackRoutes, 'remote');
+          return;
+        }
         const errorSummary = getVoicemailRoutingErrorSummary(reason);
         setVoicemailRoutingStatus(`routing load failed: ${errorSummary}`);
         log(`Voicemail routing load failed: ${errorSummary}`);
@@ -831,7 +838,7 @@
           if (res.status < 200 || res.status >= 300) {
             addVoicemailRoutingError(`${sourceLabel} HTTP ${res.status}: ${getRoutingResponsePreview(res.responseText)}`);
             log(`Voicemail routing ${sourceLabel} failed after ${reason}: HTTP ${res.status}`);
-            loadCsvFallback(`${sourceLabel} HTTP ${res.status}`, index + 1);
+            loadCsvFallback(`${sourceLabel} HTTP ${res.status}`, index + 1, fallbackRoutes);
             return;
           }
 
@@ -839,7 +846,7 @@
           if (!routes) {
             addVoicemailRoutingError(`${sourceLabel} invalid: ${getRoutingResponsePreview(res.responseText)}`);
             log(`Voicemail routing ${sourceLabel} failed after ${reason}: invalid response`);
-            loadCsvFallback(`${sourceLabel} invalid response`, index + 1);
+            loadCsvFallback(`${sourceLabel} invalid response`, index + 1, fallbackRoutes);
             return;
           }
 
@@ -850,13 +857,13 @@
           if (requestId !== state.vmRoutingRequestId) return;
           addVoicemailRoutingError(`${sourceLabel} network error`);
           log(`Voicemail routing ${sourceLabel} failed after ${reason}: network error`);
-          loadCsvFallback(`${sourceLabel} network error`, index + 1);
+          loadCsvFallback(`${sourceLabel} network error`, index + 1, fallbackRoutes);
         },
         ontimeout: () => {
           if (requestId !== state.vmRoutingRequestId) return;
           addVoicemailRoutingError(`${sourceLabel} timeout`);
           log(`Voicemail routing ${sourceLabel} failed after ${reason}: timeout`);
-          loadCsvFallback(`${sourceLabel} timeout`, index + 1);
+          loadCsvFallback(`${sourceLabel} timeout`, index + 1, fallbackRoutes);
         }
       });
     };
@@ -884,6 +891,12 @@
         if (!body || body.ok === false || !Array.isArray(body.routes)) {
           addVoicemailRoutingError(`Apps Script invalid: ${getRoutingResponsePreview(res.responseText)}`);
           loadCsvFallback('Apps Script invalid response');
+          return;
+        }
+
+        if (!routesHaveReminderConfig(body.routes) && csvUrls.length) {
+          addVoicemailRoutingError('Apps Script missing Show Reminder; trying Sheet CSV');
+          loadCsvFallback('Apps Script missing Show Reminder', 0, body.routes);
           return;
         }
 
@@ -923,6 +936,7 @@
   function clearVoicemailRouting(source) {
     state.vmRoutesByVendor = Object.create(null);
     state.vmRouteSourcesByVendor = Object.create(null);
+    state.vmReminderByVendor = Object.create(null);
     state.vmRoutingSource = source || '';
     state.vmRoutesLoadedAt = Date.now();
     state.vmFilterSignature = '';
@@ -944,6 +958,7 @@
     const vendorIndex = headers.indexOf('vendor');
     const groupIndex = headers.indexOf('group');
     const activeIndex = headers.indexOf('active');
+    const showReminderIndex = headers.indexOf('show reminder');
 
     if (vendorIndex === -1 || groupIndex === -1) return null;
 
@@ -958,7 +973,10 @@
 
       routes.push({
         vendor,
-        group
+        group,
+        showReminder: showReminderIndex === -1
+          ? DEFAULT_SHOW_REMINDER
+          : parseShowReminderValue(row[showReminderIndex])
       });
     }
 
@@ -1014,30 +1032,51 @@
     return clean === 'true' || clean === 'yes' || clean === '1';
   }
 
+  function parseShowReminderValue(value) {
+    if (value === false) return false;
+    if (value === true) return true;
+    const clean = normalizeSpace(value).toLowerCase();
+    if (!clean) return DEFAULT_SHOW_REMINDER;
+    if (clean === 'false' || clean === 'no' || clean === 'n' || clean === '0' || clean === 'off') return false;
+    if (clean === 'true' || clean === 'yes' || clean === 'y' || clean === '1' || clean === 'on') return true;
+    return DEFAULT_SHOW_REMINDER;
+  }
+
+  function routesHaveReminderConfig(routes) {
+    return Array.isArray(routes) && routes.some((route) =>
+      route && Object.prototype.hasOwnProperty.call(route, 'showReminder')
+    );
+  }
+
   function applyVoicemailRouting(routes, source) {
     const routesByVendor = Object.create(null);
     const routeSourcesByVendor = Object.create(null);
+    const reminderByVendor = Object.create(null);
 
     for (const route of routes) {
       if (!route || typeof route !== 'object') continue;
 
       const vendorKey = normalizeVendorKey(route.vendor);
       const group = normalizeVoicemailGroup(route.group);
+      const showReminder = parseShowReminderValue(route.showReminder);
 
       if (vendorKey && group) {
         routesByVendor[vendorKey] = group;
         routeSourcesByVendor[vendorKey] = source;
+        reminderByVendor[vendorKey] = showReminder;
 
         const compactVendorKey = normalizeVendorCompactKey(route.vendor);
         if (compactVendorKey && compactVendorKey !== vendorKey) {
           routesByVendor[compactVendorKey] = group;
           routeSourcesByVendor[compactVendorKey] = source;
+          reminderByVendor[compactVendorKey] = showReminder;
         }
       }
     }
 
     state.vmRoutesByVendor = routesByVendor;
     state.vmRouteSourcesByVendor = routeSourcesByVendor;
+    state.vmReminderByVendor = reminderByVendor;
     state.vmRoutingSource = source;
     state.vmRoutesLoadedAt = Date.now();
     state.vmFilterSignature = '';
@@ -1057,25 +1096,30 @@
 
     const routesByVendor = Object.create(null);
     const routeSourcesByVendor = Object.create(null);
+    const reminderByVendor = Object.create(null);
 
     for (const route of cached.routes) {
       const vendorKey = normalizeVendorKey(route && route.vendor);
       const group = normalizeVoicemailGroup(route && route.group);
+      const showReminder = parseShowReminderValue(route && route.showReminder);
 
       if (vendorKey && group) {
         routesByVendor[vendorKey] = group;
         routeSourcesByVendor[vendorKey] = 'cache';
+        reminderByVendor[vendorKey] = showReminder;
 
         const compactVendorKey = normalizeVendorCompactKey(route && route.vendor);
         if (compactVendorKey && compactVendorKey !== vendorKey) {
           routesByVendor[compactVendorKey] = group;
           routeSourcesByVendor[compactVendorKey] = 'cache';
+          reminderByVendor[compactVendorKey] = showReminder;
         }
       }
     }
 
     state.vmRoutesByVendor = routesByVendor;
     state.vmRouteSourcesByVendor = routeSourcesByVendor;
+    state.vmReminderByVendor = reminderByVendor;
     state.vmRoutingSource = 'cache';
     state.vmRoutesLoadedAt = Number(cached.loadedAt) || 0;
     state.vmRoutingStatus = `loaded from cache; Commercial=${getLoadedCommercialGroupLabel()}`;
@@ -1113,6 +1157,7 @@
     if (matchedKey) {
       return {
         group: state.vmRoutesByVendor[matchedKey],
+        showReminder: state.vmReminderByVendor[matchedKey] !== false,
         fromSheet: true,
         source: state.vmRouteSourcesByVendor[matchedKey] || state.vmRoutingSource || 'route'
       };
@@ -1120,6 +1165,7 @@
 
     return {
       group: DEFAULT_VM_GROUP,
+      showReminder: DEFAULT_SHOW_REMINDER,
       fromSheet: false,
       source: 'default'
     };
@@ -1587,6 +1633,12 @@
 
     const outbound = normalizeOutboundForSend(state.activeSession.payload.outboundCallAmount);
     if (VM_COUNTS.has(Number(outbound))) {
+      const route = getVoicemailRouteForVendor(state.activeSession.payload.vendor || '');
+      if (route.showReminder === false) {
+        hideBadge();
+        return;
+      }
+
       state.badge.textContent = 'Remember to Leave a Voicemail';
       state.badge.style.background = 'linear-gradient(180deg, #ef2b2b 0%, #ca1515 100%)';
       state.badge.style.display = 'flex';
