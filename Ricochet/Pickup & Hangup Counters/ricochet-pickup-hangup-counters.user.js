@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Pickup & Hangup Counters
 // @namespace    local.ricochet-pickup-hangup-counters
-// @version      0.5.13
+// @version      0.6.54
 // @description  Adds Pickup and Hangup counters to Ricochet and sends click/report webhooks.
 // @match        https://giainc.ricochet.me/*
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Pickup%20%26%20Hangup%20Counters/ricochet-pickup-hangup-counters.user.js
@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '0.5.13';
+  const SCRIPT_VERSION = '0.6.54';
   const HOST_ID = 'rc-call-counter-host';
   const STYLE_ID = 'rc-call-counter-style';
   const STORAGE_PREFIX = 'rcCallCounter.';
@@ -228,8 +228,13 @@
         --rc-counter-nav-height: 44px;
         display: flex !important;
         align-items: center;
+        align-self: center;
+        flex: 0 0 auto;
         gap: 7px;
         height: var(--rc-counter-nav-height);
+        max-height: 44px;
+        width: auto;
+        max-width: max-content;
         padding: 0 10px 0 4px;
         line-height: normal;
         position: relative;
@@ -245,7 +250,7 @@
         align-items: center;
         justify-content: center;
         position: relative;
-        width: 100px;
+        width: 124px;
         height: 36px;
         box-sizing: border-box;
         overflow: hidden;
@@ -263,9 +268,9 @@
         justify-content: center;
         min-width: 0;
         height: 100%;
-        padding: 0 5px;
+        padding: 0 8px 0 5px;
         color: #fff;
-        font-size: 17px;
+        font-size: 16px;
         font-weight: 700;
         line-height: 1;
         text-align: center;
@@ -479,15 +484,65 @@
     });
   }
 
+  function isVisibleElement(element) {
+    if (!element || !(element instanceof Element)) return false;
+    const style = getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function findCounterMountTarget() {
+    const eligibilityToggle = document.querySelector('span.showq[ng-click*="elegibilityToggle"]');
+    if (isVisibleElement(eligibilityToggle) && eligibilityToggle.parentNode) {
+      return { anchor: eligibilityToggle, heightSource: eligibilityToggle };
+    }
+
+    const helpLink = findHelpLink();
+    if (helpLink) {
+      const anchor = helpLink.closest('li') || helpLink;
+      return { anchor, heightSource: helpLink };
+    }
+
+    const fallbackSelectors = [
+      '#userDropdown',
+      '.toolbar-avatar-trigger',
+      '.navbar-right .dropdown-toggle',
+      '.navbar-right a[title]',
+      '.navbar-right button[title]',
+      '.toolbar-item[ng-click*="openNewViewVoicemailsModal"]',
+      '.toolbar-item',
+    ];
+
+    for (const selector of fallbackSelectors) {
+      const element = document.querySelector(selector);
+      if (!isVisibleElement(element)) continue;
+
+      const anchor = element.closest('li') || element.closest('.toolbar-item') || element;
+      if (anchor && anchor.parentNode) {
+        return { anchor, heightSource: element };
+      }
+    }
+
+    return null;
+  }
+
   function getNavHeight(helpLink) {
+    const ownHeight = getUsableNavHeight(helpLink);
+    if (ownHeight) return ownHeight;
+
     const navbar =
       helpLink.closest('.navbar-collapse') ||
       document.querySelector('.navbar-collapse.collapse') ||
       helpLink.closest('.navbar') ||
       document.querySelector('.navbar');
 
-    const measuredHeight = navbar ? Math.round(navbar.getBoundingClientRect().height) : 0;
-    return measuredHeight > 0 ? `${measuredHeight}px` : '44px';
+    return getUsableNavHeight(navbar) || '44px';
+  }
+
+  function getUsableNavHeight(element) {
+    const measuredHeight = element ? Math.round(element.getBoundingClientRect().height) : 0;
+    return measuredHeight >= 24 && measuredHeight <= 80 ? `${measuredHeight}px` : '';
   }
 
   function createClockMarkup() {
@@ -892,11 +947,11 @@
   function mountCounters() {
     injectStyles();
 
-    const helpLink = findHelpLink();
-    if (!helpLink) return false;
+    const mountTarget = findCounterMountTarget();
+    if (!mountTarget) return false;
 
-    const helpItem = helpLink.closest('li') || helpLink;
-    const parent = helpItem.parentNode;
+    const mountItem = mountTarget.anchor;
+    const parent = mountItem.parentNode;
     if (!parent) return false;
 
     let host = document.getElementById(HOST_ID);
@@ -906,13 +961,13 @@
     }
 
     if (!host) {
-      host = buildHost(helpItem.tagName.toLowerCase() === 'li');
-      parent.insertBefore(host, helpItem);
-    } else if (host.nextSibling !== helpItem) {
-      parent.insertBefore(host, helpItem);
+      host = buildHost(mountItem.tagName.toLowerCase() === 'li');
+      parent.insertBefore(host, mountItem);
+    } else if (host.nextSibling !== mountItem) {
+      parent.insertBefore(host, mountItem);
     }
 
-    host.style.setProperty('--rc-counter-nav-height', getNavHeight(helpLink));
+    host.style.setProperty('--rc-counter-nav-height', getNavHeight(mountTarget.heightSource || mountItem));
     renderClock();
     renderCounts();
     return true;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      1.90
+// @version      2.24
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -45,6 +45,34 @@
   const VM_ORIGINAL_TEXT_DATA = 'tmRicochetVmOriginalText';
   const VM_ORIGINAL_LABEL_DATA = 'tmRicochetVmOriginalLabel';
   const VM_HAD_LABEL_DATA = 'tmRicochetVmHadLabel';
+  const CALL_OPEN_SELECTOR = [
+    'button.btn.btn-danger[ng-click*="hangup"]',
+    'button.btn.btn-danger[ng-click*="transferandhangup"]',
+    '[ng-click*="hangup"]',
+    '[ng-click*="transferandhangup"]'
+  ].join(', ');
+  const VM_SELECT_CANDIDATE_SELECTOR = [
+    'select.vm_btn[ng-model="perfect_voicemail"]',
+    'select[ng-model*="voicemail" i]',
+    'select[data-ng-model*="voicemail" i]',
+    'select[ng-model*="vm" i]',
+    'select[data-ng-model*="vm" i]',
+    'select[name*="voice" i]',
+    'select[class*="vm" i]'
+  ].join(', ');
+  const VM_PLAY_SELECTOR = [
+    'button.vm_btn[ng-click*="playVm"]',
+    '[ng-click*="playVm"]',
+    '[data-ng-click*="playVm"]',
+    'button[class*="vm" i]'
+  ].join(', ');
+  const VM_TOGGLE_SELECTOR = [
+    'div.btn.btn-info.new-keypadstyle[ng-click*="toggleVoicemailWindow"]',
+    '[ng-click*="toggleVoicemailWindow"]',
+    '[data-ng-click*="toggleVoicemailWindow"]',
+    '[ng-click*="openNewCallPerfectVoicemailModal"]',
+    '[data-ng-click*="openNewCallPerfectVoicemailModal"]'
+  ].join(', ');
 
   const KEYS = {
     url: 'tm_ricochet_webapp_url_v1',
@@ -113,6 +141,13 @@
         return;
       }
 
+      if (!hasLeadWatcherSurface() && !state.activeSession && !state.callWasOpen) {
+        state.closeMisses = 0;
+        hideBadge();
+        processQueue();
+        return;
+      }
+
       const callOpen = isCallOpen();
 
       if (callOpen) {
@@ -150,6 +185,22 @@
     }
 
     processQueue();
+  }
+
+  function hasLeadWatcherSurface() {
+    return [
+      '#btn-container.new-keypadwrap',
+      '.lead-popup-main-row, .lead-popup-main-row-opened-script',
+      '#lead-popup-phone-number',
+      '.outbound-calls',
+      CALL_OPEN_SELECTOR,
+      'body.rico-on-call',
+      VM_SELECT_CANDIDATE_SELECTOR,
+      VM_PLAY_SELECTOR,
+      VM_TOGGLE_SELECTOR,
+      'button[ng-click*="triggerHotKeysStatusLead"]',
+      '#stc-bottom-dialpad'
+    ].some((selector) => [...document.querySelectorAll(selector)].some(isVisible));
   }
 
   function handleCallOpened() {
@@ -546,19 +597,39 @@
   function getLeadKey(payload) {
     if (!payload) return '';
 
-    const name = normalizeSpace(payload.name).toLowerCase();
-    if (name) return `name:${name}`;
+    const number = normalizePhone(payload.number);
+    if (isStablePhoneKey(number)) return `number:${number}`;
 
     const email = normalizeSpace(payload.email).toLowerCase();
-    if (email) return `email:${email}`;
+    if (isStableEmailKey(email)) return `email:${email}`;
 
-    const number = normalizePhone(payload.number);
-    if (number) return `number:${number}`;
+    const name = normalizeSpace(payload.name).toLowerCase();
+    const phoneFromName = normalizePhone(name);
+    if (!hasLetters(name) && isStablePhoneKey(phoneFromName)) return `number:${phoneFromName}`;
+    if (isStableNameKey(name)) return `name:${name}`;
 
     const address = normalizeSpace(payload.address).toLowerCase();
     if (address) return `address:${address}`;
 
     return '';
+  }
+
+  function isStablePhoneKey(value) {
+    return normalizePhone(value).length >= 10;
+  }
+
+  function isStableEmailKey(value) {
+    const clean = normalizeSpace(value);
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean);
+  }
+
+  function isStableNameKey(value) {
+    const clean = normalizeSpace(value);
+    return clean.length >= 2 && hasLetters(clean);
+  }
+
+  function hasLetters(value) {
+    return /[a-z]/i.test(String(value || ''));
   }
 
   function buildCurrentPayload() {
@@ -678,15 +749,9 @@
   }
 
   function isCallOpen() {
-    const root = document.querySelector('#btn-container.new-keypadwrap');
-    if (!isVisible(root)) return false;
-
-    const hangupButtons = document.querySelectorAll(
-      'button.btn.btn-danger[ng-click*="hangup"], button.btn.btn-danger[ng-click*="transferandhangup"]'
-    );
-
+    const hangupButtons = document.querySelectorAll(CALL_OPEN_SELECTOR);
     for (const btn of hangupButtons) {
-      if (isVisible(btn) && !btn.classList.contains('ng-hide')) {
+      if (isVisible(btn) && !(btn.classList && btn.classList.contains('ng-hide'))) {
         return true;
       }
     }
@@ -697,19 +762,116 @@
       if (timerText) return true;
     }
 
+    const root = document.querySelector('#btn-container.new-keypadwrap');
+    if (isVisible(root)) return true;
+
+    if (document.body && document.body.classList && document.body.classList.contains('rico-on-call')) {
+      return true;
+    }
+
     return false;
   }
 
   function isVoicemailWindowOpen() {
-    const select = document.querySelector('select.vm_btn[ng-model="perfect_voicemail"]');
-    const playBtn = document.querySelector('button.vm_btn[ng-click*="playVm"]');
+    if (findCustomVoicemailModal()) return true;
+
+    const select = findVoicemailSelect();
+    const playBtn = findPlayVmButton();
     return isVisible(select) || isVisible(playBtn);
   }
 
+  function findVoicemailSelect() {
+    const exact = document.querySelector('select.vm_btn[ng-model="perfect_voicemail"]');
+    if (isVisible(exact)) return exact;
+
+    for (const select of document.querySelectorAll(VM_SELECT_CANDIDATE_SELECTOR)) {
+      if (isVisible(select) && isVoicemailSelectCandidate(select)) return select;
+    }
+
+    for (const select of document.querySelectorAll('select')) {
+      if (isVisible(select) && isVoicemailSelectCandidate(select)) return select;
+    }
+
+    return null;
+  }
+
+  function findPlayVmButton() {
+    for (const btn of document.querySelectorAll(VM_PLAY_SELECTOR)) {
+      if (isVisible(btn)) return btn;
+    }
+
+    return null;
+  }
+
+  function findCustomVoicemailModal() {
+    const modal = document.querySelector('#modalCallPerfectVoicemail');
+    return isVisible(modal) ? modal : null;
+  }
+
+  function findCustomVoicemailDropdownButton() {
+    const modal = findCustomVoicemailModal();
+    if (!modal) return null;
+
+    const buttons = [
+      ...modal.querySelectorAll('button.button-dropdown-with-label, button.button-dropdown')
+    ];
+
+    for (const button of buttons) {
+      if (!isVisible(button)) continue;
+
+      const wrapper = button.closest('.dropdown-button-wrapper') || button.parentElement;
+      const label = normalizeSpace(firstText(wrapper || modal, ['.dropdown-label']));
+      if (!label || label.toLowerCase() === 'voicemail') {
+        return button;
+      }
+    }
+
+    return null;
+  }
+
+  function getCustomVoicemailOptionElements() {
+    const modal = findCustomVoicemailModal();
+    if (!modal) return [];
+
+    return [...modal.querySelectorAll('.stc-vue-dropdown-option')];
+  }
+
+  function getCustomVoicemailOptionText(option) {
+    return normalizeSpace(option && option.textContent);
+  }
+
+  function getCustomVoicemailSelectedText() {
+    const button = findCustomVoicemailDropdownButton();
+    if (!button) return '';
+
+    const text = firstText(button, ['.dropdown-text']) || normalizeSpace(button.textContent || '');
+    return isVoicemailSelectOptionPlaceholder(text) ? '' : text;
+  }
+
+  function isVoicemailSelectOptionPlaceholder(value) {
+    const clean = normalizeSpace(value).toLowerCase();
+    return clean === 'select option' || clean === 'choose';
+  }
+
+  function isVoicemailSelectCandidate(select) {
+    if (!select || !select.matches || !select.matches('select')) return false;
+    if (select.matches('select.vm_btn[ng-model="perfect_voicemail"]')) return true;
+
+    const options = select.options ? [...select.options] : [];
+    if (!options.length) return false;
+
+    return options.some((option) => {
+      const text = normalizeSpace(option.textContent || option.label || '');
+      return getVoicemailCallCount(text) !== '';
+    });
+  }
+
   function applyVoicemailFilter() {
-    const select = document.querySelector('select.vm_btn[ng-model="perfect_voicemail"]');
+    const select = findVoicemailSelect();
 
     if (!select || !isVisible(select)) {
+      if (applyCustomVoicemailFilter()) return;
+
       state.vmFilterSignature = '';
       state.vmAutoSelectSignature = '';
       state.vmAutoSelectLastAt = 0;
@@ -780,6 +942,125 @@
       logVoicemailFilter(vendor, requestedGroup, activeGroup, blockMissingSheetGroup);
     }
 
+  }
+
+  function applyCustomVoicemailFilter() {
+    const modal = findCustomVoicemailModal();
+    if (!modal) return false;
+
+    refreshVoicemailRouting(false);
+
+    const button = findCustomVoicemailDropdownButton();
+    let optionElements = getCustomVoicemailOptionElements();
+
+    if (!optionElements.length && button) {
+      clickElement(button);
+      optionElements = getCustomVoicemailOptionElements();
+    }
+
+    if (!optionElements.length) return true;
+
+    const vendor = getCurrentVendorForVoicemailFilter();
+    const route = getVoicemailRouteForVendor(vendor);
+    const requestedGroup = route.group;
+    const items = optionElements.map((option) => {
+      const originalText = getCustomVoicemailOptionText(option);
+      return {
+        option,
+        originalText,
+        ...getVoicemailOptionMeta(originalText)
+      };
+    });
+
+    const hasRequestedGroup = items.some((item) => !item.placeholder && item.group === requestedGroup);
+    const blockMissingSheetGroup = route.fromSheet && requestedGroup !== DEFAULT_VM_GROUP && !hasRequestedGroup;
+    const activeGroup = hasRequestedGroup || blockMissingSheetGroup ? requestedGroup : DEFAULT_VM_GROUP;
+    const targetVmCount = getCurrentVoicemailTargetCount();
+
+    for (const item of items) {
+      const matchesTargetVm = !!targetVmCount &&
+        getVoicemailCallCount(item.originalText || item.displayText) === Number(targetVmCount);
+      item.visible = !blockMissingSheetGroup && item.group === activeGroup && matchesTargetVm;
+      setCustomVoicemailOptionVisibility(item.option, item.visible);
+    }
+
+    const signature = [
+      'custom',
+      normalizeVendorKey(vendor),
+      requestedGroup,
+      activeGroup,
+      blockMissingSheetGroup ? 'blocked' : '',
+      targetVmCount ? `vm-${targetVmCount}` : 'no-vm-needed',
+      state.vmRoutesLoadedAt,
+      items.map((item) => item.originalText).join('\u001f')
+    ].join('|');
+
+    if (targetVmCount) {
+      autoSelectCustomVoicemailForCallCount(items, targetVmCount, `${signature}|${targetVmCount}`);
+    }
+
+    if (signature !== state.vmFilterSignature) {
+      state.vmFilterSignature = signature;
+      logVoicemailFilter(vendor, requestedGroup, activeGroup, blockMissingSheetGroup);
+    }
+
+    return true;
+  }
+
+  function setCustomVoicemailOptionVisibility(option, visible) {
+    const wrapper = getCustomVoicemailOptionWrapper(option);
+    for (const el of [option, wrapper]) {
+      if (!el || !el.style) continue;
+      el.style.display = visible ? '' : 'none';
+    }
+  }
+
+  function getCustomVoicemailOptionWrapper(option) {
+    const parent = option && option.parentElement;
+    return parent && parent.children && parent.children.length <= 2 ? parent : option;
+  }
+
+  function autoSelectCustomVoicemailForCallCount(items, targetCount, signature) {
+    const targetItem = items.find((item) =>
+      item.visible &&
+      !item.placeholder &&
+      getVoicemailCallCount(item.originalText || item.displayText) === Number(targetCount)
+    );
+
+    if (!targetItem || !targetItem.option) return false;
+
+    const selectedText = getCustomVoicemailSelectedText();
+    const selectedCount = getVoicemailCallCount(selectedText);
+    const alreadySyncedSignature = state.vmAutoSelectSignature === signature;
+    if (selectedCount === Number(targetCount)) {
+      state.vmAutoSelectSignature = signature;
+      state.vmAutoSelectLastAt = Date.now();
+      if (state.activeSession && selectedText) {
+        state.activeSession.payload.voicemailNameUsed = selectedText;
+      }
+      return true;
+    }
+
+    const recentScriptSelection = state.vmAutoSelectSignature === signature &&
+      Date.now() - state.vmAutoSelectLastAt < 2000;
+
+    if (selectedText && alreadySyncedSignature && !recentScriptSelection && selectedCount !== Number(targetCount)) {
+      return false;
+    }
+
+    if (!clickElement(targetItem.option)) return false;
+
+    state.vmAutoSelectSignature = signature;
+    state.vmAutoSelectLastAt = Date.now();
+
+    if (state.activeSession) {
+      state.activeSession.payload.voicemailNameUsed = targetItem.displayText || targetItem.originalText || '';
+      state.activeSession.payload.voicemailBoxOpened = 'Yes';
+      state.activeSession.lastTouched = Date.now();
+    }
+
+    log(`Voicemail auto-selected for outbound ${targetCount}: ${targetItem.displayText || targetItem.originalText}`);
+    return true;
   }
 
   function setVoicemailRoutingStatus(value) {
@@ -1582,7 +1863,13 @@
   function captureSelectedVoicemailName() {
     if (!state.activeSession) return;
 
-    const select = document.querySelector('select.vm_btn[ng-model="perfect_voicemail"]');
+    const customText = getCustomVoicemailSelectedText();
+    if (customText) {
+      state.activeSession.payload.voicemailNameUsed = customText;
+      return;
+    }
+
+    const select = findVoicemailSelect();
     if (!select || !isVisible(select)) return;
 
     const optionText = getVoicemailOptionDisplayText(select.options[select.selectedIndex]);
@@ -1593,17 +1880,24 @@
 
   function getVoicemailToggleElement(target) {
     if (!target || !target.closest) return null;
-    return target.closest('div.btn.btn-info.new-keypadstyle[ng-click*="toggleVoicemailWindow"]');
+    return target.closest(VM_TOGGLE_SELECTOR);
   }
 
   function getVoicemailSelectElement(target) {
-    if (!target || !target.matches) return null;
-    return target.matches('select.vm_btn[ng-model="perfect_voicemail"]') ? target : null;
+    if (!target) return null;
+    const select = target.closest ? target.closest('select') : target;
+    if (!select || !select.matches || !select.matches('select')) return null;
+    return isVoicemailSelectCandidate(select) ? select : null;
   }
 
   function getPlayVmElement(target) {
     if (!target || !target.closest) return null;
-    return target.closest('button.vm_btn[ng-click*="playVm"]');
+    const customPlay = target.closest('#modalCallPerfectVoicemail button');
+    if (customPlay && normalizeSpace(customPlay.textContent).toLowerCase() === 'play') {
+      return customPlay;
+    }
+
+    return target.closest(VM_PLAY_SELECTOR);
   }
 
   function getStatusButtonElement(target) {
@@ -1997,6 +2291,26 @@
       return JSON.parse(text);
     } catch (_) {
       return null;
+    }
+  }
+
+  function clickElement(el) {
+    if (!el) return false;
+
+    try {
+      if (typeof el.click === 'function') {
+        el.click();
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      const view = (el.ownerDocument && el.ownerDocument.defaultView) || window;
+      const EventCtor = view.MouseEvent || view.Event || Event;
+      el.dispatchEvent(new EventCtor('click', { bubbles: true, cancelable: true, view }));
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
