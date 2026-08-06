@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher Updater
 // @namespace    local.ricochet-voicemail-lead-watcher.updater
-// @version      1.1.1
+// @version      1.1.2
 // @description  Loads and auto-updates only the Ricochet Voicemail Lead Watcher script from GitHub.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -27,7 +27,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '1.1.1';
+  const LOADER_VERSION = '1.1.2';
   const TARGET_ID = 'ricochet-voicemail-lead-watcher';
   const TARGET_LABEL = 'Ricochet Voicemail Lead Watcher';
   const TARGET_FILE = 'ricochet-voicemail-lead-watcher.user.js';
