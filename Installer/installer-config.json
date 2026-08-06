@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-06-17",
+  "updatedAt": "2026-08-06",
   "positions": [
     "PRODUCER",
     "CSR",
@@ -98,7 +98,7 @@
       "details": "Adds daily Pick Ups and Hang Ups counters to Ricochet and can send the count/report payload to the configured webhook."
     },
     {
-      "path": "Admins/Spam Guru Risk Ratings/ricochet-spam-guru-risk-ratings.user.js",
+      "path": "Admins/Spam Guru Risk Ratings/ricochet-spam-guru-risk-ratings-updater.user.js",
       "positions": [
         "Admins"
       ],
