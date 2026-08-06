@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      2.27
+// @version      2.28
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -848,6 +848,60 @@
     return isVoicemailSelectOptionPlaceholder(text) ? '' : text;
   }
 
+  function findCustomVoicemailPlayButton(modal) {
+    if (!modal || !modal.querySelectorAll) return null;
+
+    for (const button of modal.querySelectorAll('button')) {
+      if (normalizeSpace(button.textContent || '').toLowerCase() === 'play') {
+        return button;
+      }
+    }
+
+    return null;
+  }
+
+  function setCustomVoicemailControlsAvailable(modal, available) {
+    const button = findCustomVoicemailDropdownButton();
+    if (button) {
+      if (!available) {
+        const text = button.querySelector && button.querySelector('.dropdown-text');
+        if (text) text.textContent = 'Select Option';
+        else button.textContent = 'Select Option';
+        button.disabled = true;
+        if (button.setAttribute) button.setAttribute('aria-disabled', 'true');
+        if (button.style) button.style.pointerEvents = 'none';
+        if (button.dataset) button.dataset.tmRicochetVmControlsBlocked = '1';
+      } else if (button.dataset && button.dataset.tmRicochetVmControlsBlocked === '1') {
+        button.disabled = false;
+        if (button.removeAttribute) button.removeAttribute('aria-disabled');
+        if (button.style) button.style.pointerEvents = '';
+        delete button.dataset.tmRicochetVmControlsBlocked;
+      }
+    }
+
+    const playButton = findCustomVoicemailPlayButton(modal);
+    if (!playButton) return;
+
+    if (!available) {
+      if (playButton.dataset && !Object.prototype.hasOwnProperty.call(playButton.dataset, 'tmRicochetVmOldDisplay')) {
+        playButton.dataset.tmRicochetVmOldDisplay = playButton.style ? playButton.style.display || '' : '';
+      }
+      if (playButton.style) playButton.style.display = 'none';
+      playButton.disabled = true;
+      if (playButton.setAttribute) playButton.setAttribute('aria-disabled', 'true');
+      if (playButton.dataset) playButton.dataset.tmRicochetVmControlsBlocked = '1';
+      return;
+    }
+
+    if (playButton.dataset && playButton.dataset.tmRicochetVmControlsBlocked === '1') {
+      if (playButton.style) playButton.style.display = playButton.dataset.tmRicochetVmOldDisplay || '';
+      playButton.disabled = false;
+      if (playButton.removeAttribute) playButton.removeAttribute('aria-disabled');
+      delete playButton.dataset.tmRicochetVmControlsBlocked;
+      delete playButton.dataset.tmRicochetVmOldDisplay;
+    }
+  }
+
   function isVoicemailSelectOptionPlaceholder(value) {
     const clean = normalizeSpace(value).toLowerCase();
     return clean === 'select option' || clean === 'choose';
@@ -961,11 +1015,16 @@
       optionElements = getCustomVoicemailOptionElements();
     }
 
-    if (!optionElements.length) return true;
-
     const vendor = getCurrentVendorForVoicemailFilter();
     const route = getVoicemailRouteForVendor(vendor);
     const voicemailAllowed = route.showReminder !== false;
+    const targetVmCount = getCurrentVoicemailTargetCount();
+
+    if (!optionElements.length) {
+      setCustomVoicemailControlsAvailable(modal, voicemailAllowed && !!targetVmCount);
+      return true;
+    }
+
     const requestedGroup = route.group;
     const items = optionElements.map((option) => {
       const originalText = getCustomVoicemailOptionText(option);
@@ -979,7 +1038,6 @@
     const hasRequestedGroup = items.some((item) => !item.placeholder && item.group === requestedGroup);
     const blockMissingSheetGroup = route.fromSheet && requestedGroup !== DEFAULT_VM_GROUP && !hasRequestedGroup;
     const activeGroup = hasRequestedGroup || blockMissingSheetGroup ? requestedGroup : DEFAULT_VM_GROUP;
-    const targetVmCount = getCurrentVoicemailTargetCount();
 
     for (const item of items) {
       const matchesTargetVm = !!targetVmCount &&
@@ -987,6 +1045,9 @@
       item.visible = voicemailAllowed && !blockMissingSheetGroup && item.group === activeGroup && matchesTargetVm;
       setCustomVoicemailOptionVisibility(item.option, item.visible);
     }
+
+    const hasVisibleVoicemail = items.some((item) => item.visible);
+    setCustomVoicemailControlsAvailable(modal, hasVisibleVoicemail);
 
     const signature = [
       'custom',
@@ -1000,7 +1061,7 @@
       items.map((item) => item.originalText).join('\u001f')
     ].join('|');
 
-    if (voicemailAllowed && targetVmCount) {
+    if (voicemailAllowed && targetVmCount && hasVisibleVoicemail) {
       autoSelectCustomVoicemailForCallCount(items, targetVmCount, `${signature}|${targetVmCount}`);
     }
 
