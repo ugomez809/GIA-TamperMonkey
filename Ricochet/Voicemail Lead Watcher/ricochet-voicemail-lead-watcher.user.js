@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      2.24
+// @version      2.25
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -883,6 +883,7 @@
 
     const vendor = getCurrentVendorForVoicemailFilter();
     const route = getVoicemailRouteForVendor(vendor);
+    const voicemailAllowed = route.showReminder !== false;
     const requestedGroup = route.group;
     const optionStore = getVoicemailOptionStore(select);
     const items = optionStore.options.map((option) => {
@@ -904,7 +905,8 @@
     for (const item of items) {
       const matchesTargetVm = !!targetVmCount &&
         getVoicemailCallCount(item.originalText || item.displayText) === Number(targetVmCount);
-      item.visible = item.placeholder || (!blockMissingSheetGroup && item.group === activeGroup && matchesTargetVm);
+      item.visible = item.placeholder ||
+        (voicemailAllowed && !blockMissingSheetGroup && item.group === activeGroup && matchesTargetVm);
 
       if (item.visible) {
         setVoicemailOptionLabel(item.option, item.displayText);
@@ -927,13 +929,14 @@
       normalizeVendorKey(vendor),
       requestedGroup,
       activeGroup,
+      voicemailAllowed ? '' : 'voicemail-disabled',
       blockMissingSheetGroup ? 'blocked' : '',
       targetVmCount ? `vm-${targetVmCount}` : 'no-vm-needed',
       state.vmRoutesLoadedAt,
       items.map((item) => item.originalText).join('\u001f')
     ].join('|');
 
-    if (targetVmCount) {
+    if (voicemailAllowed && targetVmCount) {
       autoSelectVoicemailForCallCount(select, items, targetVmCount, `${signature}|${targetVmCount}`);
     }
 
@@ -962,6 +965,7 @@
 
     const vendor = getCurrentVendorForVoicemailFilter();
     const route = getVoicemailRouteForVendor(vendor);
+    const voicemailAllowed = route.showReminder !== false;
     const requestedGroup = route.group;
     const items = optionElements.map((option) => {
       const originalText = getCustomVoicemailOptionText(option);
@@ -980,7 +984,7 @@
     for (const item of items) {
       const matchesTargetVm = !!targetVmCount &&
         getVoicemailCallCount(item.originalText || item.displayText) === Number(targetVmCount);
-      item.visible = !blockMissingSheetGroup && item.group === activeGroup && matchesTargetVm;
+      item.visible = voicemailAllowed && !blockMissingSheetGroup && item.group === activeGroup && matchesTargetVm;
       setCustomVoicemailOptionVisibility(item.option, item.visible);
     }
 
@@ -989,13 +993,14 @@
       normalizeVendorKey(vendor),
       requestedGroup,
       activeGroup,
+      voicemailAllowed ? '' : 'voicemail-disabled',
       blockMissingSheetGroup ? 'blocked' : '',
       targetVmCount ? `vm-${targetVmCount}` : 'no-vm-needed',
       state.vmRoutesLoadedAt,
       items.map((item) => item.originalText).join('\u001f')
     ].join('|');
 
-    if (targetVmCount) {
+    if (voicemailAllowed && targetVmCount) {
       autoSelectCustomVoicemailForCallCount(items, targetVmCount, `${signature}|${targetVmCount}`);
     }
 
@@ -1591,7 +1596,7 @@
   }
 
   function normalizeVendorCompactKey(value) {
-    return normalizeVendorKey(value).replace(/\s+/g, '');
+    return normalizeVendorKey(value).replace(/[^a-z0-9]/g, '');
   }
 
   function isVoicemailPlaceholder(value) {
