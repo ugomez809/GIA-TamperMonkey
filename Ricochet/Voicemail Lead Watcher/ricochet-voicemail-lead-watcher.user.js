@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      2.26
+// @version      2.27
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -77,7 +77,7 @@
   const KEYS = {
     url: 'tm_ricochet_webapp_url_v1',
     vmRoutingUrl: 'tm_ricochet_vm_routing_url_v1',
-    vmRoutingCache: 'tm_ricochet_vm_routing_cache_v7',
+    vmRoutingCache: 'tm_ricochet_vm_routing_cache_v8',
     queue: 'tm_ricochet_queue_v1',
     stop: 'tm_ricochet_stop_session_v1',
     recent: 'tm_ricochet_recent_send_sigs_v1'
@@ -1262,7 +1262,7 @@
         group,
         showReminder: showReminderIndex === -1
           ? DEFAULT_SHOW_REMINDER
-          : parseShowReminderValue(row[showReminderIndex], false)
+          : parseShowReminderValue(row[showReminderIndex])
       });
     }
 
@@ -1346,7 +1346,7 @@
       const group = normalizeVoicemailGroup(route.group);
       const hasShowReminder = Object.prototype.hasOwnProperty.call(route, 'showReminder');
       const showReminder = hasShowReminder
-        ? parseShowReminderValue(route.showReminder, false)
+        ? parseShowReminderValue(route.showReminder)
         : DEFAULT_SHOW_REMINDER;
 
       if (vendorKey && group) {
@@ -1392,7 +1392,7 @@
       const group = normalizeVoicemailGroup(route && route.group);
       const hasShowReminder = route && Object.prototype.hasOwnProperty.call(route, 'showReminder');
       const showReminder = hasShowReminder
-        ? parseShowReminderValue(route && route.showReminder, false)
+        ? parseShowReminderValue(route && route.showReminder)
         : DEFAULT_SHOW_REMINDER;
 
       if (vendorKey && group) {
