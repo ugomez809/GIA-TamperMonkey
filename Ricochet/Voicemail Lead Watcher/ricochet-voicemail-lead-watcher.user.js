@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      2.25
+// @version      2.26
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -77,7 +77,7 @@
   const KEYS = {
     url: 'tm_ricochet_webapp_url_v1',
     vmRoutingUrl: 'tm_ricochet_vm_routing_url_v1',
-    vmRoutingCache: 'tm_ricochet_vm_routing_cache_v6',
+    vmRoutingCache: 'tm_ricochet_vm_routing_cache_v7',
     queue: 'tm_ricochet_queue_v1',
     stop: 'tm_ricochet_stop_session_v1',
     recent: 'tm_ricochet_recent_send_sigs_v1'
@@ -1262,7 +1262,7 @@
         group,
         showReminder: showReminderIndex === -1
           ? DEFAULT_SHOW_REMINDER
-          : parseShowReminderValue(row[showReminderIndex])
+          : parseShowReminderValue(row[showReminderIndex], false)
       });
     }
 
@@ -1318,14 +1318,14 @@
     return clean === 'true' || clean === 'yes' || clean === '1';
   }
 
-  function parseShowReminderValue(value) {
+  function parseShowReminderValue(value, defaultValue = DEFAULT_SHOW_REMINDER) {
     if (value === false) return false;
     if (value === true) return true;
     const clean = normalizeSpace(value).toLowerCase();
-    if (!clean) return DEFAULT_SHOW_REMINDER;
-    if (clean === 'false' || clean === 'no' || clean === 'n' || clean === '0' || clean === 'off') return false;
-    if (clean === 'true' || clean === 'yes' || clean === 'y' || clean === '1' || clean === 'on') return true;
-    return DEFAULT_SHOW_REMINDER;
+    if (!clean) return defaultValue;
+    if (clean === 'false' || clean === 'no' || clean === 'n' || clean === '0' || clean === 'off' || clean === 'hide' || clean === 'hidden') return false;
+    if (clean === 'true' || clean === 'yes' || clean === 'y' || clean === '1' || clean === 'on' || clean === 'show' || clean === 'shown') return true;
+    return defaultValue;
   }
 
   function routesHaveReminderConfig(routes) {
@@ -1344,7 +1344,10 @@
 
       const vendorKey = normalizeVendorKey(route.vendor);
       const group = normalizeVoicemailGroup(route.group);
-      const showReminder = parseShowReminderValue(route.showReminder);
+      const hasShowReminder = Object.prototype.hasOwnProperty.call(route, 'showReminder');
+      const showReminder = hasShowReminder
+        ? parseShowReminderValue(route.showReminder, false)
+        : DEFAULT_SHOW_REMINDER;
 
       if (vendorKey && group) {
         routesByVendor[vendorKey] = group;
@@ -1387,7 +1390,10 @@
     for (const route of cached.routes) {
       const vendorKey = normalizeVendorKey(route && route.vendor);
       const group = normalizeVoicemailGroup(route && route.group);
-      const showReminder = parseShowReminderValue(route && route.showReminder);
+      const hasShowReminder = route && Object.prototype.hasOwnProperty.call(route, 'showReminder');
+      const showReminder = hasShowReminder
+        ? parseShowReminderValue(route && route.showReminder, false)
+        : DEFAULT_SHOW_REMINDER;
 
       if (vendorKey && group) {
         routesByVendor[vendorKey] = group;
