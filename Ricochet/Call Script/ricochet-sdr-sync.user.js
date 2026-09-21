@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.4.0
+// @version      2.4.1
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -162,7 +162,7 @@ function startDisplay() {
   let focusedLeadKey = '';
   let previousKeys = new Set();
   let pending = readPayload();
-  let readyWindow;
+  let readyDocument;
   let actionPending;
   const actionMessages = new Map();
   function sendAction(event) {
@@ -194,8 +194,10 @@ function startDisplay() {
     const page = typeof unsafeWindow === 'undefined' ? window : unsafeWindow;
     const view = page.document.getElementById(frame.id)?.contentWindow;
     if (!view) return;
-    if (view !== readyWindow) {
-      readyWindow = view;
+    // The iframe WindowProxy survives srcdoc navigation, but its listeners do not.
+    // Rebind for each new document, including asynchronous HTML downloads/updates.
+    if (view.document !== readyDocument) {
+      readyDocument = view.document;
       view.addEventListener('sdr:ready', applyPending);
       view.addEventListener('sdr:action', sendAction);
     }
