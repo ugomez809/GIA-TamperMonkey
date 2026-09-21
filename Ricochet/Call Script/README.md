@@ -22,7 +22,7 @@ The Notify Sales Agent button selects the matching agency Teams webhook. The sma
 
 ## Files
 
-- [Main script, v2.4.0](./ricochet-sdr-sync.user.js)
+- [Main script, v2.4.2](./ricochet-sdr-sync.user.js)
 - [Updater, v1.0.0](./ricochet-sdr-sync-updater.user.js)
 
 The main script has its own GitHub update/download links for direct installations, but the updater above is the recommended installer. Do not enable both installations together.
@@ -35,3 +35,7 @@ Keep `<meta name="ricochet-sdr-api" content="1">`, the placeholder mappings, and
 
 Existing updater installations already grant GitHub download access and automatically receive v2.4.0 between calls.
 
+
+## Remembered window placement
+
+Version 2.4.2 saves the guide window position and size every second, on resize, and when the window closes. Automatic reopening uses the saved placement. Move and resize the guide once after updating. Chrome can adjust off-screen placement if the monitor setup changes.
