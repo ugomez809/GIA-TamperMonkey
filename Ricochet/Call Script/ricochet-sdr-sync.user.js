@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.4.2
+// @version      2.4.3
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -309,17 +309,42 @@ function startDisplay() {
     GM_addValueChangeListener(PAYLOAD_KEY, () => { pending = readPayload(); applyPending(); });
   }
   setInterval(() => { checkActionResult(); pending = readPayload(); applyPending(); }, 750);
+  let restoringBounds = false;
+  let savedBounds;
+  try { savedBounds = JSON.parse(GM_getValue(WINDOW_BOUNDS_KEY, 'null')); } catch (_) {}
+  if (validWindowBounds(savedBounds)) {
+    restoringBounds = true;
+    function restoreBounds() {
+      // Opening coordinates can be ignored; restore from inside the new popup too.
+      if (Number.isFinite(savedBounds.outerWidth) && Number.isFinite(savedBounds.outerHeight)
+          && savedBounds.outerWidth >= 100 && savedBounds.outerHeight >= 100
+          && savedBounds.outerWidth <= 20000 && savedBounds.outerHeight <= 20000) {
+        window.resizeTo(savedBounds.outerWidth, savedBounds.outerHeight);
+      }
+      window.moveTo(savedBounds.left, savedBounds.top);
+    }
+    restoreBounds();
+    setTimeout(restoreBounds, 250);
+    setTimeout(() => { restoreBounds(); restoringBounds = false; }, 1000);
+  }
   function saveWindowBounds() {
+    if (restoringBounds) return;
     const bounds = {left:window.screenX, top:window.screenY, width:window.innerWidth, height:window.innerHeight};
     if (!validWindowBounds(bounds)) return;
+    if (window.outerWidth >= 100 && window.outerHeight >= 100) {
+      bounds.outerWidth = window.outerWidth;
+      bounds.outerHeight = window.outerHeight;
+    }
     const saved = JSON.stringify(bounds);
     if (GM_getValue(WINDOW_BOUNDS_KEY, '') !== saved) GM_setValue(WINDOW_BOUNDS_KEY, saved);
   }
   function heartbeat() { GM_setValue(HEARTBEAT_KEY, Date.now()); saveWindowBounds(); }
   heartbeat();
   setInterval(heartbeat, 1000);
+  setInterval(saveWindowBounds, 250);
   window.addEventListener('resize', saveWindowBounds);
-  window.addEventListener('pagehide', () => { saveWindowBounds(); GM_setValue(HEARTBEAT_KEY, 0); });
+  window.addEventListener('beforeunload', saveWindowBounds);
+  window.addEventListener('pagehide', () => GM_setValue(HEARTBEAT_KEY, 0));
 }
 
 function startController() {
