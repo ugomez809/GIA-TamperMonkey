@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.4.1
+// @version      2.4.2
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -128,6 +128,13 @@ const DISPLAY_URL = 'https://example.com/' + DISPLAY_HASH;
 const TYPE = 'ricochet-sdr-v2';
 const TEMPLATE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Call%20Script/html/sdr-transfer-script.html';
 const TEMPLATE_CACHE_KEY = 'tmRicochetSdrHtmlV1';
+const WINDOW_BOUNDS_KEY = 'tmRicochetSdrWindowBounds';
+
+function validWindowBounds(bounds) {
+  return bounds && ['left','top','width','height'].every(key => Number.isFinite(bounds[key]))
+    && bounds.width >= 100 && bounds.height >= 100 && bounds.width <= 20000 && bounds.height <= 20000
+    && Math.abs(bounds.left) < 30000 && Math.abs(bounds.top) < 30000;
+}
 
 if (location.hostname === 'example.com' && location.hash === DISPLAY_HASH) startDisplay();
 else if (location.hostname === 'giainc.ricochet.me') startController();
@@ -302,10 +309,17 @@ function startDisplay() {
     GM_addValueChangeListener(PAYLOAD_KEY, () => { pending = readPayload(); applyPending(); });
   }
   setInterval(() => { checkActionResult(); pending = readPayload(); applyPending(); }, 750);
-  function heartbeat() { GM_setValue(HEARTBEAT_KEY, Date.now()); }
+  function saveWindowBounds() {
+    const bounds = {left:window.screenX, top:window.screenY, width:window.innerWidth, height:window.innerHeight};
+    if (!validWindowBounds(bounds)) return;
+    const saved = JSON.stringify(bounds);
+    if (GM_getValue(WINDOW_BOUNDS_KEY, '') !== saved) GM_setValue(WINDOW_BOUNDS_KEY, saved);
+  }
+  function heartbeat() { GM_setValue(HEARTBEAT_KEY, Date.now()); saveWindowBounds(); }
   heartbeat();
   setInterval(heartbeat, 1000);
-  window.addEventListener('pagehide', () => GM_setValue(HEARTBEAT_KEY, 0));
+  window.addEventListener('resize', saveWindowBounds);
+  window.addEventListener('pagehide', () => { saveWindowBounds(); GM_setValue(HEARTBEAT_KEY, 0); });
 }
 
 function startController() {
@@ -367,7 +381,12 @@ function startController() {
     if (!displayWindow?.closed && now - Number(GM_getValue(HEARTBEAT_KEY, 0)) < 8000) return;
     if (!focus && !displayWindow?.closed && now - Number(GM_getValue(OPEN_KEY, 0)) < 10000) return;
     const height = Math.max(400, Math.min(950, screen.availHeight - 80));
-    displayWindow = window.open(DISPLAY_URL, 'ricochet-sdr-display', 'popup=yes,width=920,height=' + height + ',resizable=yes,scrollbars=yes');
+    let geometry = 'width=920,height=' + height;
+    try {
+      const bounds = JSON.parse(GM_getValue(WINDOW_BOUNDS_KEY, 'null'));
+      if (validWindowBounds(bounds)) geometry = 'width=' + bounds.width + ',height=' + bounds.height + ',left=' + bounds.left + ',top=' + bounds.top;
+    } catch (_) {}
+    displayWindow = window.open(DISPLAY_URL, 'ricochet-sdr-display', 'popup=yes,' + geometry + ',resizable=yes,scrollbars=yes');
     if (displayWindow) {
       GM_setValue(OPEN_KEY, now);
       document.getElementById('ricochet-open-script-window')?.remove();
