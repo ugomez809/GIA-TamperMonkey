@@ -1,0 +1,1394 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="ricochet-sdr-api" content="1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+try { document.documentElement.dataset.theme = localStorage.getItem('sdr-script-theme-v1') === 'dark' ? 'dark' : 'light'; } catch (_) {}
+</script>
+<style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>SDR Transfer Script</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --paper:#F4F6F4;
+  --surface:#FFFFFF;
+  --surface-2:#EDF1EF;
+  --ink:#12201C;
+  --ink-2:#4E615A;
+  --ink-3:#7C8E87;
+  --line:#D7E0DB;
+  --line-strong:#B8C6C0;
+  --accent:#0B6B5B;
+  --accent-ink:#075247;
+  --accent-soft:#E2EFEB;
+  --signal:#9A5D06;
+  --signal-soft:#FAEFDC;
+  --signal-line:#E2C489;
+  --focus:#0B6B5B;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1412;
+    --surface:#151F1C;
+    --surface-2:#1C2926;
+    --ink:#E7EFEB;
+    --ink-2:#A3B5AE;
+    --ink-3:#7F918B;
+    --line:#2A3833;
+    --line-strong:#3C4E48;
+    --accent:#4FC9AF;
+    --accent-ink:#8FE0CD;
+    --accent-soft:#11302A;
+    --signal:#E5AF57;
+    --signal-soft:#2C2314;
+    --signal-line:#5A4620;
+    --focus:#4FC9AF;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1412;
+  --surface:#151F1C;
+  --surface-2:#1C2926;
+  --ink:#E7EFEB;
+  --ink-2:#A3B5AE;
+  --ink-3:#7F918B;
+  --line:#2A3833;
+  --line-strong:#3C4E48;
+  --accent:#4FC9AF;
+  --accent-ink:#8FE0CD;
+  --accent-soft:#11302A;
+  --signal:#E5AF57;
+  --signal-soft:#2C2314;
+  --signal-line:#5A4620;
+  --focus:#4FC9AF;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.5;
+  margin:0;
+}
+.wrap{max-width:1200px;margin:0 auto;padding-left:16px;padding-right:16px;padding-block:0 40px}
+/* Keep the script full width in split view; objections open on demand. */
+.shell{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) clamp(230px, 34%, 352px);
+  gap:clamp(10px, 2vw, 22px);
+  align-items:start;
+}
+main{min-width:0}
+@media (max-width:1200px){
+  .shell{display:block}
+}
+/* autofilled by userscript: collapse the input rows, keep the script */
+body.fields-hidden .bar .fields{display:none}
+
+/* ---------- sticky control bar ---------- */
+.bar{
+  position:sticky;
+  top:env(safe-area-inset-top, 0px);
+  z-index:20;
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  padding:8px 16px;
+}
+.bar-inner{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:9px}
+/* one row: who is calling, which script, which line, then actions. Wraps as a unit when narrow. */
+.bar-row{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;--ctl:32px}
+.bar-row .tabs{margin:0}
+.bar-actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.bar-row .btn{height:var(--ctl);padding:0 12px;display:inline-flex;align-items:center}
+
+button{font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.btn{
+  border:1px solid var(--line-strong);
+  background:var(--surface-2);
+  color:var(--ink);
+  border-radius:6px;
+  padding:6px 10px;
+  white-space:nowrap;
+  transition:background .12s ease,border-color .12s ease;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent-ink)}
+.btn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn-primary:hover{filter:brightness(1.08)}
+
+/* ---------- field grids ---------- */
+.fields{display:grid;grid-template-columns:repeat(12,1fr);gap:8px 10px}
+.fields > .field{grid-column:span 3}
+.fields > .field.field-sm{grid-column:span 2}
+@media (max-width:900px){.fields > .field,.fields > .field.field-sm{grid-column:span 4}}
+@media (max-width:560px){.fields > .field,.fields > .field.field-sm{grid-column:span 6}}
+.field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.field label{
+  font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+}
+input[type=text],select{
+  font-family:inherit;font-size:14px;color:var(--ink);
+  background:var(--paper);
+  border:1px solid var(--line);
+  border-radius:5px;
+  padding:7px 9px;
+  width:100%;min-width:0;
+}
+input[type=text]:focus-visible,select:focus-visible,button:focus-visible{
+  outline:2px solid var(--focus);outline-offset:1px;
+}
+input::placeholder{color:var(--ink-3);opacity:.7}
+
+.sdrfield,.swgroup,.agency{display:flex;align-items:center;gap:8px}
+.agency-name{font-size:13.5px;font-weight:600;color:var(--ink);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.btn-icon{width:var(--ctl);padding:0;justify-content:center;font-size:15px;line-height:1}
+.sdrfield label,.swlab{
+  font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+}
+.sdrfield input{width:120px;height:var(--ctl);padding:0 10px;font-size:13.5px}
+.lead-switch,.lob-switch{
+  margin:0;gap:0;height:var(--ctl);padding:2px;box-sizing:border-box;
+  border:1px solid var(--line-strong);border-radius:20px;background:var(--surface-2);
+  display:inline-flex;align-items:stretch;
+}
+.lead-switch .tab,.lob-switch .tab{
+  border:none;background:transparent;padding:0 11px;font-size:12.5px;line-height:1;
+  display:inline-flex;align-items:center;
+}
+.lob-switch .tab[aria-selected="true"]{background:var(--accent)}
+body[data-mode="old"] .lob-switch .tab[aria-selected="true"]{background:var(--signal)}
+
+/* ---------- script mode ---------- */
+.modebar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:14px;padding:9px 14px;
+  border-radius:8px;
+  border:1px solid var(--accent);
+  background:var(--accent-soft);
+  color:var(--accent-ink);
+  font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+}
+.modebar .what{
+  font-weight:500;letter-spacing:.02em;text-transform:none;font-size:12.5px;
+  color:var(--ink-2);
+}
+body[data-mode="old"] .modebar{
+  border-color:var(--signal-line);
+  background:var(--signal-soft);
+  color:var(--signal);
+}
+body[data-mode="old"] .num{background:var(--signal)}
+.lead-switch .tab[aria-selected="true"]{background:var(--accent)}
+body[data-mode="old"] .lead-switch .tab[aria-selected="true"]{background:var(--signal)}
+
+/* ---------- steps ---------- */
+.step{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:8px;
+  margin-top:14px;
+  overflow:hidden;
+}
+.step-head{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 16px;
+  border-bottom:1px solid var(--line);
+  background:var(--surface-2);
+}
+.num{
+  flex:none;
+  width:22px;height:22px;border-radius:50%;
+  display:grid;place-items:center;
+  background:var(--accent);color:var(--surface);
+  font-size:11px;font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.step-head h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.step-head .hint{margin-left:auto;font-size:11.5px;color:var(--ink-3);font-weight:500}
+.step-body{padding:14px 16px}
+
+/* spoken lines */
+.say{
+  font-family:var(--serif);
+  font-size:18px;
+  line-height:1.55;
+  margin:0;
+  color:var(--ink);
+}
+.say + .say{margin-top:11px}
+.say-group > .say + .say{margin-top:0}
+.say-group{display:flex;flex-direction:column;gap:11px}
+
+.tok{
+  font-family:var(--sans);
+  font-size:.86em;
+  font-weight:600;
+  color:var(--accent-ink);
+  background:var(--accent-soft);
+  border-radius:4px;
+  padding:1px 4px;
+  margin:0 -1px;
+  white-space:nowrap;
+}
+.tok.empty{
+  color:var(--signal);
+  background:var(--signal-soft);
+  box-shadow:inset 0 -1px 0 var(--signal-line);
+  font-weight:500;
+  font-style:italic;
+}
+
+/* action / instruction chips */
+.action{
+  display:flex;align-items:center;gap:8px;
+  background:var(--signal-soft);
+  border:1px solid var(--signal-line);
+  border-radius:6px;
+  padding:9px 12px;
+  font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--signal);
+}
+.action::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--signal)}
+button.action{
+  width:100%;text-align:left;cursor:pointer;font-family:inherit;
+  transition:background .12s ease,border-color .12s ease;
+  animation:notify-pulse 2.6s ease-in-out infinite;
+}
+@keyframes notify-pulse{
+  0%,100%{transform:scale(1);box-shadow:0 0 0 0 color-mix(in srgb, var(--signal) 45%, transparent)}
+  50%{transform:scale(1.015);box-shadow:0 0 0 7px color-mix(in srgb, var(--signal) 0%, transparent)}
+}
+.notify-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.notify-row button.action{flex:1 1 270px;width:auto;margin:0}
+.quote-action{flex:0 0 auto;font:11px system-ui;padding:5px 7px;border:1px solid var(--line-strong);border-radius:5px;background:var(--surface);color:var(--ink);cursor:pointer}
+.action-status{font:12px system-ui;color:var(--ink-2);margin:6px 0 0}
+button[data-action]:disabled{cursor:default;opacity:.65;animation:none}
+button.action.done{animation:none}
+button.action:hover{border-color:var(--signal);filter:brightness(.97)}
+button.action.fired{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+button.action.fired::before{background:var(--accent)}
+.note{
+  font-size:13px;color:var(--ink-2);
+  border-left:2px solid var(--line-strong);
+  padding-left:11px;
+}
+
+/* branch tabs */
+.tabs{display:flex;gap:6px;margin-bottom:13px;flex-wrap:wrap}
+.tab{
+  border:1px solid var(--line-strong);
+  background:transparent;
+  color:var(--ink-2);
+  border-radius:20px;
+  padding:6px 14px;
+  font-size:12.5px;
+}
+.tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.sub-tabs{margin-top:13px;margin-bottom:0}
+
+/* discovery */
+.cond{
+  background:var(--signal-soft);
+  border:1px solid var(--signal-line);
+  border-radius:6px;
+  padding:10px 13px;
+  margin-bottom:14px;
+  font-size:13.5px;
+  color:var(--signal);
+  font-weight:500;
+}
+.cond strong{font-weight:700}
+.step-body{counter-reset:q}
+.q{display:grid;grid-template-columns:20px 1fr;gap:4px 10px;padding:13px 0;border-top:1px solid var(--line)}
+.say + .q{border-top:none;padding-top:2px}
+.q{counter-increment:q}
+.q.extra{counter-increment:none}
+.q-n{
+  font-size:12px;font-weight:700;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;padding-top:5px;
+}
+.q:not(.extra) .q-n::before{content:counter(q)}
+.q-text{font-family:var(--serif);font-size:17px;line-height:1.5}
+.q-in{grid-column:2}
+.q-in input{margin-top:2px}
+.q.statement .q-text{color:var(--ink-2)}
+
+.toast{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(8px);
+  background:var(--accent);color:var(--surface);
+  padding:9px 16px;border-radius:6px;font-size:13px;font-weight:600;
+  opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;
+  z-index:50;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ---------- objections: rail on desktop, drawer when narrow ---------- */
+.scrim{display:none}
+#btnObj{display:none}
+.drawer{
+  position:sticky;
+  top:calc(var(--barh, 150px) + 14px);
+  max-height:calc(100vh - var(--barh, 150px) - 28px);
+  margin-top:14px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:8px;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.drawer-close{display:none}
+.drawer-head{
+  padding:12px 14px;
+  border-bottom:1px solid var(--line);
+  background:var(--surface-2);
+  display:flex;flex-direction:column;gap:9px;
+}
+.drawer-title{display:flex;align-items:center;gap:10px}
+.drawer-title h2{margin:0;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.drawer-title .count{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.drawer-close:hover{background:var(--paper);color:var(--ink)}
+.drawer-body{flex:1;overflow-y:auto;padding:2px 14px 14px}
+
+.obj{border-bottom:1px solid var(--line)}
+.obj > summary{
+  cursor:pointer;list-style:none;
+  display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;
+  padding:11px 0;
+  font-family:var(--serif);font-size:16px;line-height:1.35;
+}
+.obj > summary::-webkit-details-marker{display:none}
+.obj > summary:hover{color:var(--accent-ink)}
+.obj > summary .on{
+  font-family:var(--sans);font-size:11.5px;font-weight:700;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;padding-top:3px;
+}
+.obj[open] > summary{color:var(--accent-ink);font-weight:600}
+.obj-body{padding:0 0 14px 30px;display:flex;flex-direction:column;gap:9px}
+.obj-body .say{font-size:16px;line-height:1.5}
+.ack{
+  display:inline-block;font-family:var(--sans);
+  font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--accent);background:var(--accent-soft);
+  border-radius:3px;padding:2px 6px;margin-right:6px;vertical-align:1px;
+}
+.back{
+  font-family:var(--sans);font-size:11px;font-weight:600;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--signal);
+  background:var(--signal-soft);border:1px solid var(--signal-line);
+  border-radius:4px;padding:6px 9px;
+}
+.pick{
+  font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.alt{border-left:2px solid var(--line-strong);padding-left:11px;display:flex;flex-direction:column;gap:8px}
+.coach{
+  font-family:var(--sans);font-size:.8em;font-weight:500;font-style:italic;
+  color:var(--ink-3);white-space:nowrap;
+}
+.nores{padding:24px 0;text-align:center;color:var(--ink-3);font-size:13px}
+
+/* tighten the rail as the window narrows, so it still fits at half-screen */
+@media (max-width:1100px){
+  .obj > summary{font-size:15px;gap:8px;padding:10px 0}
+  .obj-body{padding-left:0}
+  .obj-body .say{font-size:15px}
+  .say{font-size:17px}
+  .drawer-head{padding:10px 12px;gap:8px}
+  .drawer-body{padding:2px 12px 12px}
+}
+@media (max-width:860px){
+  .obj > summary{font-size:14.5px}
+  .obj-body .say{font-size:14.5px;line-height:1.45}
+  .say{font-size:16px}
+  .step-body{padding:12px 13px}
+  .step-head{padding:10px 13px}
+  .back{font-size:10px;padding:5px 7px}
+}
+
+@media (max-width:700px){
+  .obj > summary{font-size:14px;padding:9px 0}
+  .obj-body .say{font-size:14px}
+  .say{font-size:15.5px}
+  .drawer-head{padding:9px 10px}
+  .drawer-body{padding:2px 10px 10px}
+  .ack{font-size:9px;padding:1px 4px}
+}
+
+/* Split view: objections move into a drawer behind the toolbar button. */
+@media (max-width:1200px){
+  #btnObj{display:inline-block}
+  .scrim{
+    display:block;
+    position:fixed;inset:0;background:rgba(8,20,17,.45);
+    opacity:0;pointer-events:none;transition:opacity .16s ease;z-index:30;
+  }
+  .scrim.open{opacity:1;pointer-events:auto}
+  .drawer{
+    position:fixed;top:0;right:0;bottom:0;left:auto;
+    width:min(440px,100%);max-height:none;margin-top:0;
+    border:none;border-left:1px solid var(--line);border-radius:0;
+    transform:translateX(100%);
+    transition:transform .18s ease;
+    z-index:31;
+  }
+  .drawer.open{transform:translateX(0)}
+  .drawer-head{
+    padding:12px 16px;
+    padding-top:calc(12px + env(safe-area-inset-top, 0px));
+  }
+  .drawer-close{
+    display:block;
+    margin-left:auto;border:none;background:transparent;color:var(--ink-2);
+    font-size:20px;line-height:1;padding:2px 6px;border-radius:4px;
+  }
+  .drawer-body{
+    padding:4px 16px 16px;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* phone, single column: the drawer has room again, type goes back up */
+@media (max-width:480px){
+  .say{font-size:16.5px}
+  .q-text{font-size:16px}
+  .obj > summary{font-size:15px}
+  .obj-body .say{font-size:15px}
+  .bar-actions{width:100%;margin-left:0}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="bar">
+  <div class="bar-inner">
+    <div class="bar-row">
+      <div class="sdrfield">
+        <label for="f_sdrName">SDR</label>
+        <input type="text" id="f_sdrName" data-fill="sdrName" placeholder="Your name" autocomplete="off">
+      </div>
+      <div class="swgroup">
+        <span class="swlab">Lead</span>
+        <div class="tabs lead-switch" role="tablist" aria-label="Which script">
+          <button class="tab" role="tab" type="button" data-lead="new" aria-selected="true">New</button>
+          <button class="tab" role="tab" type="button" data-lead="old" aria-selected="false">Old</button>
+        </div>
+      </div>
+      <div class="swgroup">
+        <span class="swlab">Line</span>
+        <div class="tabs lob-switch" role="tablist" aria-label="Line of business">
+          <button class="tab" role="tab" type="button" data-lob="home" aria-selected="true">Home</button>
+          <button class="tab" role="tab" type="button" data-lob="auto" aria-selected="false">Auto</button>
+        </div>
+      </div>
+      <div class="agency">
+        <span class="swlab">Agency</span>
+        <span class="agency-name" id="agencyName" data-fill="agency">&mdash;</span>
+      </div>
+      <div class="bar-actions">
+        <button class="btn" id="btnFields" type="button" aria-expanded="true">Fields</button>
+        <button class="btn" id="btnObj" type="button" aria-expanded="false">Objections</button>
+        <button class="btn" id="btnReset" type="button">Reset</button>
+        <button class="btn btn-primary" id="btnCopy" type="button">Copy note</button>
+      </div>
+    </div>
+
+    <div class="fields">
+      <div class="field">
+        <label for="f_prospect">Prospect name</label>
+        <input type="text" id="f_prospect" data-fill="prospect" placeholder="First name" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f_dob">Date of birth</label>
+        <input type="text" id="f_dob" data-fill="dob" placeholder="MM/DD/YYYY" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f_email">Email on file</label>
+        <input type="text" id="f_email" data-fill="email" placeholder="name@email.com" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f_spouse">Spouse name</label>
+        <input type="text" id="f_spouse" data-fill="spouse" placeholder="If it comes up" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f_vehicles">Vehicles on file</label>
+        <input type="text" id="f_vehicles" data-fill="vehicles" placeholder="2019 Honda Civic" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f_street">Street address</label>
+        <input type="text" id="f_street" data-fill="street" placeholder="123 Main St" autocomplete="off">
+      </div>
+      <div class="field field-sm">
+        <label for="f_city">City</label>
+        <input type="text" id="f_city" data-fill="city" placeholder="Salinas" autocomplete="off">
+      </div>
+      <div class="field field-sm">
+        <label for="f_state">State</label>
+        <input type="text" id="f_state" data-fill="state" placeholder="CA" autocomplete="off">
+      </div>
+      <div class="field field-sm">
+        <label for="f_zip">Zip</label>
+        <input type="text" id="f_zip" data-fill="zip" placeholder="93901" autocomplete="off">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+<div class="shell">
+<main>
+
+  <div class="modebar" id="modebar">
+    <span id="modeName">New internet lead</span>
+    <span class="what" id="modeWhat">They asked for a quote. Confirm details, stall, transfer.</span>
+  </div>
+
+  <div data-script="new">
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">1</div>
+      <h2>Confirm you have the right person</h2>
+    </div>
+    <div class="step-body say-group">
+      <p class="say">Hello, is this <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>?</p>
+      <p class="say">Hi <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>, this is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>. How are you?</p>
+      <div class="notify-row"><button type="button" class="action done" data-notify data-action="notify" disabled>Notify sales agents the lead is on the line</button><button type="button" class="quote-action" data-action="quote" disabled>Quoting / Info Form</button></div><div class="action-status" role="status" data-action-status></div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">2</div>
+      <h2>Confirm the details</h2>
+      <div class="hint"><span class="tok" data-tok="lobWord" data-ph="Line"></span></div>
+    </div>
+    <div class="step-body">
+      <div class="say-group" data-panel="auto">
+        <p class="say">I received your request for a car insurance quote, and we're working on that right now. Before we share the final price with you, I wanted to confirm a few details to get you the best price possible.</p>
+        <p class="say">Looks like you have <span class="tok" data-tok="vehicles" data-ph="Make/Model of Vehicles"></span>, do you have any other vehicles that you'd like for us to include in this quote?</p>
+        <p class="say">Your complete address is <span class="tok" data-tok="addressFull" data-ph="Street / City / Zip Code"></span>. Is that correct?</p>
+      </div>
+
+      <div class="say-group" data-panel="home" hidden>
+        <p class="say">I see that you requested an insurance quote for your home on <span class="tok" data-tok="street" data-ph="Street Address"></span>. Do you currently live in that home, or are you in the process of buying it?</p>
+
+        <div class="tabs sub-tabs" role="tablist" aria-label="Ownership status">
+          <button class="tab" role="tab" type="button" data-own="owns" aria-selected="true">Already owns it</button>
+          <button class="tab" role="tab" type="button" data-own="buying" aria-selected="false">Buying the home</button>
+        </div>
+
+        <div data-own-panel="owns">
+          <p class="say">Perfect.</p>
+        </div>
+        <div data-own-panel="buying" hidden>
+          <p class="say">Congratulations! When do you close on the home? We'll work with your lender to make sure you close on time.</p>
+        </div>
+
+        <p class="say">We have a quote started for you here and we'll share the final price with you in just a moment, but before we do that, I want to see if we can apply any discounts that the system may have missed.</p>
+        <p class="say">To confirm, your home is in <span class="tok" data-tok="cityStateZip" data-ph="City, State, Zip Code"></span>. Is that correct?</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">3</div>
+      <h2>Confirm date of birth</h2>
+      <div class="hint">Both lines of business</div>
+    </div>
+    <div class="step-body">
+      <p class="say">It looks like your date of birth is <span class="tok" data-tok="dob" data-ph="DOB"></span>. Is that correct?</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">4</div>
+      <h2>Stall questions</h2>
+      <div class="hint">Capture the answers</div>
+    </div>
+    <div class="step-body">
+      <div class="cond"><strong>Only if the sales agent has not joined the call yet.</strong> Keep the prospect talking and collect what the agent will need.</div>
+      <p class="say" style="margin-bottom:6px">To make sure we give you the best price possible, I want to confirm:</p>
+
+      <div class="q">
+        <div class="q-n"></div>
+        <div class="q-text">What company carries your insurance right now?</div>
+        <div class="q-in" data-slot="carrier"><input type="text" id="d_carrier" data-capture="carrier" placeholder="Current carrier" autocomplete="off"></div>
+      </div>
+
+      <div class="q">
+        <div class="q-n"></div>
+        <div class="q-text">I do want to ask, besides getting a better price, what made you shop for insurance today?</div>
+        <div class="q-in" data-slot="reason"><input type="text" id="d_reason" data-capture="reason" placeholder="Reason for shopping" autocomplete="off"></div>
+      </div>
+
+      <div class="q statement">
+        <div class="q-n"></div>
+        <div class="q-text">It's great that we connected today. Recently, we've been able to help a lot of people in <span class="tok" data-tok="city" data-ph="City"></span> switch their insurance to <span class="tok" data-tok="company" data-ph="Your Company"></span> because we have great rates, with better coverage. I'm glad that we are talking right now.</div>
+      </div>
+
+      <div class="q">
+        <div class="q-n"></div>
+        <div class="q-text">We have discounts for certain occupations, what do you do for work?</div>
+        <div class="q-in" data-slot="occupation"><input type="text" id="d_occupation" data-capture="occupation" placeholder="Occupation" autocomplete="off"></div>
+      </div>
+
+      <div class="q" data-lob-alt="auto">
+        <div class="q-n"></div>
+        <div class="q-text">About how many miles do you drive per year?</div>
+        <div class="q-in" data-slot="miles"><input type="text" id="d_miles" data-capture="miles" placeholder="Miles per year" autocomplete="off" inputmode="numeric"></div>
+      </div>
+
+      <div class="q" data-lob-alt="home">
+        <div class="q-n"></div>
+        <div class="q-text">What type of plumbing does the home have? Copper, galvanized, PVC, or PEX?</div>
+        <div class="q-in" data-slot="plumbing">
+          <select id="d_plumbing" data-capture="plumbing">
+            <option value="">Plumbing type</option>
+            <option>Copper</option>
+            <option>Galvanized</option>
+            <option>PVC</option>
+            <option>PEX</option>
+            <option>Not sure</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="q" data-lob-alt="home">
+        <div class="q-n"></div>
+        <div class="q-text">Do you run a business on your property?</div>
+        <div class="q-in" data-slot="business"><input type="text" id="d_business" data-capture="business" placeholder="Yes / No / what kind" autocomplete="off"></div>
+      </div>
+
+      <div class="q extra">
+        <div class="q-n">+</div>
+        <div class="q-text" style="font-family:var(--sans);font-size:13px;color:var(--ink-2)">Anything else worth passing to the agent</div>
+        <div class="q-in" data-slot="notes"><input type="text" id="d_notes" data-capture="notes" placeholder="Free notes" autocomplete="off"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">5</div>
+      <h2>Hand off to the sales agent</h2>
+    </div>
+    <div class="step-body say-group">
+      <p class="say">I have <span class="coach">[Sales Agent's Name]</span> on the line with us, who's working on your quote and will go over your discounts to make sure we're getting you the best price possible.</p>
+      <div class="note">If the prospect gave you new information, share it with the sales agent. Hit <strong>Copy CRM note</strong> and paste it into the Teams channel conversation before you drop off.</div>
+    </div>
+  </section>
+
+  </div>
+
+  <div data-script="old" hidden>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">1</div>
+      <h2>Introduction &amp; purpose of call</h2>
+    </div>
+    <div class="step-body say-group">
+      <p class="say"><span class="tok" data-tok="greet" data-ph="Good afternoon"></span>, is this <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>?</p>
+      <p class="say">Hey <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>, this is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>. How are you?</p>
+      <p class="say">I'm calling you because we gave you a <span class="tok" data-tok="lobThing" data-ph="Car/Home"></span> insurance quote a while back, but we couldn't help you at that time. Since our rates have recently changed, I wanted to share our updated quote with you.</p>
+      <div class="notify-row"><button type="button" class="action done" data-notify data-action="notify" disabled>Notify sales agents the lead is on the line</button><button type="button" class="quote-action" data-action="quote" disabled>Quoting / Info Form</button></div><div class="action-status" role="status" data-action-status></div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">2</div>
+      <h2><span data-lob-alt="auto">Vehicle &amp; household information</span><span data-lob-alt="home">Household information</span></h2>
+      <div class="hint">Confirm before quoting</div>
+    </div>
+    <div class="step-body say-group">
+      <div class="say-group" data-lob-alt="auto">
+        <p class="say">Looks like you have <span class="tok" data-tok="vehicles" data-ph="Make/Model of Vehicles"></span>, do you have any other vehicles that you'd like for us to include in this quote?</p>
+        <p class="say">Are you still at <span class="tok" data-tok="addressFull" data-ph="Home Address"></span>?</p>
+      </div>
+      <div class="say-group" data-lob-alt="home">
+        <p class="say">Are you still at <span class="tok" data-tok="addressFull" data-ph="Home Address"></span>?</p>
+        <div>
+          <div class="pick">Select one</div>
+          <p class="say" style="margin-top:5px">You own that home, is that correct?</p>
+          <p class="say">You rent that home, is that correct?</p>
+        </div>
+      </div>
+      <p class="say">I see your date of birth is <span class="tok" data-tok="dob" data-ph="DOB"></span>. Is that right?</p>
+      <p class="say">Perfect. We have a quote started for you here and we'll share the final price with you in just a moment, but before we do that, I want to see if we can apply any discounts that the system may have missed.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">3</div>
+      <h2>Current carrier</h2>
+      <div class="hint">Capture the answer</div>
+    </div>
+    <div class="step-body say-group">
+      <div>
+        <div class="pick">If you see their current carrier</div>
+        <p class="say" style="margin-top:5px">It looks like you're currently insured with <span class="tok" data-tok="insurer" data-ph="Current Insurer"></span>. Is that right?</p>
+      </div>
+      <div>
+        <div class="pick">If you don't see their current carrier</div>
+        <p class="say" style="margin-top:5px">Who are you currently insured with?</p>
+      </div>
+      <div data-slot="carrier"></div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">4</div>
+      <h2>Benefit statement</h2>
+    </div>
+    <div class="step-body">
+      <p class="say">It's great that we connected today. Recently, we've been able to help a lot of people in <span class="tok" data-tok="city" data-ph="City"></span> switch their insurance to <span class="tok" data-tok="company" data-ph="Your Company"></span> because we have great rates, with better coverage. I'm glad that we are talking right now.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">5</div>
+      <h2><span data-lob-alt="auto">Occupational discounts &amp; mileage</span><span data-lob-alt="home">Occupational discounts &amp; plumbing</span></h2>
+      <div class="hint">Capture the answers</div>
+    </div>
+    <div class="step-body say-group">
+      <p class="say">We do have discounts for certain occupations, what do you <span class="coach">[and other named insureds]</span> do for work?</p>
+      <div data-slot="occupation"></div>
+      <div class="say-group" data-lob-alt="auto">
+        <p class="say">About how many miles do you drive per year?</p>
+        <div data-slot="miles"></div>
+      </div>
+      <div class="say-group" data-lob-alt="home">
+        <p class="say">What type of plumbing does the home have? Copper, galvanized, PVC, or PEX?</p>
+        <div data-slot="plumbing"></div>
+      </div>
+      <div>
+        <div class="pick">Anything else worth passing to the agent</div>
+        <div data-slot="notes" style="margin-top:5px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">6</div>
+      <h2>Hand off to the sales agent</h2>
+    </div>
+    <div class="step-body say-group">
+      <p class="say">I have <span class="coach">[Sales Agent's Name]</span> on the line with us, who's working on your quote and will go over your discounts to make sure we're getting you the best price possible.</p>
+      <div class="note">If the prospect gave you new information, share it with the sales agent. Hit <strong>Copy CRM note</strong> and paste it into the Teams channel conversation before you drop off.</div>
+    </div>
+  </section>
+
+  </div>
+
+</main>
+
+<aside class="drawer" id="drawer" aria-label="Opening objections">
+  <div class="drawer-head">
+    <div class="drawer-title">
+      <h2>Opening objections</h2>
+      <span class="count" id="objCount">16 of 16</span>
+      <button class="drawer-close" id="btnObjClose" type="button" aria-label="Close objections">&times;</button>
+    </div>
+    <input type="text" id="objFilter" aria-label="Filter objections" placeholder="Filter: email, busy, interested, rate&hellip;" autocomplete="off">
+  </div>
+
+  <div class="drawer-body" id="objList">
+
+    <details class="obj" name="objection" data-k="busy time talk no time">
+      <summary><span class="on">1</span><span>I'm really busy, don't have time to talk&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Oh I'm sorry about that. We can email you the quote for you to review. Is your email <span class="tok" data-tok="email" data-ph="Email Address"></span>?</p>
+        <p class="say">Perfect, we'll send that over to you along with the <span class="tok" data-tok="lobShort" data-ph="Auto/Home"></span> quote as well&hellip;</p>
+        <p class="say">To make sure you get the best price possible, I want to see if we can apply any discounts that the system may have missed&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="email quote just send">
+      <summary><span class="on">2</span><span>Can you just email me the quote?</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>I'd be happy to do that. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>?</p>
+        <p class="say">To make sure we're sending you the most accurate quote to your email, I wanted to confirm&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="who is this why calling me">
+      <summary><span class="on">3</span><span>Who's this? Why are you calling me?</span></summary>
+      <div class="obj-body">
+        <div class="alt" data-lead="old">
+          <div class="pick">Old lead</div>
+          <p class="say"><span class="ack">Acknowledge / agree</span>This is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>, we gave you a quote a while back, and since our rates have recently changed, I wanted to email you the updated <span class="tok" data-tok="lobWord" data-ph="Auto/Homeowners"></span> quote that we have in the system for you. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>? And your home address is <span class="tok" data-tok="addressFull" data-ph="Address"></span>, is that right?</p>
+        </div>
+        <div class="alt" data-lead="new">
+          <div class="pick">New internet lead</div>
+          <p class="say" data-lob-alt="auto"><span class="ack">Acknowledge / agree</span>This is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>, I see that you requested a car insurance quote for your <span class="tok" data-tok="vehicles" data-ph="Make/Model of Vehicle"></span>. Is that the only car that you need a quote for, or do you have other cars that need to be insured as well?</p>
+          <p class="say" data-lob-alt="home"><span class="ack">Acknowledge / agree</span>This is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>, I see that you requested an insurance quote for your home on <span class="tok" data-tok="street" data-ph="Street Address"></span>. Do you live in that home, or are you in the process of buying it?</p>
+        </div>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="didnt request quote did not">
+      <summary><span class="on">4</span><span>I didn't request a quote&hellip;</span></summary>
+      <div class="obj-body">
+        <div class="alt" data-lead="old">
+          <div class="pick">Old lead</div>
+          <p class="say"><span class="ack">Acknowledge / agree</span>That's right you didn't. I wanted to give you a call because we gave you a quote a while back, and since our rates have recently changed, I wanted to email you the updated <span class="tok" data-tok="lobWord" data-ph="Auto/Homeowners"></span> quote that we have in the system for you. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>? And your home address is <span class="tok" data-tok="addressFull" data-ph="Address"></span>, is that right?</p>
+        </div>
+        <div class="alt" data-lead="new">
+          <div class="pick">New internet lead</div>
+          <p class="say"><span class="ack">Acknowledge / agree</span>Oh I'm sorry about that. It could be that someone requested an insurance quote under your name&hellip; or your policy is coming up for renewal.</p>
+          <p class="say">I will tell you that we've been able to help a lot of people in <span class="tok" data-tok="city" data-ph="City"></span> switch their insurance to <span class="tok" data-tok="company" data-ph="Your Company"></span> because we have great rates, and great coverage.</p>
+          <p class="say">I did want to ask, do you:</p>
+          <p class="say" data-lob-alt="home">Live at <span class="tok" data-tok="addressFull" data-ph="Address"></span>, or are you in the process of buying it?</p>
+          <p class="say" data-lob-alt="auto">Drive the <span class="tok" data-tok="vehicles" data-ph="Make/Model of Vehicle"></span>?</p>
+        </div>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="never worked with you dont know">
+      <summary><span class="on">5</span><span>I never worked with you&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>That's right! You and I have never talked before, but we gave you a quote a while back, and since our rates have recently changed, I wanted to email you the updated <span class="tok" data-tok="lobWord" data-ph="Auto/Homeowners"></span> quote that we have in the system for you. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>? And your home address is <span class="tok" data-tok="addressFull" data-ph="Address"></span>, is that right?</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="not interested no thanks">
+      <summary><span class="on">6</span><span>I'm not interested&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>I totally get it. Getting a <span class="tok" data-tok="lobThing" data-ph="Car/Home"></span> insurance quote can take forever when you have to answer a lot of questions and start the quote from scratch. The good news is that we have most of your information here, and we can share the price with you in just a moment but I wanted to see if we can apply any additional discounts that the system may have missed. It looks like&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="already have insurance covered insured">
+      <summary><span class="on">7</span><span>I already have insurance&hellip;</span></summary>
+      <div class="obj-body">
+        <div class="pick">Acknowledge, pick one</div>
+        <p class="say">Who are you insured with?</p>
+        <p class="say">That's right you do! It looks like you're insured with <span class="tok" data-tok="insurer" data-ph="Current Insurer"></span>, is that right?</p>
+        <p class="say">I will tell you that we've been able to help a lot of people in <span class="tok" data-tok="city" data-ph="City"></span> switch their insurance to <span class="tok" data-tok="company" data-ph="Your Company"></span> because we have great rates, and great coverage.</p>
+        <p class="say">I did want to ask, do you:</p>
+        <p class="say" data-lob-alt="home">Live at <span class="tok" data-tok="addressFull" data-ph="Address"></span>, or are you in the process of buying it?</p>
+        <p class="say" data-lob-alt="auto">Drive the <span class="tok" data-tok="vehicles" data-ph="Make/Model of Vehicle"></span>?</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="just renewed policy renewal">
+      <summary><span class="on">8</span><span>I just renewed my policy&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Ah, got it. Did you pay in full or do you pay monthly?</p>
+        <p class="say">Well, since we have your quote already started, we can share how much it would cost if you insured your <span class="tok" data-tok="lobThing" data-ph="Car/Home"></span> with our agency. If you like our price and coverage, we can help you switch over to us, and <span class="tok" data-tok="insurer" data-ph="Current Carrier"></span> will send you a refund for what you prepaid for in advance. It's very easy, and we will help you with that. It looks like&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="just paid for insurance payment">
+      <summary><span class="on">9</span><span>I just paid for my insurance&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Ah, got it. Did you pay in full or do you pay monthly?</p>
+        <p class="say">Well, since we have your quote already started, we can share how much it would cost if you insured your <span class="tok" data-tok="lobThing" data-ph="Car/Home"></span> with our agency. If you like our price and coverage, we can help you switch over to us, and <span class="tok" data-tok="insurer" data-ph="New Carrier"></span> will send you a refund for what you prepaid for in advance. It's very easy, and we will help you with that. It looks like&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="signed up different company switched already bought">
+      <summary><span class="on">10</span><span>I just signed up with a different company&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Ah, got it. Who did you end up signing up with?</p>
+        <p class="say">Well, since we have your quote already started, we can share how much it would cost if you insured your <span class="tok" data-tok="lobThing" data-ph="Car/Home"></span> with our agency. If you like our price and coverage, we can help you switch over to us, and <span class="tok" data-tok="insurer" data-ph="New Carrier"></span> will send you a refund for the unearned premium. It's very easy, and we will help you with that. It looks like&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="how do you have my information privacy where get number">
+      <summary><span class="on">11</span><span>How do you have my information?</span></summary>
+      <div class="obj-body">
+        <div class="alt" data-lead="old">
+          <div class="pick">Old lead</div>
+          <p class="say"><span class="ack">Acknowledge / agree</span>That's a great question! We gave you an insurance quote a while back and since our rates have recently changed, I wanted to email you an updated <span class="tok" data-tok="lobWord" data-ph="Auto/Homeowners"></span> quote that we have in the system for you. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>? And your home address is <span class="tok" data-tok="addressFull" data-ph="Address"></span>, is that right?</p>
+        </div>
+        <div class="alt" data-lead="new">
+          <div class="pick">New lead</div>
+          <p class="say" data-lob-alt="auto">That's a great question! We got a request for a car insurance quote for a <span class="tok" data-tok="vehicles" data-ph="Make/Model of Vehicle"></span>. Is that the only car that you need a quote for, or do you have other cars that need to be insured as well?</p>
+          <p class="say" data-lob-alt="home">That's a great question! We got a request for an insurance quote for your home on <span class="tok" data-tok="street" data-ph="Street Address"></span>. Do you live in that home, or are you in the process of buying it?</p>
+        </div>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="spouse wife husband takes care of the bill partner">
+      <summary><span class="on">12</span><span>My spouse takes care of the bill&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Oh that's great, I'm sure it makes things easier for you! Well I'm looking at the quote that we've started for you, and we'll share the price with you so you can pass it along to <span class="tok" data-tok="spouse" data-ph="Spouse's Name"></span>, but first I want to see if we can apply any additional discounts that the system may have missed. It looks like&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="bad experience complaint upset angry">
+      <summary><span class="on">13</span><span>I've had a bad experience with your company&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Oh I am so sorry to hear that! What happened?</p>
+        <div class="pick">Politely intervene and say</div>
+        <p class="say">I'm so sorry to hear that, I know that I wouldn't be happy if that happened to me. I think it's important for you to know that I'm calling you from a completely different <span class="tok" data-tok="company" data-ph="Your Company"></span> office, and we do things very differently here. I can assure you that your experience with us will never be anything short of amazing. That I can promise you.</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="give me your price first how much cost">
+      <summary><span class="on">14</span><span>Give me your price first&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>I'd be happy to do that! We'll share the price with you in just a moment, but first I want to see if we can apply any additional discounts that the system may have missed. It looks like&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="no one can beat my rate cheaper price">
+      <summary><span class="on">15</span><span>No one can beat my rate&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Well, challenge accepted!</p>
+        <p class="say">I will tell you that we've been able to help a lot of people in <span class="tok" data-tok="city" data-ph="City"></span> switch their insurance to <span class="tok" data-tok="company" data-ph="Your Company"></span> because we have great rates, and great coverage.</p>
+        <p class="say">We're working on your quote right now, before we share our final price with you, I wanted to confirm a few details to make sure you get the best price possible. It looks like&hellip;</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <details class="obj" name="objection" data-k="wrong number not me who">
+      <summary><span class="on">16</span><span>You called the wrong number&hellip;</span></summary>
+      <div class="obj-body">
+        <p class="say"><span class="ack">Acknowledge / agree</span>Do you know who <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span> is? Does s/he live in your household?</p>
+        <p class="say"><strong>Yes:</strong> May I speak to him/her?</p>
+        <p class="say"><strong>No:</strong> Oh got it, it looks like they might have entered a wrong number by mistake. I'm sorry about that. I didn't catch your name, what is your name?</p>
+        <p class="say">Well, [their name], since our rates have recently changed, and I have you on the line, if you'd like we can give you a quote and let you know how much it would cost if you switched your insurance to <span class="tok" data-tok="company" data-ph="Your Company"></span>. Who are you currently insured with?</p>
+        <div class="back">Get back into the script and ask a question</div>
+      </div>
+    </details>
+
+    <div class="nores" id="objNone" hidden>No objection matches that.</div>
+  </div>
+</aside>
+</div>
+
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<button class="btn" id="btnTheme" type="button" style="position:fixed;bottom:8px;right:8px;z-index:1000;padding:4px 7px;font-size:11px;line-height:18px">Dark mode</button>
+<script>
+(function(){
+  var COMPANY = 'Farmers Insurance';
+  var PERSIST = ['sdrName'];
+  var CALL    = ['prospect','vehicles','street','city','state','zip','dob','email','spouse'];
+  var DISCOVERY = ['d_carrier','d_reason','d_occupation','d_miles','d_plumbing','d_business','d_notes'];
+  var KEY = 'sdr-script-setup-v1';
+
+  function el(id){ return document.getElementById(id); }
+  function val(id){ var e = el('f_'+id); return e ? e.value.trim() : ''; }
+  function join(parts){ return parts.filter(function(p){return p;}).join(', '); }
+
+  function readableDob(value){
+    var raw = String(value || '').trim();
+    var iso = raw.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+    var us = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if(!iso && !us) return raw;
+    var year = Number(iso ? iso[1] : us[3]);
+    var month = Number(iso ? iso[2] : us[1]);
+    var day = Number(iso ? iso[3] : us[2]);
+    var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    var days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if(year < 1 || month < 1 || month > 12 || day < 1 || day > days[month-1]) return raw;
+    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var yyyy = String(year).padStart(4, '0');
+    return String(month).padStart(2, '0') + '/' + String(day).padStart(2, '0') + '/' + yyyy +
+      ' (' + months[month-1] + ' ' + day + ', ' + yyyy + ')';
+  }
+
+  var COMPOSED = {
+    prospect: function(){ return val('prospect').split(/\s+/)[0]; },
+    dob: function(){ return readableDob(val('dob')); },
+    company: function(){ return COMPANY; },
+    addressFull: function(){ return join([val('street'), val('city'), val('zip')]); },
+    cityStateZip: function(){ return join([val('city'), val('state'), val('zip')]); },
+    lobWord: function(){ return currentLob() === 'auto' ? 'Auto' : 'Homeowners'; },
+    lobThing: function(){ return currentLob() === 'auto' ? 'Car' : 'Home'; },
+    lobShort: function(){ return currentLob() === 'auto' ? 'Auto' : 'Home'; },
+    // agency runs on Pacific time regardless of the SDR's machine
+    greet: function(){
+      var h;
+      try{
+        h = parseInt(new Intl.DateTimeFormat('en-US', {hour:'numeric', hour12:false, timeZone:'America/Los_Angeles'}).format(new Date()), 10);
+      }catch(e){ h = new Date().getHours(); }
+      return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    },
+    insurer: function(){ return el('d_carrier') ? el('d_carrier').value.trim() : ''; }
+  };
+
+  function render(){
+    var toks = document.querySelectorAll('.tok');
+    for(var i=0;i<toks.length;i++){
+      var t = toks[i], k = t.getAttribute('data-tok');
+      var v = COMPOSED[k] ? COMPOSED[k]() : val(k);
+      if(v){ t.textContent = v; t.classList.remove('empty'); }
+      else { t.textContent = '[' + t.getAttribute('data-ph') + ']'; t.classList.add('empty'); }
+    }
+  }
+
+  function agency(){ var t = el('agencyName').textContent.trim(); return t === '\u2014' ? '' : t; }
+  function setAgency(name){ el('agencyName').textContent = (name && String(name).trim()) || '\u2014'; }
+
+  function save(){
+    try{
+      var o = {agency: agency()};
+      PERSIST.forEach(function(k){ o[k] = val(k); });
+      localStorage.setItem(KEY, JSON.stringify(o));
+    }catch(e){}
+  }
+
+  function load(){
+    var o = null;
+    try{ o = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(e){}
+    if(!o) return false;
+    PERSIST.forEach(function(k){ if(el('f_'+k) && o[k]) el('f_'+k).value = o[k]; });
+    if(o.agency) setAgency(o.agency);
+    return !!o.sdrName;
+  }
+
+  function updateThemeButton(){
+    el('btnTheme').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
+  }
+  el('btnTheme').addEventListener('click', function(){
+    var theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('sdr-script-theme-v1', theme); } catch (_) {}
+    updateThemeButton();
+  });
+  updateThemeButton();
+
+  // The userscript routes these clicks to the selected Ricochet popup.
+  document.querySelectorAll('button[data-action]').forEach(function(b){
+    b.addEventListener('click', function(){
+      window.dispatchEvent(new CustomEvent('sdr:action', {detail: {action:b.dataset.action}}));
+      if(b.dataset.action === 'notify') window.dispatchEvent(new CustomEvent('sdr:notify', {detail:window.SDR.get()}));
+    });
+  });
+
+  // wire inputs
+  PERSIST.concat(CALL).forEach(function(k){
+    var e = el('f_'+k);
+    if(!e) return;
+    e.addEventListener('input', function(){
+      render();
+      if(PERSIST.indexOf(k) !== -1) save();
+    });
+  });
+
+  // line of business tabs
+  function setLob(lob){
+    document.querySelectorAll('[data-lob]').forEach(function(b){
+      b.setAttribute('aria-selected', b.getAttribute('data-lob') === lob ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-panel]').forEach(function(p){
+      p.hidden = p.getAttribute('data-panel') !== lob;
+    });
+    document.querySelectorAll('[data-lob-alt]').forEach(function(a){
+      a.hidden = a.getAttribute('data-lob-alt') !== lob;
+    });
+    render();
+  }
+
+  var MODES = {
+    'new': ['New internet lead', 'They asked for a quote. Confirm details, stall, transfer.'],
+    'old': ['Old lead / X-date / requote', 'Quoted before, could not help at the time. Rates changed, requote.']
+  };
+  // one set of capture inputs, moved into whichever script is showing
+  var SLOTS = ['carrier','reason','occupation','miles','plumbing','business','notes'];
+  function moveCaptures(lead){
+    SLOTS.forEach(function(k){
+      var inp = el('d_' + k);
+      var slot = document.querySelector('[data-script="' + lead + '"] [data-slot="' + k + '"]');
+      if(inp && slot && inp.parentNode !== slot) slot.appendChild(inp);
+    });
+  }
+
+  function setLead(lead){
+    document.querySelectorAll('[data-lead]').forEach(function(n){
+      if(n.tagName === 'BUTTON'){
+        n.setAttribute('aria-selected', n.getAttribute('data-lead') === lead ? 'true' : 'false');
+      } else {
+        n.hidden = n.getAttribute('data-lead') !== lead;
+      }
+    });
+    moveCaptures(lead);
+    document.querySelectorAll('[data-script]').forEach(function(sc){
+      sc.hidden = sc.getAttribute('data-script') !== lead;
+    });
+    document.body.setAttribute('data-mode', lead);
+    el('modeName').textContent = MODES[lead][0];
+    el('modeWhat').textContent = MODES[lead][1];
+    render();
+  }
+  document.querySelectorAll('button[data-lead]').forEach(function(b){
+    b.addEventListener('click', function(){ setLead(b.getAttribute('data-lead')); });
+  });
+  document.querySelectorAll('[data-lob]').forEach(function(b){
+    b.addEventListener('click', function(){ setLob(b.getAttribute('data-lob')); });
+  });
+
+  function setOwn(own){
+    document.querySelectorAll('[data-own]').forEach(function(b){
+      b.setAttribute('aria-selected', b.getAttribute('data-own') === own ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-own-panel]').forEach(function(p){
+      p.hidden = p.getAttribute('data-own-panel') !== own;
+    });
+  }
+  document.querySelectorAll('[data-own]').forEach(function(b){
+    b.addEventListener('click', function(){ setOwn(b.getAttribute('data-own')); });
+  });
+
+  function currentLob(){
+    var b = document.querySelector('[data-lob][aria-selected="true"]');
+    return b ? b.getAttribute('data-lob') : 'home';
+  }
+  function currentLead(){
+    var b = document.querySelector('button[data-lead][aria-selected="true"]');
+    return b ? b.getAttribute('data-lead') : 'new';
+  }
+
+  // current carrier answer feeds the objection scripts too
+  if(el('d_carrier')) el('d_carrier').addEventListener('input', render);
+
+  // the rail sits under the sticky bar, whose height depends on wrapping
+  var narrow = window.matchMedia('(max-width: 1200px)');
+  function syncBarHeight(){
+    document.documentElement.style.setProperty('--barh', document.querySelector('.bar').offsetHeight + 'px');
+  }
+  window.addEventListener('resize', syncBarHeight);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncBarHeight);
+  syncBarHeight();
+
+  // objections: a rail on desktop, a slide-over drawer when narrow
+  function setDrawer(open){
+    el('drawer').classList.toggle('open', open);
+    el('scrim').classList.toggle('open', open);
+    el('btnObj').setAttribute('aria-expanded', open ? 'true' : 'false');
+    // only hide it from AT when it is actually an off-screen drawer
+    if(narrow.matches && !open) el('drawer').setAttribute('aria-hidden', 'true');
+    else el('drawer').removeAttribute('aria-hidden');
+    if(open) el('objFilter').focus();
+  }
+  narrow.addEventListener('change', function(){ setDrawer(false); });
+  el('btnObj').addEventListener('click', function(){ setDrawer(!el('drawer').classList.contains('open')); });
+  el('btnObjClose').addEventListener('click', function(){ setDrawer(false); });
+  el('scrim').addEventListener('click', function(){ setDrawer(false); });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && el('drawer').classList.contains('open')) setDrawer(false);
+  });
+
+  // one objection open at a time. <details name> does this natively in Chrome 120+; this covers older builds.
+  el('objList').addEventListener('toggle', function(e){
+    if(!e.target.open || !e.target.classList.contains('obj')) return;
+    document.querySelectorAll('.obj[open]').forEach(function(o){ if(o !== e.target) o.open = false; });
+  }, true);
+
+  el('objFilter').addEventListener('input', function(){
+    var q = this.value.trim().toLowerCase();
+    var objs = document.querySelectorAll('.obj');
+    var shown = 0;
+    objs.forEach(function(o){
+      var hay = (o.getAttribute('data-k') + ' ' + o.querySelector('summary').textContent).toLowerCase();
+      var match = !q || hay.indexOf(q) !== -1;
+      o.hidden = !match;
+      if(match) shown++;
+    });
+    el('objNone').hidden = shown > 0;
+    el('objCount').textContent = shown + ' of ' + objs.length;
+  });
+
+  // toast
+  var toastTimer;
+  function toast(msg){
+    var t = el('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+  }
+
+  // copy note
+  function buildNote(){
+    var lob = currentLob() === 'auto' ? 'Auto' : 'Homeowners';
+    var lines = [];
+    lines.push('SDR CALL NOTE');
+    lines.push('SDR: ' + (val('sdrName') || '-'));
+    lines.push('Date: ' + new Date().toLocaleString());
+    lines.push('Script: ' + (currentLead() === 'old' ? 'Old lead / requote' : 'New internet lead'));
+    lines.push('Line of business: ' + lob);
+    lines.push('Prospect: ' + (val('prospect') || '-'));
+    if(val('vehicles')) lines.push('Vehicles: ' + val('vehicles'));
+    var addr = join([val('street'), val('city'), val('state'), val('zip')]);
+    if(addr) lines.push('Address: ' + addr);
+    if(val('dob')) lines.push('DOB: ' + val('dob'));
+    if(val('email')) lines.push('Email: ' + val('email'));
+    if(val('spouse')) lines.push('Spouse: ' + val('spouse'));
+    lines.push('');
+    lines.push('DISCOVERY');
+    var qs = [
+      ['Current carrier', 'd_carrier'],
+      ['Why shopping today', 'd_reason'],
+      ['Occupation', 'd_occupation'],
+      ['Miles per year', 'd_miles'],
+      ['Plumbing type', 'd_plumbing'],
+      ['Business on property', 'd_business'],
+      ['Other notes', 'd_notes']
+    ];
+    var any = false;
+    qs.forEach(function(q){
+      var v = el(q[1]) ? el(q[1]).value.trim() : '';
+      if(v){ lines.push(q[0] + ': ' + v); any = true; }
+    });
+    if(!any) lines.push('(no discovery answers captured)');
+    return lines.join('\n');
+  }
+
+  function copyText(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ toast('Note copied'); }, fallback);
+    } else { fallback(); }
+    function fallback(){
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly','');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try{ ok = document.execCommand('copy'); }catch(e){}
+      document.body.removeChild(ta);
+      toast(ok ? 'Note copied' : 'Copy blocked, select the text manually');
+    }
+  }
+
+  el('btnCopy').addEventListener('click', function(){ copyText(buildNote()); });
+
+  el('btnReset').addEventListener('click', function(){
+    CALL.forEach(function(k){ if(el('f_'+k)) el('f_'+k).value = ''; });
+    DISCOVERY.forEach(function(k){ if(el(k)) el(k).value = ''; });
+    setOwn('owns');
+    setDrawer(false);
+    el('objFilter').value = '';
+    document.querySelectorAll('.obj').forEach(function(o){ o.hidden = false; o.open = false; });
+    el('objNone').hidden = true;
+    el('objCount').textContent = '16 of 16';
+    document.querySelectorAll('button[data-notify]').forEach(function(b){ b.classList.remove('fired'); });
+    render();
+    if(!document.body.classList.contains('fields-hidden') && el('f_prospect')) el('f_prospect').focus();
+    window.scrollTo({top:0, behavior:'smooth'});
+    toast('Cleared for next call');
+  });
+
+  // ---- fields toggle: hidden once a userscript is filling them ----
+  function setFields(hidden){
+    document.body.classList.toggle('fields-hidden', hidden);
+    el('btnFields').setAttribute('aria-expanded', hidden ? 'false' : 'true');
+    el('btnFields').textContent = hidden ? 'Show fields' : 'Hide fields';
+    syncBarHeight();
+  }
+  el('btnFields').addEventListener('click', function(){
+    setFields(!document.body.classList.contains('fields-hidden'));
+  });
+
+  // ---- public API for the Tampermonkey userscript ----
+  // Setting input.value directly does NOT fire an input event, so the script
+  // text would never update. Always go through SDR.fill().
+  var FILLABLE = PERSIST.concat(CALL);
+  window.SDR = {
+    fill: function(data){
+      data = data || {};
+      FILLABLE.forEach(function(k){
+        if(data[k] === undefined || data[k] === null) return;
+        var e = el('f_' + k);
+        if(e) e.value = String(data[k]);
+        if(PERSIST.indexOf(k) !== -1) save();
+      });
+      var lob  = String(data.lob  || '').toLowerCase();
+      var lead = String(data.lead || '').toLowerCase();
+      var owns = String(data.owns || '').toLowerCase();
+      if(lob)  setLob(/^home/.test(lob) ? 'home' : 'auto');
+      if(lead) setLead(lead === 'old' ? 'old' : 'new');
+      if(owns) setOwn(/^buy/.test(owns) ? 'buying' : 'owns');
+      if(data.agency !== undefined && data.agency !== null){ setAgency(data.agency); save(); }
+      var carrier = data.carrier !== undefined ? data.carrier : data.insurer;
+      if(carrier !== undefined && carrier !== null && el('d_carrier')) el('d_carrier').value = String(carrier);
+      render();
+      // the userscript is driving the fields, so get them out of the way
+      if(el('f_prospect').value.trim()) setFields(true);
+      return window.SDR.get();
+    },
+    get: function(){
+      var out = {lob: currentLob(), lead: currentLead(), agency: agency(), owns: document.querySelector('[data-own][aria-selected="true"]')?.getAttribute('data-own') || 'owns'};
+      FILLABLE.forEach(function(k){ out[k] = val(k); });
+      DISCOVERY.forEach(function(k){ out[k.slice(2)] = el(k) ? el(k).value.trim() : ''; });
+      return out;
+    },
+    restore: function(data){
+      window.SDR.fill(data);
+      DISCOVERY.forEach(function(k){ if(el(k)) el(k).value = String(data[k.slice(2)] || ''); });
+      render();
+    },
+    note: function(){ return buildNote(); },
+    setLob: setLob,
+    setLead: setLead,
+    reset: function(){ el('btnReset').click(); },
+    setAgency: function(name){ setAgency(name); save(); },
+    setActions: function(options){
+      document.querySelectorAll('button[data-action]').forEach(function(b){
+        b.disabled = !options.available || options.busy || (b.dataset.action === 'notify' && !options.agencyKnown);
+      });
+      document.querySelectorAll('[data-action-status]').forEach(function(e){e.textContent = options.message || '';});
+    },
+    onNotify: function(fn){ window.addEventListener('sdr:notify', function(e){ fn(e.detail); }); },
+    showFields: function(show){ setFields(!show); }
+  };
+
+  load();
+  setLob('home');
+  setOwn('owns');
+  setLead('new');
+  setDrawer(false);
+  // always hidden on load; the userscript fills them, the button reveals them for this session
+  setFields(true);
+  render();
+  window.dispatchEvent(new CustomEvent('sdr:ready', {detail: window.SDR}));
+})();
+</script>
+
+</body>
+</html>
+
