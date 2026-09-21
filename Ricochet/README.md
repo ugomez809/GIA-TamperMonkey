@@ -83,4 +83,4 @@ The endpoint source is tracked in `Ricochet/Voicemail Lead Watcher/apps-script/C
 - [Install Call Script Updater](https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Call%20Script/ricochet-sdr-sync-updater.user.js)
 - [Call Script setup and details](./Call%20Script/README.md)
 
-The HTML guide is included. Install only the updater and disable older standalone copies of the call script. Updates check every 30 seconds and wait until no lead box is open before reloading.
+The HTML guide loads automatically from `Call Script/html/sdr-transfer-script.html` and can be edited independently of the userscript. Install only the updater and disable older standalone copies of the call script. Updates check every 30 seconds and wait until no lead box is open before reloading.
