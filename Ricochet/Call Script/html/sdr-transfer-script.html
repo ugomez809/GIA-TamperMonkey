@@ -478,8 +478,8 @@ button.action.fired::before{background:var(--accent)}
       <div class="swgroup">
         <span class="swlab">Lead</span>
         <div class="tabs lead-switch" role="tablist" aria-label="Which script">
-          <button class="tab" role="tab" type="button" data-lead="new" aria-selected="true">New</button>
-          <button class="tab" role="tab" type="button" data-lead="old" aria-selected="false">Old</button>
+          <button class="tab" role="tab" type="button" data-lead="new" aria-selected="true">New lead</button>
+          <button class="tab" role="tab" type="button" data-lead="old" aria-selected="false">Re-quote</button>
         </div>
       </div>
       <div class="swgroup">
@@ -505,6 +505,10 @@ button.action.fired::before{background:var(--accent)}
       <div class="field">
         <label for="f_prospect">Prospect name</label>
         <input type="text" id="f_prospect" data-fill="prospect" placeholder="First name" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f_last">Last name</label>
+        <input type="text" id="f_last" data-fill="last" placeholder="Last name" autocomplete="off">
       </div>
       <div class="field">
         <label for="f_dob">Date of birth</label>
@@ -539,6 +543,12 @@ button.action.fired::before{background:var(--accent)}
         <input type="text" id="f_zip" data-fill="zip" placeholder="93901" autocomplete="off">
       </div>
     </div>
+
+    <!-- The dialled number. Never shown on screen and never spoken, so it stays out of
+         the fields bar, but it rides along into Copy note and the quote form. The
+         userscript fills it like any other lead-row field: SDR.fill({phone: '4085551212'}).
+         Any punctuation is fine, the digits are what get used. -->
+    <input type="hidden" id="f_phone" data-fill="phone" value="">
   </div>
 </div>
 
@@ -547,7 +557,7 @@ button.action.fired::before{background:var(--accent)}
 <main>
 
   <div class="modebar" id="modebar">
-    <span id="modeName">New internet lead</span>
+    <span id="modeName">New lead</span>
     <span class="what" id="modeWhat">They asked for a quote. Confirm details, stall, transfer.</span>
   </div>
 
@@ -671,22 +681,86 @@ button.action.fired::before{background:var(--accent)}
         <div class="q-in" data-slot="business"><input type="text" id="d_business" data-capture="business" placeholder="Yes / No / what kind" autocomplete="off"></div>
       </div>
 
-      <div class="q extra">
-        <div class="q-n">+</div>
-        <div class="q-text" style="font-family:var(--sans);font-size:13px;color:var(--ink-2)">Anything else worth passing to the agent</div>
-        <div class="q-in" data-slot="notes"><input type="text" id="d_notes" data-capture="notes" placeholder="Free notes" autocomplete="off"></div>
-      </div>
     </div>
   </section>
 
   <section class="step">
     <div class="step-head">
       <div class="num">5</div>
+      <h2>A few more questions</h2>
+      <div class="hint">Capture the answers</div>
+    </div>
+    <div class="step-body">
+      <div class="cond"><strong>Only if the sales agent still has not joined.</strong> These are the questions the agent asks next, so nothing here is wasted.</div>
+      <p class="say" style="margin-bottom:6px">While the system checks for discounts, let me confirm a few more things.</p>
+
+      <div class="q">
+        <div class="q-n"></div>
+        <div class="q-text">Is anyone else going to be on the policy with you, like a spouse<span data-lob-alt="auto"> or another driver in the home</span>?</div>
+        <div class="q-in" data-slot="addl"><input type="text" id="d_addl" data-capture="addl" placeholder="Name, or No" autocomplete="off"></div>
+      </div>
+
+      <div class="q" data-lob-alt="home">
+        <div class="q-n"></div>
+        <div class="q-text">And just to confirm, is it a single family house, a condo or townhouse, or a mobile home?</div>
+        <div class="q-in" data-slot="proptype">
+          <select id="d_proptype" data-capture="proptype">
+            <option value="">Property type</option>
+            <option value="Home">Single family</option>
+            <option value="Condo / Townhouse">Condo or townhouse</option>
+            <option value="Mobile Home">Mobile home</option>
+            <option value="Renters">Renters</option>
+            <option value="Landlord">Landlord / rental</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="q" data-lob-alt="home">
+        <div class="q-n"></div>
+        <div class="q-text">What year was the home built?</div>
+        <div class="q-in" data-slot="built"><input type="text" id="d_built" data-capture="built" placeholder="Year built" autocomplete="off" inputmode="numeric"></div>
+      </div>
+
+      <div class="q" data-lob-alt="home">
+        <div class="q-n"></div>
+        <div class="q-text">About how many square feet is the home?</div>
+        <div class="q-in" data-slot="sqft"><input type="text" id="d_sqft" data-capture="sqft" placeholder="Square feet" autocomplete="off" inputmode="numeric"></div>
+      </div>
+
+      <div class="q" data-lob-alt="home">
+        <div class="q-n"></div>
+        <div class="q-text">Have you had any claims on the home in the last 3 years?</div>
+        <div class="q-in" data-slot="claims">
+          <select id="d_claims" data-capture="claims">
+            <option value="">Claims in 3 years</option>
+            <option>No</option>
+            <option>1 Claim</option>
+            <option>2 Claims</option>
+            <option>3 Claims</option>
+            <option>4 Claims</option>
+            <option>5 Claims</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="q extra">
+        <div class="q-n">+</div>
+        <div class="q-text" style="font-family:var(--sans);font-size:13px;color:var(--ink-2)">Anything else worth passing to the agent</div>
+        <div class="q-in" data-slot="notes"><input type="text" id="d_notes" data-capture="notes" placeholder="Free notes" autocomplete="off"></div>
+      </div>
+
+      <div class="note">Everything above fills the quote form. Hit <strong>Quote form</strong> to open it with these answers already in it.</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">6</div>
       <h2>Hand off to the sales agent</h2>
     </div>
     <div class="step-body say-group">
       <p class="say">I have <span class="coach">[Sales Agent's Name]</span> on the line with us, who's working on your quote and will go over your discounts to make sure we're getting you the best price possible.</p>
-      <div class="note">If the prospect gave you new information, share it with the sales agent. Hit <strong>Copy CRM note</strong> and paste it into the Teams channel conversation before you drop off.</div>
+      <div class="note">If the prospect gave you new information, share it with the sales agent. Hit <strong>Copy note</strong> and paste it into the Teams channel conversation, and hit <strong>Quote form</strong> to open the quote form already filled in, before you drop off.</div>
     </div>
   </section>
 
@@ -777,21 +851,46 @@ button.action.fired::before{background:var(--accent)}
         <p class="say">What type of plumbing does the home have? Copper, galvanized, PVC, or PEX?</p>
         <div data-slot="plumbing"></div>
       </div>
-      <div>
-        <div class="pick">Anything else worth passing to the agent</div>
-        <div data-slot="notes" style="margin-top:5px"></div>
-      </div>
     </div>
   </section>
 
   <section class="step">
     <div class="step-head">
       <div class="num">6</div>
+      <h2>A few more questions</h2>
+      <div class="hint">Capture the answers</div>
+    </div>
+    <div class="step-body say-group">
+      <div class="cond"><strong>Only if the sales agent still has not joined.</strong> These are the questions the agent asks next, so nothing here is wasted.</div>
+      <p class="say">While the system checks for discounts, let me confirm a few more things.</p>
+      <p class="say">Is anyone else going to be on the policy with you, like a spouse<span data-lob-alt="auto"> or another driver in the home</span>?</p>
+      <div data-slot="addl"></div>
+      <div class="say-group" data-lob-alt="home">
+        <p class="say">And just to confirm, is it a single family house, a condo or townhouse, or a mobile home?</p>
+        <div data-slot="proptype"></div>
+        <p class="say">What year was the home built?</p>
+        <div data-slot="built"></div>
+        <p class="say">About how many square feet is the home?</p>
+        <div data-slot="sqft"></div>
+        <p class="say">Have you had any claims on the home in the last 3 years?</p>
+        <div data-slot="claims"></div>
+      </div>
+      <div>
+        <div class="pick">Anything else worth passing to the agent</div>
+        <div data-slot="notes" style="margin-top:5px"></div>
+      </div>
+      <div class="note">Everything above fills the quote form. Hit <strong>Quote form</strong> to open it with these answers already in it.</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <div class="num">7</div>
       <h2>Hand off to the sales agent</h2>
     </div>
     <div class="step-body say-group">
       <p class="say">I have <span class="coach">[Sales Agent's Name]</span> on the line with us, who's working on your quote and will go over your discounts to make sure we're getting you the best price possible.</p>
-      <div class="note">If the prospect gave you new information, share it with the sales agent. Hit <strong>Copy CRM note</strong> and paste it into the Teams channel conversation before you drop off.</div>
+      <div class="note">If the prospect gave you new information, share it with the sales agent. Hit <strong>Copy note</strong> and paste it into the Teams channel conversation, and hit <strong>Quote form</strong> to open the quote form already filled in, before you drop off.</div>
     </div>
   </section>
 
@@ -834,11 +933,11 @@ button.action.fired::before{background:var(--accent)}
       <summary><span class="on">3</span><span>Who's this? Why are you calling me?</span></summary>
       <div class="obj-body">
         <div class="alt" data-lead="old">
-          <div class="pick">Old lead</div>
+          <div class="pick">Re-quote</div>
           <p class="say"><span class="ack">Acknowledge / agree</span>This is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>, we gave you a quote a while back, and since our rates have recently changed, I wanted to email you the updated <span class="tok" data-tok="lobWord" data-ph="Auto/Homeowners"></span> quote that we have in the system for you. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>? And your home address is <span class="tok" data-tok="addressFull" data-ph="Address"></span>, is that right?</p>
         </div>
         <div class="alt" data-lead="new">
-          <div class="pick">New internet lead</div>
+          <div class="pick">New lead</div>
           <p class="say" data-lob-alt="auto"><span class="ack">Acknowledge / agree</span>This is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>, I see that you requested a car insurance quote for your <span class="tok" data-tok="vehicles" data-ph="Make/Model of Vehicle"></span>. Is that the only car that you need a quote for, or do you have other cars that need to be insured as well?</p>
           <p class="say" data-lob-alt="home"><span class="ack">Acknowledge / agree</span>This is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>, I see that you requested an insurance quote for your home on <span class="tok" data-tok="street" data-ph="Street Address"></span>. Do you live in that home, or are you in the process of buying it?</p>
         </div>
@@ -850,11 +949,11 @@ button.action.fired::before{background:var(--accent)}
       <summary><span class="on">4</span><span>I didn't request a quote&hellip;</span></summary>
       <div class="obj-body">
         <div class="alt" data-lead="old">
-          <div class="pick">Old lead</div>
+          <div class="pick">Re-quote</div>
           <p class="say"><span class="ack">Acknowledge / agree</span>That's right you didn't. I wanted to give you a call because we gave you a quote a while back, and since our rates have recently changed, I wanted to email you the updated <span class="tok" data-tok="lobWord" data-ph="Auto/Homeowners"></span> quote that we have in the system for you. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>? And your home address is <span class="tok" data-tok="addressFull" data-ph="Address"></span>, is that right?</p>
         </div>
         <div class="alt" data-lead="new">
-          <div class="pick">New internet lead</div>
+          <div class="pick">New lead</div>
           <p class="say"><span class="ack">Acknowledge / agree</span>Oh I'm sorry about that. It could be that someone requested an insurance quote under your name&hellip; or your policy is coming up for renewal.</p>
           <p class="say">I will tell you that we've been able to help a lot of people in <span class="tok" data-tok="city" data-ph="City"></span> switch their insurance to <span class="tok" data-tok="company" data-ph="Your Company"></span> because we have great rates, and great coverage.</p>
           <p class="say">I did want to ask, do you:</p>
@@ -926,7 +1025,7 @@ button.action.fired::before{background:var(--accent)}
       <summary><span class="on">11</span><span>How do you have my information?</span></summary>
       <div class="obj-body">
         <div class="alt" data-lead="old">
-          <div class="pick">Old lead</div>
+          <div class="pick">Re-quote</div>
           <p class="say"><span class="ack">Acknowledge / agree</span>That's a great question! We gave you an insurance quote a while back and since our rates have recently changed, I wanted to email you an updated <span class="tok" data-tok="lobWord" data-ph="Auto/Homeowners"></span> quote that we have in the system for you. Is your email address <span class="tok" data-tok="email" data-ph="Email Address"></span>? And your home address is <span class="tok" data-tok="addressFull" data-ph="Address"></span>, is that right?</p>
         </div>
         <div class="alt" data-lead="new">
@@ -1003,8 +1102,27 @@ button.action.fired::before{background:var(--accent)}
 (function(){
   var COMPANY = 'Farmers Insurance';
   var PERSIST = ['sdrName'];
-  var CALL    = ['prospect','vehicles','street','city','state','zip','dob','email','spouse'];
-  var DISCOVERY = ['d_carrier','d_reason','d_occupation','d_miles','d_plumbing','d_business','d_notes'];
+  var CALL    = ['prospect','last','phone','vehicles','street','city','state','zip','dob','email','spouse'];
+  // asked in this order, and Copy note prints them in this order. Free notes last.
+  var DISCOVERY = ['d_carrier','d_reason','d_occupation','d_miles','d_plumbing','d_business',
+                   'd_addl','d_proptype','d_built','d_sqft','d_claims','d_notes'];
+  // one label per DISCOVERY id. buildNote walks DISCOVERY itself, so a capture added
+  // to the script can never be silently left out of the note. No label falls back to
+  // the bare id rather than dropping the answer.
+  var LABELS = {
+    d_carrier:    'Current carrier',
+    d_reason:     'Why shopping today',
+    d_occupation: 'Occupation',
+    d_miles:      'Miles per year',
+    d_plumbing:   'Plumbing type',
+    d_business:   'Business on property',
+    d_addl:       'Also on the policy',
+    d_proptype:   'Property type',
+    d_built:      'Year built',
+    d_sqft:       'Square feet',
+    d_claims:     'Claims in last 3 years',
+    d_notes:      'Other notes'
+  };
   var KEY = 'sdr-script-setup-v1';
 
   function el(id){ return document.getElementById(id); }
@@ -1092,6 +1210,7 @@ button.action.fired::before{background:var(--accent)}
   // The userscript routes these clicks to the selected Ricochet popup.
   document.querySelectorAll('button[data-action]').forEach(function(b){
     b.addEventListener('click', function(){
+      if(b.dataset.action === 'quote'){ openQuote(); return; }
       window.dispatchEvent(new CustomEvent('sdr:action', {detail: {action:b.dataset.action}}));
       if(b.dataset.action === 'notify') window.dispatchEvent(new CustomEvent('sdr:notify', {detail:window.SDR.get()}));
     });
@@ -1122,11 +1241,12 @@ button.action.fired::before{background:var(--accent)}
   }
 
   var MODES = {
-    'new': ['New internet lead', 'They asked for a quote. Confirm details, stall, transfer.'],
-    'old': ['Old lead / X-date / requote', 'Quoted before, could not help at the time. Rates changed, requote.']
+    'new': ['New lead', 'They asked for a quote. Confirm details, stall, transfer.'],
+    'old': ['Re-quote', 'Quoted before, could not help at the time. Rates changed, requote.']
   };
   // one set of capture inputs, moved into whichever script is showing
-  var SLOTS = ['carrier','reason','occupation','miles','plumbing','business','notes'];
+  var SLOTS = ['carrier','reason','occupation','miles','plumbing','business','notes',
+               'addl','proptype','built','sqft','claims'];
   function moveCaptures(lead){
     SLOTS.forEach(function(k){
       var inp = el('d_' + k);
@@ -1246,10 +1366,14 @@ button.action.fired::before{background:var(--accent)}
     var lines = [];
     lines.push('SDR CALL NOTE');
     lines.push('SDR: ' + (val('sdrName') || '-'));
+    if(agency()) lines.push('Agency: ' + agency());
     lines.push('Date: ' + new Date().toLocaleString());
-    lines.push('Script: ' + (currentLead() === 'old' ? 'Old lead / requote' : 'New internet lead'));
+    lines.push('Script: ' + (currentLead() === 'old' ? 'Re-quote' : 'New lead'));
     lines.push('Line of business: ' + lob);
-    lines.push('Prospect: ' + (val('prospect') || '-'));
+    lines.push('Prospect: ' + (prospectParts().filter(Boolean).join(' ') || '-'));
+    // the phone field is hidden, so a missing number has to announce itself here or
+    // nobody finds out until the quote form comes through without one
+    lines.push('Phone: ' + (val('phone') || '(not received from Ricochet)'));
     if(val('vehicles')) lines.push('Vehicles: ' + val('vehicles'));
     var addr = join([val('street'), val('city'), val('state'), val('zip')]);
     if(addr) lines.push('Address: ' + addr);
@@ -1258,22 +1382,122 @@ button.action.fired::before{background:var(--accent)}
     if(val('spouse')) lines.push('Spouse: ' + val('spouse'));
     lines.push('');
     lines.push('DISCOVERY');
-    var qs = [
-      ['Current carrier', 'd_carrier'],
-      ['Why shopping today', 'd_reason'],
-      ['Occupation', 'd_occupation'],
-      ['Miles per year', 'd_miles'],
-      ['Plumbing type', 'd_plumbing'],
-      ['Business on property', 'd_business'],
-      ['Other notes', 'd_notes']
-    ];
     var any = false;
-    qs.forEach(function(q){
-      var v = el(q[1]) ? el(q[1]).value.trim() : '';
-      if(v){ lines.push(q[0] + ': ' + v); any = true; }
+    DISCOVERY.forEach(function(id){
+      var e = el(id), v = e ? e.value.trim() : '';
+      if(!v) return;
+      lines.push((LABELS[id] || id.slice(2)) + ': ' + v);
+      any = true;
     });
     if(!any) lines.push('(no discovery answers captured)');
     return lines.join('\n');
+  }
+
+  // ---- quote form prefill ----
+  // Jotform prefills from the query string using each field's unique name with the
+  // qN_ prefix stripped: ?name[first]=Maria works, ?q4_name[first]=Maria does nothing.
+  var JF_FORM   = 'https://form.jotform.com/250220301485140';
+  var JF_AGENCY = ['Ulises Gomez','Stefanie Pinheiro','Carlos Perez'];
+  var JF_SDR    = ['Lovely','Jessie','Simonette','Catherine'];
+  var JF_OCC    = ['Accountant','Architect','Aviator','Dentist','Educator','Firefighter',
+                   'Law Enforcement','Lawyer / Judge','Librarian','Physician / RN',
+                   'Scientist','Veterinarian','Real State Agent and Broker'];
+  // the form has no PEX and no "Not sure"; those ride along in the notes instead
+  var JF_PLUMB  = ['Copper','Galvanized','Polybutylene','PVC'];
+
+  // anything that does not match a dropdown option is dropped rather than sent as
+  // junk, so the form's own required-field highlighting still means something
+  function pick(list, v){
+    if(!v) return '';
+    for(var i=0;i<list.length;i++){
+      if(list[i].toLowerCase() === String(v).toLowerCase()) return list[i];
+    }
+    return '';
+  }
+  function cap(id){ return el(id) ? el(id).value.trim() : ''; }
+  function splitName(s){
+    var p = String(s || '').trim().split(/\s+/);
+    return [p.shift() || '', p.join(' ')];
+  }
+
+  function prospectParts(){
+    var first = val('prospect'), last = val('last');
+    if(!last) return splitName(first);
+    var suffix = ' ' + last;
+    if(first.toLowerCase().endsWith(suffix.toLowerCase())) first = first.slice(0, -suffix.length).trim();
+    return [first,last];
+  }
+
+  function buildQuoteUrl(){
+    var q = {}, home = currentLob() !== 'auto';
+    function put(k, v){ if(v) q[k] = v; }
+
+    var fullAgency = {Carlos:'Carlos Perez',Ulises:'Ulises Gomez',Stefanie:'Stefanie Pinheiro'}[agency()] || agency();
+    put('whichAgency', pick(JF_AGENCY, fullAgency));
+    put('whoIs', pick(JF_SDR, val('sdrName')));
+    put('typeA[]', home ? (cap('d_proptype') || 'Home') : 'Auto');
+    put('whereIs', 'Other');
+    put('explainWhere', 'SDR live transfer - ' +
+        (currentLead() === 'old' ? 're-quote' : 'new lead'));
+
+    // the lead row carries a first name; fall back to splitting it when the
+    // userscript sends the whole name in one field
+    var name = prospectParts();
+    put('name[first]', name[0]);
+    put('name[last]', name[1]);
+
+    // the field masks as #(###) ###-####, so it wants the country code up front
+    var digits = val('phone').replace(/\D/g, '');
+    if(digits.length === 10) digits = '1' + digits;
+    if(digits.length === 11) put('phoneNumber[full]', digits);
+
+    put('email', val('email'));
+
+    var dob = readableDob(val('dob')).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) \(/);
+    if(dob){
+      put('primarydob[month]', dob[1]);
+      put('primarydob[day]', dob[2]);
+      put('primarydob[year]', dob[3]);
+    }
+
+    var occ = cap('d_occupation'), occMatch = pick(JF_OCC, occ);
+    if(occMatch) put('occupation', occMatch);
+    else if(occ){ put('occupation', 'Other'); put('whatIs', occ); }
+
+    var addl = cap('d_addl') || val('spouse');
+    if(addl){
+      var no = /^(no|none|n\/a)$/i.test(addl);
+      put('marriedOr', no ? 'NO' : 'YES');
+      if(!no){
+        var a = splitName(addl);
+        put('name21[first]', a[0]);
+        put('name21[last]', a[1]);
+      }
+    }
+
+    // geoComplete address widgets keep a prefilled value through init; the vehicle
+    // and lender configurableList widgets wipe theirs, so vehicles ride in the notes
+    var addr = join([val('street'), val('city'), join([val('state'), val('zip')]).replace(', ', ' ')]);
+    if(addr) put(home ? 'typeA169' : 'mailingAddress172', addr);
+
+    if(home){
+      put('yearBuilt', cap('d_built'));
+      put('squareFootage', cap('d_sqft'));
+      put('anyClaims', cap('d_claims'));
+      put('plumbingType', pick(JF_PLUMB, cap('d_plumbing')));
+    }
+
+    // the note is the catch-all: carrier, why they are shopping, vehicles, miles,
+    // business on the property, PEX plumbing, free notes
+    put('notes', buildNote());
+
+    var parts = [];
+    for(var k in q){
+      if(Object.prototype.hasOwnProperty.call(q, k)){
+        parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(q[k]));
+      }
+    }
+    return JF_FORM + '?' + parts.join('&');
   }
 
   function copyText(text){
@@ -1296,6 +1520,28 @@ button.action.fired::before{background:var(--accent)}
   }
 
   el('btnCopy').addEventListener('click', function(){ copyText(buildNote()); });
+
+  function openQuote(){
+    var w = window.open(buildQuoteUrl(), '_blank');
+    if(w) w.opener = null;
+    toast(w ? 'Quote form opened' : 'Popup blocked, allow popups for this page');
+  }
+
+  function fillDiscovery(data){
+    DISCOVERY.forEach(function(id){
+      var key = id.slice(2), field = el(id), value = data[key];
+      if(!field || value === undefined || value === null) return;
+      value = String(value).trim();
+      if(key === 'proptype') value = ({'single family':'Home','single family home':'Home','single-family':'Home','condo':'Condo / Townhouse','townhouse':'Condo / Townhouse','mobile home':'Mobile Home','home':'Home','renters':'Renters','landlord':'Landlord'})[value.toLowerCase()] || value;
+      if(key === 'claims' && /^\d+$/.test(value)) value = value === '0' ? 'No' : value + (value === '1' ? ' Claim' : ' Claims');
+      if(field.tagName === 'SELECT') {
+        var option = Array.from(field.options).find(function(o){return o.value.toLowerCase() === value.toLowerCase() || o.textContent.toLowerCase() === value.toLowerCase();});
+        if(!option) return;
+        value = option.value;
+      }
+      field.value = value;
+    });
+  }
 
   el('btnReset').addEventListener('click', function(){
     CALL.forEach(function(k){ if(el('f_'+k)) el('f_'+k).value = ''; });
@@ -1328,6 +1574,17 @@ button.action.fired::before{background:var(--accent)}
   // Setting input.value directly does NOT fire an input event, so the script
   // text would never update. Always go through SDR.fill().
   var FILLABLE = PERSIST.concat(CALL);
+
+  // The tabs read "New lead" and "Re-quote", so accept what a caller would
+  // reasonably send for them. Used by every public entry point, so fill() and
+  // setLead() can never disagree about what 'requote' means.
+  function leadKey(v){
+    return /^(old|re-?quote|x-?date)/.test(String(v == null ? '' : v).toLowerCase()) ? 'old' : 'new';
+  }
+  function lobKey(v){
+    return /^home/.test(String(v == null ? '' : v).toLowerCase()) ? 'home' : 'auto';
+  }
+
   window.SDR = {
     fill: function(data){
       data = data || {};
@@ -1337,15 +1594,14 @@ button.action.fired::before{background:var(--accent)}
         if(e) e.value = String(data[k]);
         if(PERSIST.indexOf(k) !== -1) save();
       });
-      var lob  = String(data.lob  || '').toLowerCase();
-      var lead = String(data.lead || '').toLowerCase();
       var owns = String(data.owns || '').toLowerCase();
-      if(lob)  setLob(/^home/.test(lob) ? 'home' : 'auto');
-      if(lead) setLead(lead === 'old' ? 'old' : 'new');
+      if(data.lob)  setLob(lobKey(data.lob));
+      if(data.lead) setLead(leadKey(data.lead));
       if(owns) setOwn(/^buy/.test(owns) ? 'buying' : 'owns');
       if(data.agency !== undefined && data.agency !== null){ setAgency(data.agency); save(); }
       var carrier = data.carrier !== undefined ? data.carrier : data.insurer;
       if(carrier !== undefined && carrier !== null && el('d_carrier')) el('d_carrier').value = String(carrier);
+      fillDiscovery(data);
       render();
       // the userscript is driving the fields, so get them out of the way
       if(el('f_prospect').value.trim()) setFields(true);
@@ -1363,8 +1619,9 @@ button.action.fired::before{background:var(--accent)}
       render();
     },
     note: function(){ return buildNote(); },
-    setLob: setLob,
-    setLead: setLead,
+    quoteUrl: function(){ return buildQuoteUrl(); },
+    setLob: function(v){ setLob(lobKey(v)); },
+    setLead: function(v){ setLead(leadKey(v)); },
     reset: function(){ el('btnReset').click(); },
     setAgency: function(name){ setAgency(name); save(); },
     setActions: function(options){
