@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.4.3
+// @version      2.5.0
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -72,7 +72,7 @@ function clean(value) {
 function buildPrefill(lead, sdrName) {
   const data = { sdrName: clean(sdrName), prospect: clean(lead.contact) };
   if (clean(lead.agency)) data.agency = clean(lead.agency).split(/\s+/)[0];
-  for (const key of ['dob', 'email', 'vehicles', 'street', 'city', 'state', 'zip', 'spouse', 'carrier']) {
+  for (const key of ['last', 'phone', 'dob', 'email', 'vehicles', 'street', 'city', 'state', 'zip', 'spouse', 'carrier', 'occupation', 'miles', 'plumbing', 'business', 'addl', 'proptype', 'built', 'sqft', 'claims']) {
     data[key] = clean(lead[key]);
   }
   const mode = clean(lead.lead).toLowerCase();
@@ -155,7 +155,7 @@ function startDisplay() {
   const frame = document.createElement('iframe');
   frame.id = 'ricochet-sdr-frame';
   frame.title = 'SDR Transfer Script';
-  frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
+  frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox');
   const status = document.createElement('div');
   status.id = 'ricochet-sync-status';
   status.setAttribute('role', 'status');
@@ -477,12 +477,14 @@ function readLead(root) {
     popupData = page.angular?.element(root).scope()?.lead;
   } catch (_) {}
   const value = (...names) => readField(root, names);
+  const extra = (...names) => value(...names) || clean(names.map(name => popupData?.lead_field_data?.[name.replace(/ /g, '_')]).find(v => v !== undefined && v !== null && String(v).trim() !== ''));
   const vehiclePart = (order, part) => value(order + ' Vehicle ' + part)
     || clean(popupData?.lead_field_data?.[order + '_Vehicle_' + part]);
   const text = selector => clean(Array.from(root.querySelectorAll(selector)).find(visible)?.textContent);
   const address = parsePopupAddress(text('.led-usr-addr'));
   const lead = {
     contact: value('First Name', 'Contact Name', 'Listed Contact', 'Contact Person') || text('h2'),
+    last: value('Last Name') || clean(popupData?.last_name) || text('h2').split(/\s+/).slice(1).join(' '),
     name: value('Company Name') || clean(value('First Name') + ' ' + value('Last Name')) || text('h2'),
     phone: value('Phone - Main', 'Phone - Work', 'Phone') || text('#lead-popup-phone-number'),
     email: value('Email') || text('.led-usr-email'),
@@ -495,6 +497,15 @@ function readLead(root) {
       ['Year', 'Make', 'Model'].map(part => vehiclePart(order, part)).filter(Boolean).join(' ')
     ).filter(Boolean).join(', '),
     spouse: value('Spouse Name', 'Spouse'),
+    occupation: extra('Occupation', '1st Driver Occupation'),
+    miles: extra('Annual Mileage', 'Miles per Year', '1st Vehicle Annual Mileage'),
+    plumbing: extra('Plumbing Type'),
+    business: extra('Business on Property'),
+    addl: extra('Additional Insured', 'Additional Insured Name', 'Additional Driver Name'),
+    proptype: extra('Property Type', 'Dwelling Type', 'Type of Home'),
+    built: extra('Year Built', 'Year Home Built'),
+    sqft: extra('Square Footage', 'Square Feet', 'Living Area'),
+    claims: extra('Claims in Last 3 Years', 'Claims in 3 Years'),
     carrier: value('Current Carrier', 'Current Insurer')
       || clean(popupData?.lead_field_data?.Current_Insurance_Carrier || popupData?.lead_field_data?.Carrier),
     lead: value('Lead Type'), lob: value('Line of Business'), owns: value('Home Ownership'),
