@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.5.0
+// @version      2.5.1
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -24,7 +24,7 @@
 'use strict';
 function createTemplateLoader({getCache, setCache, download, mount, isBusy, onError}) {
   let current = '', queued = '', checking = false, mounting = false;
-  const compatible = html => typeof html === 'string' && /<meta\s+name=["']ricochet-sdr-api["']\s+content=["']1["']\s*\/?\s*>/i.test(html);
+  const compatible = html => typeof html === 'string' && (/<meta\s+name=["']ricochet-sdr-api["']\s+content=["']1["']\s*\/?\s*>/i.test(html) || (html.includes('window.SDR =') && html.includes('sdr:ready') && html.includes('quoteUrl:')));
   async function apply() {
     if (mounting || !queued || queued === current || (current && isBusy())) return;
     mounting = true;
@@ -63,6 +63,51 @@ function createTemplateLoader({getCache, setCache, download, mount, isBusy, onEr
     await check();
   }
   return {start, check, apply};
+}
+
+// Adapt the supplied page API without changing its HTML, layout, or controls.
+function installTemplateAdapter() {
+  const api = window.SDR;
+  if (!api || api.restore) return;
+  const fill = api.fill, get = api.get, reset = api.reset, setAgency = api.setAgency;
+  const agencies = {Carlos:'Carlos Perez', Ulises:'Ulises Gomez', Stefanie:'Stefanie Pinheiro'};
+  let source = {};
+  api.fill = function(data = {}) {
+    const mapped = {...data};
+    for (const key of ['prospect','dob','agency']) if (data[key] !== undefined) source[key] = data[key];
+    if (mapped.prospect) {
+      const parts = String(mapped.prospect).trim().split(/\s+/);
+      mapped.prospect = parts.shift();
+      if (!mapped.last && parts.length) mapped.last = parts.join(' ');
+    }
+    if (mapped.agency) mapped.agency = agencies[mapped.agency] || mapped.agency;
+    const iso = String(mapped.dob || '').match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
+    if (iso) mapped.dob = `${iso[2]}/${iso[3]}/${iso[1]}`;
+    fill(mapped);
+    for (const [key, value] of Object.entries(data)) {
+      const field = document.getElementById('d_' + key);
+      if (!field || value == null) continue;
+      let normalized = String(value);
+      if (key === 'proptype') normalized = ({'single family':'Home','single family home':'Home','single-family':'Home','condo':'Condo / Townhouse','townhouse':'Condo / Townhouse'})[normalized.toLowerCase()] || normalized;
+      if (key === 'claims' && /^\d+$/.test(normalized)) normalized = +normalized === 0 ? 'No' : normalized + (+normalized === 1 ? ' Claim' : ' Claims');
+      if (field.tagName === 'SELECT') {
+        const option = [...field.options].find(o => o.value.toLowerCase() === normalized.toLowerCase() || o.textContent.toLowerCase() === normalized.toLowerCase());
+        if (option) field.value = option.value;
+      } else field.value = normalized;
+    }
+    return api.get();
+  };
+  api.get = () => ({...get(), ...source});
+  api.setAgency = name => { source.agency = name; setAgency(agencies[name] || name); };
+  api.reset = () => { source = {}; reset(); };
+  api.restore = data => api.fill(data);
+  api.setActions = ({available=false, agencyKnown=false, busy=false, message=''}) => {
+    document.querySelectorAll('[data-notify]').forEach(button => {
+      button.disabled = !available || !agencyKnown || busy;
+      button.title = message;
+    });
+  };
+  api.setActions({});
 }
 
 function clean(value) {
@@ -207,6 +252,7 @@ function startDisplay() {
       readyDocument = view.document;
       view.addEventListener('sdr:ready', applyPending);
       view.addEventListener('sdr:action', sendAction);
+      view.addEventListener('sdr:notify', () => { if (!view.document.querySelector('[data-action]')) sendAction({detail:{action:'notify'}}); });
     }
     if (!pending) return;
     try {
@@ -285,7 +331,7 @@ function startDisplay() {
     }),
     mount: html => new Promise((resolve, reject) => {
       const previousApi = frame.contentWindow?.SDR;
-      frame.srcdoc = html;
+      frame.srcdoc = html + '<script>(' + installTemplateAdapter.toString() + ')();</script>';
       const deadline = Date.now() + 10000;
       function ready() {
         const page = typeof unsafeWindow === 'undefined' ? window : unsafeWindow;
@@ -577,4 +623,3 @@ function parsePopupAddress(value) {
 }
 
 })();
-
