@@ -1,12 +1,8 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="ricochet-sdr-api" content="1">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<script>
-try { document.documentElement.dataset.theme = localStorage.getItem('sdr-script-theme-v1') === 'dark' ? 'dark' : 'light'; } catch (_) {}
-</script>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -81,7 +77,7 @@ body{
   margin:0;
 }
 .wrap{max-width:1200px;margin:0 auto;padding-left:16px;padding-right:16px;padding-block:0 40px}
-/* Keep the script full width in split view; objections open on demand. */
+/* rail shrinks with the window instead of disappearing at half-screen */
 .shell{
   display:grid;
   grid-template-columns:minmax(0,1fr) clamp(230px, 34%, 352px);
@@ -89,7 +85,7 @@ body{
   align-items:start;
 }
 main{min-width:0}
-@media (max-width:1200px){
+@media (max-width:560px){
   .shell{display:block}
 }
 /* autofilled by userscript: collapse the input rows, keep the script */
@@ -268,11 +264,6 @@ button.action{
   0%,100%{transform:scale(1);box-shadow:0 0 0 0 color-mix(in srgb, var(--signal) 45%, transparent)}
   50%{transform:scale(1.015);box-shadow:0 0 0 7px color-mix(in srgb, var(--signal) 0%, transparent)}
 }
-.notify-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.notify-row button.action{flex:1 1 270px;width:auto;margin:0}
-.quote-action{flex:0 0 auto;font:11px system-ui;padding:5px 7px;border:1px solid var(--line-strong);border-radius:5px;background:var(--surface);color:var(--ink);cursor:pointer}
-.action-status{font:12px system-ui;color:var(--ink-2);margin:6px 0 0}
-button[data-action]:disabled{cursor:default;opacity:.65;animation:none}
 button.action.done{animation:none}
 button.action:hover{border-color:var(--signal);filter:brightness(.97)}
 button.action.fired{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
@@ -424,8 +415,8 @@ button.action.fired::before{background:var(--accent)}
   .ack{font-size:9px;padding:1px 4px}
 }
 
-/* Split view: objections move into a drawer behind the toolbar button. */
-@media (max-width:1200px){
+/* phone: back to a slide-over drawer behind the toolbar button */
+@media (max-width:560px){
   #btnObj{display:inline-block}
   .scrim{
     display:block;
@@ -495,8 +486,10 @@ button.action.fired::before{background:var(--accent)}
       </div>
       <div class="bar-actions">
         <button class="btn" id="btnFields" type="button" aria-expanded="true">Fields</button>
+        <button class="btn btn-icon" id="btnTheme" type="button" aria-label="Toggle dark mode" title="Dark / light">&#9681;</button>
         <button class="btn" id="btnObj" type="button" aria-expanded="false">Objections</button>
         <button class="btn" id="btnReset" type="button">Reset</button>
+        <button class="btn" id="btnQuote" type="button">Quote form</button>
         <button class="btn btn-primary" id="btnCopy" type="button">Copy note</button>
       </div>
     </div>
@@ -571,7 +564,7 @@ button.action.fired::before{background:var(--accent)}
     <div class="step-body say-group">
       <p class="say">Hello, is this <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>?</p>
       <p class="say">Hi <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>, this is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>. How are you?</p>
-      <div class="notify-row"><button type="button" class="action done" data-notify data-action="notify" disabled>Notify sales agents the lead is on the line</button><button type="button" class="quote-action" data-action="quote" disabled>Quoting / Info Form</button></div><div class="action-status" role="status" data-action-status></div>
+      <button type="button" class="action" data-notify>Notify sales agents the lead is on the line</button>
     </div>
   </section>
 
@@ -777,7 +770,7 @@ button.action.fired::before{background:var(--accent)}
       <p class="say"><span class="tok" data-tok="greet" data-ph="Good afternoon"></span>, is this <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>?</p>
       <p class="say">Hey <span class="tok" data-tok="prospect" data-ph="Prospect's Name"></span>, this is <span class="tok" data-tok="sdrName" data-ph="Your Name"></span> calling you from <span class="tok" data-tok="company" data-ph="Your Company"></span>. How are you?</p>
       <p class="say">I'm calling you because we gave you a <span class="tok" data-tok="lobThing" data-ph="Car/Home"></span> insurance quote a while back, but we couldn't help you at that time. Since our rates have recently changed, I wanted to share our updated quote with you.</p>
-      <div class="notify-row"><button type="button" class="action done" data-notify data-action="notify" disabled>Notify sales agents the lead is on the line</button><button type="button" class="quote-action" data-action="quote" disabled>Quoting / Info Form</button></div><div class="action-status" role="status" data-action-status></div>
+      <button type="button" class="action" data-notify>Notify sales agents the lead is on the line</button>
     </div>
   </section>
 
@@ -1097,7 +1090,6 @@ button.action.fired::before{background:var(--accent)}
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<button class="btn" id="btnTheme" type="button" style="position:fixed;bottom:8px;right:8px;z-index:1000;padding:4px 7px;font-size:11px;line-height:18px">Dark mode</button>
 <script>
 (function(){
   var COMPANY = 'Farmers Insurance';
@@ -1124,31 +1116,13 @@ button.action.fired::before{background:var(--accent)}
     d_notes:      'Other notes'
   };
   var KEY = 'sdr-script-setup-v1';
+  var THEME_KEY = 'sdr-theme';
 
   function el(id){ return document.getElementById(id); }
   function val(id){ var e = el('f_'+id); return e ? e.value.trim() : ''; }
   function join(parts){ return parts.filter(function(p){return p;}).join(', '); }
 
-  function readableDob(value){
-    var raw = String(value || '').trim();
-    var iso = raw.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
-    var us = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-    if(!iso && !us) return raw;
-    var year = Number(iso ? iso[1] : us[3]);
-    var month = Number(iso ? iso[2] : us[1]);
-    var day = Number(iso ? iso[3] : us[2]);
-    var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-    var days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    if(year < 1 || month < 1 || month > 12 || day < 1 || day > days[month-1]) return raw;
-    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    var yyyy = String(year).padStart(4, '0');
-    return String(month).padStart(2, '0') + '/' + String(day).padStart(2, '0') + '/' + yyyy +
-      ' (' + months[month-1] + ' ' + day + ', ' + yyyy + ')';
-  }
-
   var COMPOSED = {
-    prospect: function(){ return val('prospect').split(/\s+/)[0]; },
-    dob: function(){ return readableDob(val('dob')); },
     company: function(){ return COMPANY; },
     addressFull: function(){ return join([val('street'), val('city'), val('zip')]); },
     cityStateZip: function(){ return join([val('city'), val('state'), val('zip')]); },
@@ -1196,23 +1170,30 @@ button.action.fired::before{background:var(--accent)}
     return !!o.sdrName;
   }
 
-  function updateThemeButton(){
-    el('btnTheme').textContent = document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
+  // ---- theme: system by default, one tap flips, remembered per browser ----
+  function applyTheme(t){
+    if(t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+    else document.documentElement.removeAttribute('data-theme');
   }
+  function currentTheme(){
+    var t = document.documentElement.getAttribute('data-theme');
+    if(t) return t;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  try{ applyTheme(localStorage.getItem(THEME_KEY)); }catch(e){}
   el('btnTheme').addEventListener('click', function(){
-    var theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem('sdr-script-theme-v1', theme); } catch (_) {}
-    updateThemeButton();
+    var next = currentTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
   });
-  updateThemeButton();
 
-  // The userscript routes these clicks to the selected Ricochet popup.
-  document.querySelectorAll('button[data-action]').forEach(function(b){
+  // ---- notify: the chip is a button; the page only announces, the userscript acts ----
+  document.querySelectorAll('button[data-notify]').forEach(function(b){
     b.addEventListener('click', function(){
-      if(b.dataset.action === 'quote'){ openQuote(); return; }
-      window.dispatchEvent(new CustomEvent('sdr:action', {detail: {action:b.dataset.action}}));
-      if(b.dataset.action === 'notify') window.dispatchEvent(new CustomEvent('sdr:notify', {detail:window.SDR.get()}));
+      window.dispatchEvent(new CustomEvent('sdr:notify', {detail: window.SDR.get()}));
+      b.classList.add('fired','done');
+      setTimeout(function(){ b.classList.remove('fired'); }, 2500);
+      toast('Agents notified');
     });
   });
 
@@ -1304,7 +1285,7 @@ button.action.fired::before{background:var(--accent)}
   if(el('d_carrier')) el('d_carrier').addEventListener('input', render);
 
   // the rail sits under the sticky bar, whose height depends on wrapping
-  var narrow = window.matchMedia('(max-width: 1200px)');
+  var narrow = window.matchMedia('(max-width: 560px)');
   function syncBarHeight(){
     document.documentElement.style.setProperty('--barh', document.querySelector('.bar').offsetHeight + 'px');
   }
@@ -1370,7 +1351,7 @@ button.action.fired::before{background:var(--accent)}
     lines.push('Date: ' + new Date().toLocaleString());
     lines.push('Script: ' + (currentLead() === 'old' ? 'Re-quote' : 'New lead'));
     lines.push('Line of business: ' + lob);
-    lines.push('Prospect: ' + (prospectParts().filter(Boolean).join(' ') || '-'));
+    lines.push('Prospect: ' + (join([val('prospect'), val('last')]).replace(', ', ' ') || '-'));
     // the phone field is hidden, so a missing number has to announce itself here or
     // nobody finds out until the quote form comes through without one
     lines.push('Phone: ' + (val('phone') || '(not received from Ricochet)'));
@@ -1420,20 +1401,11 @@ button.action.fired::before{background:var(--accent)}
     return [p.shift() || '', p.join(' ')];
   }
 
-  function prospectParts(){
-    var first = val('prospect'), last = val('last');
-    if(!last) return splitName(first);
-    var suffix = ' ' + last;
-    if(first.toLowerCase().endsWith(suffix.toLowerCase())) first = first.slice(0, -suffix.length).trim();
-    return [first,last];
-  }
-
   function buildQuoteUrl(){
     var q = {}, home = currentLob() !== 'auto';
     function put(k, v){ if(v) q[k] = v; }
 
-    var fullAgency = {Carlos:'Carlos Perez',Ulises:'Ulises Gomez',Stefanie:'Stefanie Pinheiro'}[agency()] || agency();
-    put('whichAgency', pick(JF_AGENCY, fullAgency));
+    put('whichAgency', pick(JF_AGENCY, agency()));
     put('whoIs', pick(JF_SDR, val('sdrName')));
     put('typeA[]', home ? (cap('d_proptype') || 'Home') : 'Auto');
     put('whereIs', 'Other');
@@ -1442,9 +1414,10 @@ button.action.fired::before{background:var(--accent)}
 
     // the lead row carries a first name; fall back to splitting it when the
     // userscript sends the whole name in one field
-    var name = prospectParts();
-    put('name[first]', name[0]);
-    put('name[last]', name[1]);
+    var first = val('prospect'), last = val('last');
+    if(!last){ var s = splitName(first); first = s[0]; last = s[1]; }
+    put('name[first]', first);
+    put('name[last]', last);
 
     // the field masks as #(###) ###-####, so it wants the country code up front
     var digits = val('phone').replace(/\D/g, '');
@@ -1453,7 +1426,7 @@ button.action.fired::before{background:var(--accent)}
 
     put('email', val('email'));
 
-    var dob = readableDob(val('dob')).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) \(/);
+    var dob = val('dob').match(/^(\d{1,2})\D+(\d{1,2})\D+(\d{4})$/);
     if(dob){
       put('primarydob[month]', dob[1]);
       put('primarydob[day]', dob[2]);
@@ -1521,27 +1494,10 @@ button.action.fired::before{background:var(--accent)}
 
   el('btnCopy').addEventListener('click', function(){ copyText(buildNote()); });
 
-  function openQuote(){
-    var w = window.open(buildQuoteUrl(), '_blank');
-    if(w) w.opener = null;
+  el('btnQuote').addEventListener('click', function(){
+    var w = window.open(buildQuoteUrl(), '_blank', 'noopener');
     toast(w ? 'Quote form opened' : 'Popup blocked, allow popups for this page');
-  }
-
-  function fillDiscovery(data){
-    DISCOVERY.forEach(function(id){
-      var key = id.slice(2), field = el(id), value = data[key];
-      if(!field || value === undefined || value === null) return;
-      value = String(value).trim();
-      if(key === 'proptype') value = ({'single family':'Home','single family home':'Home','single-family':'Home','condo':'Condo / Townhouse','townhouse':'Condo / Townhouse','mobile home':'Mobile Home','home':'Home','renters':'Renters','landlord':'Landlord'})[value.toLowerCase()] || value;
-      if(key === 'claims' && /^\d+$/.test(value)) value = value === '0' ? 'No' : value + (value === '1' ? ' Claim' : ' Claims');
-      if(field.tagName === 'SELECT') {
-        var option = Array.from(field.options).find(function(o){return o.value.toLowerCase() === value.toLowerCase() || o.textContent.toLowerCase() === value.toLowerCase();});
-        if(!option) return;
-        value = option.value;
-      }
-      field.value = value;
-    });
-  }
+  });
 
   el('btnReset').addEventListener('click', function(){
     CALL.forEach(function(k){ if(el('f_'+k)) el('f_'+k).value = ''; });
@@ -1552,7 +1508,7 @@ button.action.fired::before{background:var(--accent)}
     document.querySelectorAll('.obj').forEach(function(o){ o.hidden = false; o.open = false; });
     el('objNone').hidden = true;
     el('objCount').textContent = '16 of 16';
-    document.querySelectorAll('button[data-notify]').forEach(function(b){ b.classList.remove('fired'); });
+    document.querySelectorAll('button[data-notify]').forEach(function(b){ b.classList.remove('done','fired'); });
     render();
     if(!document.body.classList.contains('fields-hidden') && el('f_prospect')) el('f_prospect').focus();
     window.scrollTo({top:0, behavior:'smooth'});
@@ -1601,22 +1557,16 @@ button.action.fired::before{background:var(--accent)}
       if(data.agency !== undefined && data.agency !== null){ setAgency(data.agency); save(); }
       var carrier = data.carrier !== undefined ? data.carrier : data.insurer;
       if(carrier !== undefined && carrier !== null && el('d_carrier')) el('d_carrier').value = String(carrier);
-      fillDiscovery(data);
       render();
       // the userscript is driving the fields, so get them out of the way
       if(el('f_prospect').value.trim()) setFields(true);
       return window.SDR.get();
     },
     get: function(){
-      var out = {lob: currentLob(), lead: currentLead(), agency: agency(), owns: document.querySelector('[data-own][aria-selected="true"]')?.getAttribute('data-own') || 'owns'};
+      var out = {lob: currentLob(), lead: currentLead(), agency: agency()};
       FILLABLE.forEach(function(k){ out[k] = val(k); });
       DISCOVERY.forEach(function(k){ out[k.slice(2)] = el(k) ? el(k).value.trim() : ''; });
       return out;
-    },
-    restore: function(data){
-      window.SDR.fill(data);
-      DISCOVERY.forEach(function(k){ if(el(k)) el(k).value = String(data[k.slice(2)] || ''); });
-      render();
     },
     note: function(){ return buildNote(); },
     quoteUrl: function(){ return buildQuoteUrl(); },
@@ -1624,12 +1574,6 @@ button.action.fired::before{background:var(--accent)}
     setLead: function(v){ setLead(leadKey(v)); },
     reset: function(){ el('btnReset').click(); },
     setAgency: function(name){ setAgency(name); save(); },
-    setActions: function(options){
-      document.querySelectorAll('button[data-action]').forEach(function(b){
-        b.disabled = !options.available || options.busy || (b.dataset.action === 'notify' && !options.agencyKnown);
-      });
-      document.querySelectorAll('[data-action-status]').forEach(function(e){e.textContent = options.message || '';});
-    },
     onNotify: function(fn){ window.addEventListener('sdr:notify', function(e){ fn(e.detail); }); },
     showFields: function(show){ setFields(!show); }
   };
@@ -1648,4 +1592,3 @@ button.action.fired::before{background:var(--accent)}
 
 </body>
 </html>
-
