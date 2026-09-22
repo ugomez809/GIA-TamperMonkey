@@ -18,11 +18,13 @@ The updater checks GitHub every 30 seconds, caches the call script in Tampermonk
 
 The guide checks for a closed window every five seconds. A newly opened lead becomes selected, and the guide asks Ricochet to bring its window forward after filling that lead. Existing open leads remain available in the switcher, with separate temporary notes. Closing or reloading the guide clears its temporary notes.
 
-The Notify Sales Agent button selects the matching agency Teams webhook. The smaller Quoting / Info Form button selects Ricochet's corresponding form webhook. These actions happen only when clicked.
+The Notify Sales Agent button selects the matching agency Teams webhook. The smaller Quoting / Info Form button opens the prefilled Jotform for review; it does not submit the form or trigger the old form webhook. These actions happen only when clicked.
+
+The v17 guide also accepts last name, phone, additional insured, property type, year built, square footage, recent claims, occupation, annual mileage, plumbing, and business-on-property details when available in the selected top lead box. Missing information remains available for manual entry. Agency abbreviations and ISO dates of birth are converted for the quote form.
 
 ## Files
 
-- [Main script, v2.4.2](./ricochet-sdr-sync.user.js)
+- [Main script, v2.5.0](./ricochet-sdr-sync.user.js)
 - [Updater, v1.0.0](./ricochet-sdr-sync-updater.user.js)
 
 The main script has its own GitHub update/download links for direct installations, but the updater above is the recommended installer. Do not enable both installations together.
@@ -31,11 +33,11 @@ The main script has its own GitHub update/download links for direct installation
 
 Edit [html/sdr-transfer-script.html](./html/sdr-transfer-script.html) and commit it to GitHub. The guide checks for HTML changes every 30 seconds, subject to GitHub caching, and applies them when no lead box is open. No userscript rebuild or version bump is required for compatible HTML edits. The most recent successfully loaded HTML is cached for offline startup. First installation requires a successful download. Invalid downloads keep the working guide; a template that fails runtime validation rolls back to the previous working HTML when available.
 
-Keep `<meta name="ricochet-sdr-api" content="1">`, the placeholder mappings, and `window.SDR` methods `get`, `fill`, `reset`, `restore`, `setActions`, and `setAgency`. Preserve the `sdr:ready` and `sdr:action` events (actions `notify` and `quote`). Layout, wording, styling, and internal guide behavior can change without changing the userscript. Changes to that integration contract require a corresponding userscript update. Keep CSS/JavaScript inline or use absolute resource URLs; relative paths do not resolve against the GitHub HTML folder.
+Keep `<meta name="ricochet-sdr-api" content="1">`, the placeholder mappings, and `window.SDR` methods `get`, `fill`, `reset`, `restore`, `setActions`, and `setAgency`. Preserve the `sdr:ready` and `sdr:action` events (action `notify`). The quote button opens Jotform directly from the HTML. Layout, wording, styling, and internal guide behavior can change without changing the userscript. Changes to that integration contract require a corresponding userscript update. Keep CSS/JavaScript inline or use absolute resource URLs; relative paths do not resolve against the GitHub HTML folder.
 
-Existing updater installations already grant GitHub download access and automatically receive v2.4.0 between calls.
-
+Existing updater installations already grant GitHub download access and automatically receive v2.5.0 between calls.
 
 ## Remembered window placement
 
-Version 2.4.2 saves the guide window position and size every second, on resize, and when the window closes. Automatic reopening uses the saved placement. Move and resize the guide once after updating. Chrome can adjust off-screen placement if the monitor setup changes.
+The guide saves its window position and size every 250 ms, on resize, and before closing. A reopened popup restores its own saved placement before tracking starts. Chrome can adjust off-screen placement if the monitor setup changes.
+
