@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Voicemail Lead Watcher
 // @namespace    GIA.INC
-// @version      2.28
+// @version      2.29
 // @description  Assists SDRs to be reminded of when to leave a voicemail.
 // @author       JKira & Mr.G
 // @match        https://giainc.ricochet.me/*
@@ -206,18 +206,21 @@
   function handleCallOpened() {
     const fresh = buildCurrentPayload();
     const freshLeadKey = getLeadKey(fresh);
+    let hadPreCallSession = Boolean(state.activeSession);
 
     if (state.activeSession && !state.activeSession.sent) {
       const currentKey = getLeadKey(state.activeSession.payload);
       if (currentKey && freshLeadKey && currentKey !== freshLeadKey) {
         if (isSessionLocked(state.activeSession)) return;
         clearActiveSession('new_open_different_lead');
+        hadPreCallSession = false;
       }
     }
 
     if (!state.activeSession) {
       if (!hasAnyLeadData(fresh)) return;
       state.activeSession = createSessionFromFresh(fresh);
+      hadPreCallSession = false;
     }
 
     if (!state.activeSession.payload.timestampCallBoxOpen) {
@@ -226,6 +229,11 @@
     }
 
     state.activeSession.isCallOpen = true;
+    if (hadPreCallSession) {
+      markWaitingForOutboundRefresh(state.activeSession, fresh);
+    } else {
+      state.activeSession.waitingForOutboundRefresh = false;
+    }
     state.activeSession.lastTouched = Date.now();
     updateBadgeFromSession();
   }
@@ -240,8 +248,36 @@
     stampCloseTimestampIfMissing('auto_or_manual_close');
 
     state.activeSession.isCallOpen = false;
+    state.activeSession.reminderActive = false;
+    updateOutboundRefreshState(state.activeSession, false);
     state.activeSession.lastTouched = Date.now();
     hideBadge();
+  }
+
+  function markWaitingForOutboundRefresh(session, fresh) {
+    const baseline = session.preCallOutboundCallAmount || '';
+    if (!baseline) {
+      session.waitingForOutboundRefresh = false;
+      return;
+    }
+
+    const freshOutbound = normalizeOutboundForSend(fresh && fresh.outboundCallAmount);
+    session.waitingForOutboundRefresh = !freshOutbound || freshOutbound === baseline;
+  }
+
+  function updateOutboundRefreshState(session, liveCallOpen) {
+    if (!session) return;
+
+    const outbound = normalizeOutboundForSend(session.payload.outboundCallAmount);
+    if (!liveCallOpen) {
+      session.waitingForOutboundRefresh = false;
+      if (outbound) session.preCallOutboundCallAmount = outbound;
+      return;
+    }
+
+    if (session.waitingForOutboundRefresh && outbound && outbound !== session.preCallOutboundCallAmount) {
+      session.waitingForOutboundRefresh = false;
+    }
   }
 
   function stampCloseTimestampIfMissing(reason) {
@@ -262,6 +298,7 @@
 
       state.activeSession = createSessionFromFresh(fresh);
       state.activeSession.isCallOpen = liveCallOpen;
+      updateOutboundRefreshState(state.activeSession, liveCallOpen);
 
       if (liveCallOpen && !state.activeSession.payload.timestampCallBoxOpen) {
         state.activeSession.payload.timestampCallBoxOpen = formatCaliforniaDate(new Date()) || '';
@@ -276,6 +313,7 @@
     if (!state.activeSession.sent && currentLeadKey && freshLeadKey && currentLeadKey !== freshLeadKey) {
       if (isSessionLocked(state.activeSession)) {
         state.activeSession.isCallOpen = liveCallOpen;
+        updateOutboundRefreshState(state.activeSession, liveCallOpen);
         if (!liveCallOpen && hasSelectedStatus(state.activeSession.payload) && !state.activeSession.payload.timestampCallBoxClosed) {
           stampCloseTimestampIfMissing('post_status_wait');
         }
@@ -316,6 +354,8 @@
       p.outboundCallAmount = fresh.outboundCallAmount;
     }
 
+    updateOutboundRefreshState(state.activeSession, liveCallOpen);
+
     p.sdrName = getCallerName() || p.sdrName || '';
     state.activeSession.lastTouched = Date.now();
 
@@ -334,6 +374,7 @@
       state.activeSession.isCallOpen = true;
     }
 
+    updateOutboundRefreshState(state.activeSession, state.activeSession.isCallOpen);
     state.activeSession.lastTouched = Date.now();
     updateBadgeFromSession();
     log(`Lead changed: ${state.activeSession.payload.name || state.activeSession.payload.number || 'unknown'}`);
@@ -364,6 +405,10 @@
       },
       sent: false,
       isCallOpen: false,
+      reminderActive: false,
+      reminderOutboundCallAmount: '',
+      preCallOutboundCallAmount: '',
+      waitingForOutboundRefresh: false,
       lastTouched: Date.now(),
       finalizeTimer: null,
       finalizeReason: ''
@@ -679,7 +724,50 @@
       }
     }
 
+    const currentCallWindowOpen = isCurrentCallWindowOpen();
+    const activeNumber = getActiveCallNumber();
+    if (currentCallWindowOpen) {
+      if (!activeNumber) return null;
+
+      for (const el of matches) {
+        if (samePhoneNumber(getPopupPhoneNumber(el), activeNumber)) {
+          return el;
+        }
+      }
+
+      return null;
+    }
+
     return matches.length ? matches[matches.length - 1] : null;
+  }
+
+  function getActiveCallNumber() {
+    const text = firstText(document, [
+      '.dialpad-options .caller-title',
+      '.dialpad-options .call-active'
+    ]);
+    const number = normalizePhone(text);
+    return number.length >= 10 ? number : '';
+  }
+
+  function getPopupPhoneNumber(root) {
+    return normalizePhone(firstText(root, [
+      '#lead-popup-phone-number',
+      '.inspectletIgnore'
+    ]));
+  }
+
+  function samePhoneNumber(left, right) {
+    const a = normalizePhone(left);
+    const b = normalizePhone(right);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return trimUsCountryCode(a) === trimUsCountryCode(b);
+  }
+
+  function trimUsCountryCode(value) {
+    const phone = normalizePhone(value);
+    return phone.length === 11 && phone[0] === '1' ? phone.slice(1) : phone;
   }
 
   function extractLeadData(root) {
@@ -749,7 +837,16 @@
   }
 
   function isCallOpen() {
-    const hangupButtons = document.querySelectorAll(CALL_OPEN_SELECTOR);
+    return isLegacyCallWindowOpen() || isCurrentCallWindowOpen();
+  }
+
+  function isLegacyCallWindowOpen() {
+    const root = document.querySelector('#btn-container.new-keypadwrap');
+    if (!isVisible(root)) return false;
+
+    const hangupButtons = document.querySelectorAll(
+      'button.btn.btn-danger[ng-click*="hangup"], button.btn.btn-danger[ng-click*="transferandhangup"]'
+    );
     for (const btn of hangupButtons) {
       if (isVisible(btn) && !(btn.classList && btn.classList.contains('ng-hide'))) {
         return true;
@@ -762,11 +859,18 @@
       if (timerText) return true;
     }
 
-    const root = document.querySelector('#btn-container.new-keypadwrap');
-    if (isVisible(root)) return true;
+    return false;
+  }
 
-    if (document.body && document.body.classList && document.body.classList.contains('rico-on-call')) {
-      return true;
+  function isCurrentCallWindowOpen() {
+    const root = document.querySelector('.dialpad-options');
+    if (!isVisible(root)) return false;
+
+    const hangupButtons = root.querySelectorAll('[ng-click*="hangup"], [title="End Call"]');
+    for (const btn of hangupButtons) {
+      if (isVisible(btn) && !(btn.classList && btn.classList.contains('ng-hide'))) {
+        return true;
+      }
     }
 
     return false;
@@ -1997,14 +2101,29 @@
       return;
     }
 
+    if (state.activeSession.waitingForOutboundRefresh) {
+      hideBadge();
+      return;
+    }
+
     const outbound = normalizeOutboundForSend(state.activeSession.payload.outboundCallAmount);
+    if (state.activeSession.reminderOutboundCallAmount !== outbound) {
+      state.activeSession.reminderActive = false;
+      state.activeSession.reminderOutboundCallAmount = outbound;
+    }
+
     if (VM_COUNTS.has(Number(outbound))) {
       const route = getVoicemailRouteForVendor(state.activeSession.payload.vendor || '');
       if (route.showReminder === false) {
+        state.activeSession.reminderActive = false;
         hideBadge();
         return;
       }
 
+      state.activeSession.reminderActive = true;
+    }
+
+    if (state.activeSession.reminderActive) {
       state.badge.textContent = 'Remember to Leave a Voicemail';
       state.badge.style.background = 'linear-gradient(180deg, #ef2b2b 0%, #ca1515 100%)';
       state.badge.style.display = 'flex';
@@ -2015,6 +2134,7 @@
   }
 
   function createBadge() {
+    document.querySelectorAll('#tm-ricochet-state-badge-v1').forEach((el) => el.remove());
     const badge = document.createElement('div');
     badge.id = 'tm-ricochet-state-badge-v1';
     badge.style.cssText = [

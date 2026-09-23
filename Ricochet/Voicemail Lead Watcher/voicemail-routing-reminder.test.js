@@ -38,6 +38,9 @@ function createFakeDocument() {
     addEventListener() {},
     querySelector() {
       return null;
+    },
+    querySelectorAll() {
+      return [];
     }
   };
 }
@@ -83,10 +86,15 @@ function loadScriptForTest() {
   return context.__ricochetVmTestApi;
 }
 
-function setActiveCall(api, vendor, outboundCallAmount) {
+function setActiveCall(api, vendor, outboundCallAmount, extras = {}) {
   api.state.activeSession = {
     sent: false,
     isCallOpen: true,
+    reminderActive: false,
+    reminderOutboundCallAmount: '',
+    preCallOutboundCallAmount: '',
+    waitingForOutboundRefresh: false,
+    ...extras,
     payload: {
       vendor,
       outboundCallAmount
@@ -131,6 +139,45 @@ function testShowReminderDefaultsTrue() {
   assert.equal(api.state.badge.textContent, 'Remember to Leave a Voicemail');
 }
 
+function testReminderWaitsForOutboundRefresh() {
+  const api = loadScriptForTest();
+
+  setActiveCall(api, '', '22', {
+    preCallOutboundCallAmount: '22',
+    waitingForOutboundRefresh: true
+  });
+  api.updateBadgeFromSession();
+
+  assert.equal(api.state.badge.style.display, 'none');
+  assert.equal(api.state.badge.textContent, '');
+}
+
+function testReminderStaysVisibleForStableQualifyingCount() {
+  const api = loadScriptForTest();
+
+  setActiveCall(api, '', '22');
+  api.updateBadgeFromSession();
+  api.updateBadgeFromSession();
+
+  assert.equal(api.state.badge.style.display, 'flex');
+  assert.equal(api.state.badge.textContent, 'Remember to Leave a Voicemail');
+}
+
+function testReminderClearsWhenOutboundCountChanges() {
+  const api = loadScriptForTest();
+
+  setActiveCall(api, '', '22');
+  api.updateBadgeFromSession();
+  api.state.activeSession.payload.outboundCallAmount = '23';
+  api.updateBadgeFromSession();
+
+  assert.equal(api.state.badge.style.display, 'none');
+  assert.equal(api.state.badge.textContent, '');
+}
+
 testShowReminderFalseHidesOnlyReminder();
 testShowReminderDefaultsTrue();
+testReminderWaitsForOutboundRefresh();
+testReminderStaysVisibleForStableQualifyingCount();
+testReminderClearsWhenOutboundCountChanges();
 console.log('voicemail routing reminder tests passed');
