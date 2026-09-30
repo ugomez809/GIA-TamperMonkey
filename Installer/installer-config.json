@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-06",
+  "updatedAt": "2026-09-30",
   "positions": [
     "PRODUCER",
     "CSR",
@@ -38,6 +38,18 @@
       "tags": [],
       "summary": "Adds call, SMS, email, and note actions to AgencyZoom pipeline views.",
       "details": "Adds AgencyZoom-style action icons to lead pipeline cards and task modals. Phone calls route through RingCentral; notes, SMS, and email actions open the matching AgencyZoom workflows."
+    },
+    {
+      "path": "AgencyZoom/Google Review Helper/ulises-google-review-helper-updater.user.js",
+      "positions": [
+        "PRODUCER",
+        "CSR"
+      ],
+      "tags": [
+        "Ulises Gomez"
+      ],
+      "summary": "Shows Google review status on AgencyZoom SMS conversations.",
+      "details": "Checks the open AgencyZoom SMS client name against Ulises Gomez Agency Google reviews, shows whether a review was found, and drafts either the review request or thank-you SMS."
     },
     {
       "path": "AgencyZoom/Producer Tag Hider/agencyzoom-producer-tag-hider-updater.user.js",
