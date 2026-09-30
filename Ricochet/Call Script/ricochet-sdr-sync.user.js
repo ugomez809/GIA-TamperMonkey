@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.5.1
+// @version      2.5.2
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -195,7 +195,7 @@ function startDisplay() {
   document.title = 'SDR Transfer Script';
   document.body.replaceChildren();
   const style = document.createElement('style');
-  style.textContent = 'html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:flex;flex-direction:column}#ricochet-sdr-frame{width:100%;flex:1;min-height:0;border:0}#ricochet-leads{padding:6px 10px;background:#edf3f1;display:flex;gap:6px;flex-wrap:wrap;font:12px system-ui}#ricochet-leads[hidden]{display:none}#ricochet-leads button{font:inherit;padding:5px 9px;border:1px solid #708c80;border-radius:5px;background:white;color:#182e25;cursor:pointer}#ricochet-leads button[aria-pressed=true]{background:#245f48;color:white}#ricochet-sync-status{position:fixed;bottom:8px;left:8px;max-width:calc(100vw - 130px);padding:5px 9px;border-radius:5px;background:#12201ce8;color:white;font:12px system-ui;pointer-events:none;z-index:9999}';
+  style.textContent = 'html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:flex;flex-direction:column}#ricochet-sdr-frame{width:100vw;max-width:100%;flex:1;min-height:0;border:0}#ricochet-leads{padding:6px 10px;background:#edf3f1;display:flex;gap:6px;flex-wrap:wrap;font:12px system-ui}#ricochet-leads[hidden]{display:none}#ricochet-leads button{font:inherit;padding:5px 9px;border:1px solid #708c80;border-radius:5px;background:white;color:#182e25;cursor:pointer}#ricochet-leads button[aria-pressed=true]{background:#245f48;color:white}#ricochet-sync-status{position:fixed;bottom:8px;left:8px;max-width:calc(100vw - 130px);padding:5px 9px;border-radius:5px;background:#12201ce8;color:white;font:12px system-ui;pointer-events:none;z-index:9999}';
   document.head.appendChild(style);
   const frame = document.createElement('iframe');
   frame.id = 'ricochet-sdr-frame';
