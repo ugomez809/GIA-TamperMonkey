@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.5.3
+// @version      2.5.5
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -18,6 +18,8 @@
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // ==/UserScript==
 
 (function () {
@@ -172,7 +174,9 @@ const DISPLAY_HASH = '#tm-auto-shop-script-window';
 const DISPLAY_URL = 'https://example.com/' + DISPLAY_HASH;
 const TYPE = 'ricochet-sdr-v2';
 const TEMPLATE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Call%20Script/html/sdr-transfer-script.html';
+const DEFAULT_REGISTRY_URL = 'https://script.google.com/macros/s/AKfycbz2-nvhiKSeB3Iov1GhFHBYIPDz-z_tmXdI42Kmn8XRaOVHGcAKuYD2r4G65A2HoJ7F/exec';
 const TEMPLATE_CACHE_KEY = 'tmRicochetSdrHtmlV1';
+const ENABLED_CACHE_KEY = 'tmRicochetSdrEnabledV1';
 const WINDOW_BOUNDS_KEY = 'tmRicochetSdrWindowBounds';
 
 function validWindowBounds(bounds) {
@@ -396,6 +400,8 @@ function startDisplay() {
 function startController() {
   let displayWindow;
   const controllerId = crypto.randomUUID();
+  let scriptEnabled = GM_getValue(ENABLED_CACHE_KEY, 'true') !== 'false';
+  let disabledPublished = false;
   window.addEventListener('message', event => {
     const request = event.data;
     if (event.origin !== 'https://example.com' || request?.type !== 'ricochet-sdr-focus' || request.controllerId !== controllerId || !event.source) return;
@@ -430,8 +436,46 @@ function startController() {
   if (typeof GM_addValueChangeListener === 'function') GM_addValueChangeListener(ACTION_KEY, handleAction);
   setInterval(handleAction, 300);
   let candidate = '', lastSent = '';
+  function readRepName() {
+    return clean(GM_getValue(REP_KEY, '') || GM_getValue('callerName', ''));
+  }
+  function publishDisabled() {
+    if (disabledPublished) return;
+    candidate = ''; lastSent = '';
+    GM_setValue(PAYLOAD_KEY, JSON.stringify({type:TYPE, controllerId, leadKey:'none', prefill:{}, leads:[], disabled:true, sentAt:Date.now()}));
+    disabledPublished = true;
+  }
+  function setScriptEnabled(next) {
+    if (scriptEnabled === next) return;
+    scriptEnabled = next;
+    disabledPublished = false;
+    if (!scriptEnabled) {
+      document.getElementById('ricochet-open-script-window')?.remove();
+      if (displayWindow && !displayWindow.closed) displayWindow.close?.();
+      publishDisabled();
+    } else {
+      publish(true);
+      openDisplay();
+    }
+  }
+  function checkEnabledConfig() {
+    const name = readRepName();
+    if (!name || typeof GM_xmlhttpRequest !== 'function') return;
+    GM_xmlhttpRequest({method:'POST', url:DEFAULT_REGISTRY_URL, timeout:15000, headers:{'Content-Type':'text/plain'}, data:JSON.stringify({name}),
+      onload: response => {
+        if (response.status !== 200) return;
+        const result = parseJson(response.responseText);
+        if (!result || result.enabled === undefined) return;
+        GM_setValue(ENABLED_CACHE_KEY, String(result.enabled !== false));
+        setScriptEnabled(result.enabled !== false);
+      },
+      onerror: () => {},
+      ontimeout: () => {}});
+  }
   function publish(force = false) {
-    const rep = GM_getValue(REP_KEY, '') || GM_getValue('callerName', '');
+    if (!scriptEnabled) { publishDisabled(); return; }
+    disabledPublished = false;
+    const rep = readRepName();
     const leads = readLeads(document).map(lead => ({leadKey:lead.key, prefill:buildPrefill(lead, rep), label:lead.name || lead.phone || ''}));
     if (!leads.length && !lastSent && !readPayload()) { candidate = ''; return; }
     const payload = {type: TYPE, controllerId, ...(leads.at(-1) || {leadKey:'none', prefill:{}}), leads};
@@ -444,6 +488,7 @@ function startController() {
     lastSent = signature;
   }
   function openDisplay(focus = false) {
+    if (!scriptEnabled) { publishDisabled(); return; }
     const now = Date.now();
     if (displayWindow && !displayWindow.closed) {
       if (focus) displayWindow.focus();
@@ -477,7 +522,11 @@ function startController() {
   GM_registerMenuCommand('Preview Current Lead (Ctrl+Alt+S)', preview);
   GM_registerMenuCommand('Set SDR Name', () => {
     const name = window.prompt('Your SDR name', GM_getValue(REP_KEY, '') || GM_getValue('callerName', ''));
-    if (name !== null) { GM_setValue(REP_KEY, clean(name)); publish(true); }
+    if (name !== null) {
+      GM_setValue(REP_KEY, clean(name));
+      checkEnabledConfig();
+      publish(true);
+    }
   });
   document.addEventListener('keydown', event => {
     const target = event.target;
@@ -491,12 +540,23 @@ function startController() {
   setInterval(publish, 500);
   openDisplay();
   setInterval(() => openDisplay(), 5000);
+  checkEnabledConfig();
+  setInterval(checkEnabledConfig, 30000);
   if (!clean(GM_getValue(REP_KEY, '') || GM_getValue('callerName', ''))) {
     setTimeout(() => {
       const name = window.prompt('Your SDR name for the transfer script', '');
-      if (name !== null) { GM_setValue(REP_KEY, clean(name)); publish(true); }
+      if (name !== null) {
+        GM_setValue(REP_KEY, clean(name));
+        checkEnabledConfig();
+        publish(true);
+      }
     }, 350);
   }
+}
+
+function parseJson(value) {
+  try { return JSON.parse(String(value || '').trim()); }
+  catch (_) { return null; }
 }
 
 function visible(el) {
