@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync Updater
 // @namespace    local.ricochet-sdr-sync.updater
-// @version      1.0.0
+// @version      1.0.1
 // @description  Loads and auto-updates only the Ricochet SDR Transfer Script Sync script from GitHub.
 // @match        https://giainc.ricochet.me/*
 // @match        https://example.com/*
@@ -16,6 +16,8 @@
 // @grant        GM_registerMenuCommand
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Call%20Script/ricochet-sdr-sync-updater.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Call%20Script/ricochet-sdr-sync-updater.user.js
 // ==/UserScript==
