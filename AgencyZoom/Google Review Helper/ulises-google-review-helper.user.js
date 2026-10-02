@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.1.0
+// @version      0.1.1
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
@@ -27,9 +27,9 @@
   const CACHE_TTL_MS = 10 * 60 * 1000;
 
   const ASK_REVIEW_MESSAGE = [
-    'Your feedback helps our agency recognize outstanding client service. If I helped you today, a quick Google review mentioning my name would mean a lot to me! https://gomezagency.net/review/',
+    'Your feedback helps our agency recognize outstanding client service. If I helped you today, a quick Google review mentioning my name would mean a lot to me! https://gomezagency.net/feedback/',
     '',
-    'Tu opinion ayuda a nuestra agencia a reconocer el excelente servicio de nuestro equipo. Si te ayude hoy, una breve resena en Google mencionando mi nombre significaria mucho para mi! https://gomezagency.net/review/'
+    'Tu opinion ayuda a nuestra agencia a reconocer el excelente servicio de nuestro equipo. Si te ayude hoy, una breve resena en Google mencionando mi nombre significaria mucho para mi! https://gomezagency.net/feedback/'
   ].join('\n');
 
   const THANK_REVIEW_MESSAGE = [

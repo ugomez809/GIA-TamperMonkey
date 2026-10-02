@@ -39,7 +39,8 @@ assert.equal(metadataValue(main, 'downloadURL'), `${encodedBase}/ulises-google-r
 includes(main, "const AGENCY_NAME = 'Ulises Gomez Agency';", 'agency name');
 includes(main, "const AGENCY_ID = 'e51d3d22-5099-425b-865e-a24924b3624c';", 'agency id');
 includes(main, "const ROOT_ID = 'ugomez-google-review-helper';", 'unique DOM root');
-includes(main, 'https://gomezagency.net/review/', 'Ulises review request URL');
+includes(main, 'https://gomezagency.net/feedback/', 'Ulises feedback request URL');
+assert.doesNotMatch(main, /https:\/\/gomezagency\.net\/review\//);
 assert.doesNotMatch(main, /Carlos Perez Agency|CARLOS_AGENCY_ID|cpagy\.com\/review|cpagy-google-review-helper/);
 
 const updater = read(updaterPath);
