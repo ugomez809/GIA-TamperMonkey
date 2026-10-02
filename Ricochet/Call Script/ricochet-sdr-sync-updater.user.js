@@ -25,7 +25,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '1.0.0';
+  const LOADER_VERSION = '1.0.1';
   const TARGET_ID = 'ricochet-sdr-sync';
   const TARGET_LABEL = 'Ricochet SDR Transfer Script Sync';
   const TARGET_FILE = 'ricochet-sdr-sync.user.js';
