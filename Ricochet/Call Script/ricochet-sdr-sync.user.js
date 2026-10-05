@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.5.5
+// @version      2.5.6
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -100,7 +100,11 @@ function installTemplateAdapter() {
     return api.get();
   };
   api.get = () => ({...get(), ...source});
-  api.setAgency = name => { source.agency = name; setAgency(agencies[name] || name); };
+  api.setAgency = name => {
+    source.agency = name;
+    const displayName = agencies[name] || name;
+    if (get().agency !== displayName) setAgency(displayName);
+  };
   api.reset = () => { source = {}; reset(); };
   api.restore = data => api.fill(data);
   api.setActions = ({available=false, agencyKnown=false, busy=false, message=''}) => {
@@ -196,11 +200,15 @@ function readPayload() {
 }
 
 function startDisplay() {
-  document.title = 'SDR Transfer Script';
   document.body.replaceChildren();
   const style = document.createElement('style');
-  style.textContent = 'html,body{margin:0;width:100vw;min-width:100vw;height:100vh;overflow:hidden}body{display:flex;flex-direction:column;align-items:stretch}#ricochet-sdr-frame{display:block;width:100vw;min-width:100vw;flex:1 1 auto;min-height:0;border:0}#ricochet-leads{padding:6px 10px;background:#edf3f1;display:flex;gap:6px;flex-wrap:wrap;font:12px system-ui}#ricochet-leads[hidden]{display:none}#ricochet-leads button{font:inherit;padding:5px 9px;border:1px solid #708c80;border-radius:5px;background:white;color:#182e25;cursor:pointer}#ricochet-leads button[aria-pressed=true]{background:#245f48;color:white}#ricochet-sync-status{position:fixed;bottom:8px;left:8px;max-width:calc(100vw - 130px);padding:5px 9px;border-radius:5px;background:#12201ce8;color:white;font:12px system-ui;pointer-events:none;z-index:9999}';
-  document.head.appendChild(style);
+  style.textContent = 'html,body{box-sizing:border-box;margin:0;padding:0;width:100%;max-width:none;min-width:0;height:100%;overflow:hidden}body{display:flex;flex-direction:column;align-items:stretch}#ricochet-sdr-frame{display:block;width:100%;min-width:0;flex:1 1 0;min-height:0;border:0}#ricochet-leads{flex:none;padding:6px 10px;background:#edf3f1;display:flex;gap:6px;flex-wrap:wrap;font:12px system-ui}#ricochet-leads[hidden]{display:none}#ricochet-leads button{font:inherit;padding:5px 9px;border:1px solid #708c80;border-radius:5px;background:white;color:#182e25;cursor:pointer}#ricochet-leads button[aria-pressed=true]{background:#245f48;color:white}#ricochet-sync-status{position:fixed;bottom:8px;left:8px;max-width:calc(100vw - 130px);padding:5px 9px;border-radius:5px;background:#12201ce8;color:white;font:12px system-ui;pointer-events:none;z-index:9999}';
+  const viewport = document.createElement('meta');
+  viewport.name = 'viewport';
+  viewport.content = 'width=device-width, initial-scale=1';
+  // This window owns its document; example.com's styles must not constrain the iframe.
+  document.head.replaceChildren(viewport, style);
+  document.title = 'SDR Transfer Script';
   const frame = document.createElement('iframe');
   frame.id = 'ricochet-sdr-frame';
   frame.title = 'SDR Transfer Script';
@@ -306,7 +314,7 @@ function startDisplay() {
       if (!syncs.has(selectedKey)) syncs.set(selectedKey, createDisplaySync());
       if (!syncs.get(selectedKey).apply(api, chosen)) return;
       const agency = chosen.prefill.agency || '';
-      if (api.get().agency !== agency && typeof api.setAgency === 'function') api.setAgency(agency);
+      if (typeof api.setAgency === 'function') api.setAgency(agency);
       const label = chosen.prefill.prospect || chosen.label || 'Lead';
       document.title = label + ' | SDR Transfer Script';
       const manual = !chosen.prefill.lead || !chosen.prefill.lob;
@@ -335,7 +343,9 @@ function startDisplay() {
     }),
     mount: html => new Promise((resolve, reject) => {
       const previousApi = frame.contentWindow?.SDR;
-      frame.srcdoc = html + '<script>(' + installTemplateAdapter.toString() + ')();</script>';
+      // Expanded fields must leave space for the script even in a short popup.
+      frame.srcdoc = html + '<style>.bar{max-height:50vh;overflow-y:auto;overscroll-behavior:contain}</style><script>('
+        + installTemplateAdapter.toString() + ')();window.dispatchEvent(new Event("resize"));</script>';
       const deadline = Date.now() + 10000;
       function ready() {
         const page = typeof unsafeWindow === 'undefined' ? window : unsafeWindow;

@@ -28,7 +28,7 @@ The v17 guide also accepts last name, phone, additional insured, property type, 
 
 ## Files
 
-- [Main script, v2.5.5](./ricochet-sdr-sync.user.js)
+- [Main script, v2.5.6](./ricochet-sdr-sync.user.js)
 - [Updater, v1.0.0](./ricochet-sdr-sync-updater.user.js)
 - [Google Sheet web app source](./sdr-script-sheet-webapp.gs)
 
@@ -40,7 +40,13 @@ Edit [html/sdr-transfer-script.html](./html/sdr-transfer-script.html) and commit
 
 Keep `<meta name="ricochet-sdr-api" content="1">`, the placeholder mappings, and `window.SDR` methods `get`, `fill`, `reset`, `restore`, `setActions`, and `setAgency`. Preserve the `sdr:ready` and `sdr:action` events (action `notify`). The quote button opens Jotform directly from the HTML. Layout, wording, styling, and internal guide behavior can change without changing the userscript. Changes to that integration contract require a corresponding userscript update. Keep CSS/JavaScript inline or use absolute resource URLs; relative paths do not resolve against the GitHub HTML folder.
 
-Existing updater installations already grant GitHub download access and automatically receive v2.5.5 between calls.
+Existing updater installations already grant GitHub download access and automatically receive v2.5.6 between calls.
+
+## Window clipping fix (v2.5.6)
+
+The guide removes example.com's host styles before building its display. The iframe fills the popup without the host page's top padding, side padding, or width limit. Expanded fields scroll within half the window height so the script remains reachable in short windows. Agency display names are also reapplied consistently for quote-form prefilling.
+
+Verified with 71 unit/integration tests, the Chrome browser regression suite, and 31 Playwright layout checks on the real host page. Layout checks cover resizing, minimizing, maximizing, restoring, narrow/short windows, expanded fields, scrolling, lead switching, and reloads with cached HTML. These checks use the development userscript bridge; they do not replace verification of an installed Tampermonkey copy.
 
 ## Remembered window placement
 
