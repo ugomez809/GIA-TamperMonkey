@@ -76,6 +76,8 @@ includes(updater, `const BASE_URL = '${encodedBase}';`, 'updater base URL');
 includes(updater, "const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';", 'commit API URL');
 includes(updater, 'isAgencyZoomReviewHelperPage', 'updater allows SMS and service pipeline');
 includes(updater, "path.startsWith('/pipeline/service')", 'updater route guard allows workflow service pipelines');
+includes(updater, 'function isTargetActive', 'updater detects whether cached main helper actually ran');
+includes(updater, '!isTargetActive()', 'updater refreshes or executes when cached target is inactive');
 assert.ok(!updater.includes('window.location.reload()'), 'updater must not reload AgencyZoom by default');
 assert.ok(!updater.includes('location.reload()'), 'updater must not reload AgencyZoom by default');
 assert.ok(!updater.includes('location.assign('), 'updater must not navigate AgencyZoom after cache updates');

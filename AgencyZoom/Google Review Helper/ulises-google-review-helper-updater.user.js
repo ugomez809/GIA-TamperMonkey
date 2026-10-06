@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper Updater
 // @namespace    local.agencyzoom.ulises-google-review-helper.updater
-// @version      0.1.3
+// @version      0.1.4
 // @description  Loads and auto-updates the Ulises AgencyZoom Google Review Helper from GitHub.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
@@ -25,10 +25,12 @@
 (function loadUlisesAgencyZoomGoogleReviewHelper() {
   'use strict';
 
-  const LOADER_VERSION = '0.1.3';
+  const LOADER_VERSION = '0.1.4';
   const TARGET_ID = 'ulises-agencyzoom-google-review-helper';
   const TARGET_LABEL = 'Ulises AgencyZoom Google Review Helper';
   const TARGET_FILE = 'ulises-google-review-helper.user.js';
+  const TARGET_ROOT_ID = 'ugomez-google-review-helper';
+  const TARGET_PIPELINE_MARKER_CLASS = 'ugomez-pipeline-review-card';
   const BASE_URL = 'https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/AgencyZoom/Google%20Review%20Helper';
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 15 * 60 * 1000;
@@ -81,7 +83,7 @@
   async function refreshTarget() {
     const now = Date.now();
     const lastCheck = Number(storageGet(LAST_CHECK_KEY, 0)) || 0;
-    if (!forceCheck && cachedSource && now - lastCheck < CHECK_INTERVAL_MS) {
+    if (!forceCheck && cachedSource && isTargetActive() && now - lastCheck < CHECK_INTERVAL_MS) {
       log('skipped remote check; cache interval has not expired');
       return;
     }
@@ -120,12 +122,25 @@
     storageSet(COMMIT_KEY, commitSha || 'branch');
     log(`cached ${TARGET_LABEL} v${version}`);
 
-    if (!executedCachedScript) {
+    if (!executedCachedScript || !isTargetActive()) {
       executeTarget(source, version);
       return;
     }
 
     log('updated cache; new target will run on the next AgencyZoom page load');
+  }
+
+  function isTargetActive() {
+    const path = String(location.pathname || '');
+    if (path.startsWith('/integration/messages/index')) {
+      return Boolean(document.getElementById(TARGET_ROOT_ID));
+    }
+
+    if (path.startsWith('/pipeline/service')) {
+      return Boolean(document.querySelector(`.${TARGET_PIPELINE_MARKER_CLASS}`));
+    }
+
+    return false;
   }
 
   async function fetchLatestCommitSha() {
