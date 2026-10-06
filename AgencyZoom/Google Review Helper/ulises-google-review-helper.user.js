@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.1.4
+// @version      0.1.5
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
@@ -116,9 +116,12 @@
   }
 
   function isServicePipelinePage() {
+    return isPipelinePage() && hasServicePipelineHeader();
+  }
+
+  function isPipelinePage() {
     const path = String(window.location.pathname || '');
-    return path.startsWith('/pipeline/service') ||
-      (path.startsWith('/pipeline/') && hasServicePipelineHeader());
+    return path.startsWith('/pipeline/');
   }
 
   function hasServicePipelineHeader() {
@@ -915,7 +918,11 @@
   }
 
   const observer = new MutationObserver((mutations) => {
-    if (isServicePipelinePage()) {
+    if (isPipelinePage()) {
+      if (!isServicePipelinePage()) {
+        return;
+      }
+
       window.clearTimeout(observer.timer);
       observer.timer = window.setTimeout(refreshPipelineBadges, 500);
       return;
@@ -937,6 +944,8 @@
   observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   if (isServicePipelinePage()) {
     refreshPipelineBadges();
+  } else if (isPipelinePage()) {
+    // Wait for the specific Service Pipeline header; do not run the SMS helper on other pipelines.
   } else {
     refresh();
   }
