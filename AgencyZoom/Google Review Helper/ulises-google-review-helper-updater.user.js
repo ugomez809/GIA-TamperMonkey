@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper Updater
 // @namespace    local.agencyzoom.ulises-google-review-helper.updater
-// @version      0.1.0
+// @version      0.1.1
 // @description  Loads and auto-updates the Ulises AgencyZoom Google Review Helper from GitHub.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
 // @supportURL   https://github.com/ugomez809/GIA-TamperMonkey/issues
 // @match        https://app.agencyzoom.com/integration/messages/index*
+// @match        https://app.agencyzoom.com/pipeline/service-pipeline*
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
 // @connect      qkjbpszojgyvhzrlopys.supabase.co
@@ -24,7 +25,7 @@
 (function loadUlisesAgencyZoomGoogleReviewHelper() {
   'use strict';
 
-  const LOADER_VERSION = '0.1.0';
+  const LOADER_VERSION = '0.1.1';
   const TARGET_ID = 'ulises-agencyzoom-google-review-helper';
   const TARGET_LABEL = 'Ulises AgencyZoom Google Review Helper';
   const TARGET_FILE = 'ulises-google-review-helper.user.js';
@@ -45,7 +46,7 @@
   let executedSource = '';
   let executedCachedScript = false;
 
-  if (!isAgencyZoomSmsPage()) {
+  if (!isAgencyZoomReviewHelperPage()) {
     return;
   }
 
@@ -67,9 +68,14 @@
     return value === '' || ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
   }
 
-  function isAgencyZoomSmsPage() {
-    return /^app\.agencyzoom\.com$/i.test(String(location.hostname || '')) &&
-      String(location.pathname || '').startsWith('/integration/messages/index');
+  function isAgencyZoomReviewHelperPage() {
+    if (!/^app\.agencyzoom\.com$/i.test(String(location.hostname || ''))) {
+      return false;
+    }
+
+    const path = String(location.pathname || '');
+    return path.startsWith('/integration/messages/index') ||
+      path.startsWith('/pipeline/service-pipeline');
   }
 
   async function refreshTarget() {

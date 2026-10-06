@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.1.1
+// @version      0.1.2
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
 // @supportURL   https://github.com/ugomez809/GIA-TamperMonkey/issues
 // @match        https://app.agencyzoom.com/integration/messages/index*
+// @match        https://app.agencyzoom.com/pipeline/service-pipeline*
 // @connect      qkjbpszojgyvhzrlopys.supabase.co
 // @grant        GM_xmlhttpRequest
 // @run-at       document-idle
@@ -25,6 +26,8 @@
   const AGENCY_ID = 'e51d3d22-5099-425b-865e-a24924b3624c';
   const ROOT_ID = 'ugomez-google-review-helper';
   const CACHE_TTL_MS = 10 * 60 * 1000;
+  const MIN_REVIEW_SEARCH_LETTERS = 2;
+  const PIPELINE_LOOKUP_CONCURRENCY = 3;
 
   const ASK_REVIEW_MESSAGE = [
     'Your feedback helps our agency recognize outstanding client service. If I helped you today, a quick Google review mentioning my name would mean a lot to me! https://gomezagency.net/feedback/',
@@ -43,8 +46,12 @@
   let manualLookupName = '';
   let manualLookupStatus = 'idle';
   let manualLookupMessage = '';
+  let manualLookupRows = [];
   let lookupSequence = 0;
   let manualLookupSequence = 0;
+  let manualLookupTimer = 0;
+  let pipelineLookupRunning = 0;
+  const pipelineLookupQueue = [];
 
   function normalizeName(value) {
     return String(value || '')
@@ -98,6 +105,32 @@
 
     const parts = normalized.split(' ').filter(Boolean);
     return parts.length >= 2 && parts.length <= 5 && parts.every((part) => /^[a-z]+$/.test(part));
+  }
+
+  function countLetters(value) {
+    return (String(value || '').match(/[a-z]/gi) || []).length;
+  }
+
+  function shouldSearchReviewLookup(value) {
+    return countLetters(value) >= MIN_REVIEW_SEARCH_LETTERS;
+  }
+
+  function isServicePipelinePage() {
+    return window.location.pathname.indexOf('/pipeline/service-pipeline') !== -1;
+  }
+
+  function formatReviewSearchSummary(query, rows) {
+    if (!shouldSearchReviewLookup(query)) {
+      return `Type at least ${MIN_REVIEW_SEARCH_LETTERS} letters of a customer name to search in ${AGENCY_NAME}.`;
+    }
+
+    const count = Array.isArray(rows) ? rows.length : 0;
+    if (count === 0) {
+      return `No matches in ${AGENCY_NAME}.`;
+    }
+
+    const countText = count >= 50 ? '50+ matches' : `${count} ${count === 1 ? 'match' : 'matches'}`;
+    return `${countText} in ${AGENCY_NAME}.`;
   }
 
   function findInfoBoxesPanel() {
@@ -379,17 +412,50 @@
       #${ROOT_ID} .ugomez-review-manual-result.ugomez-warn {
         color: #996b00;
       }
+      #${ROOT_ID} .ugomez-review-match-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      #${ROOT_ID} .ugomez-review-match {
+        border-top: 1px solid #eef1f6;
+        padding-top: 6px;
+      }
+      #${ROOT_ID} .ugomez-review-match-name {
+        color: #001f4e;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+      #${ROOT_ID} .ugomez-review-match-meta {
+        color: #6b7280;
+        font-size: 10px;
+        line-height: 1.25;
+      }
       #${ROOT_ID} .ugomez-review-note {
         color: #6b7280;
         font-size: 11px;
         line-height: 1.35;
+      }
+      .ugomez-pipeline-review-card {
+        box-shadow: inset 4px 0 0 #6b7280;
+      }
+      .ugomez-pipeline-review-card.ugomez-reviewed {
+        box-shadow: inset 4px 0 0 #16803c;
+      }
+      .ugomez-pipeline-review-card.ugomez-missing {
+        box-shadow: inset 4px 0 0 #c62828;
+      }
+      .ugomez-pipeline-review-card.ugomez-checking {
+        box-shadow: inset 4px 0 0 #6b7280;
       }
     `;
     document.head.appendChild(style);
   }
 
   function manualResultClass() {
-    if (manualLookupStatus === 'reviewed') {
+    if (manualLookupStatus === 'matches') {
       return 'ugomez-ok';
     }
 
@@ -407,26 +473,64 @@
     }
 
     result.className = `ugomez-review-manual-result ${manualResultClass()}`;
-    result.textContent = manualLookupMessage;
+    result.textContent = '';
     result.hidden = !manualLookupMessage;
+
+    const summary = document.createElement('div');
+    summary.textContent = manualLookupMessage;
+    result.appendChild(summary);
+
+    if (manualLookupRows.length > 0) {
+      const list = document.createElement('div');
+      list.className = 'ugomez-review-match-list';
+
+      manualLookupRows.slice(0, 8).forEach((row) => {
+        const item = document.createElement('div');
+        item.className = 'ugomez-review-match';
+
+        const name = document.createElement('div');
+        name.className = 'ugomez-review-match-name';
+        name.textContent = row.reviewer_name || 'Unnamed reviewer';
+
+        const meta = document.createElement('div');
+        meta.className = 'ugomez-review-match-meta';
+        const date = row.original_review_date || row.review_date || '';
+        const rating = row.rating ? `${row.rating} star${Number(row.rating) === 1 ? '' : 's'}` : '';
+        meta.textContent = [rating, date].filter(Boolean).join(' · ');
+
+        item.append(name, meta);
+        list.appendChild(item);
+      });
+
+      result.appendChild(list);
+    }
   }
 
-  async function runManualLookup(fullName) {
+  async function runManualLookup(query) {
     const sequence = ++manualLookupSequence;
+
+    if (!shouldSearchReviewLookup(query)) {
+      manualLookupStatus = 'idle';
+      manualLookupRows = [];
+      manualLookupMessage = formatReviewSearchSummary(query, []);
+      renderManualLookupResult();
+      return;
+    }
+
     manualLookupStatus = 'loading';
-    manualLookupMessage = `Checking Google review for ${fullName}...`;
+    manualLookupRows = [];
+    manualLookupMessage = `Searching Google reviews for ${query}...`;
     renderManualLookupResult();
 
     try {
-      const result = await lookupReview(fullName);
+      const rows = await lookupReviewRows(query);
       if (sequence !== manualLookupSequence) {
         return;
       }
 
-      manualLookupStatus = result.reviewed ? 'reviewed' : 'missing';
-      manualLookupMessage = result.reviewed
-        ? `${fullName} has an exact Google review match in ${AGENCY_NAME}.`
-        : `${fullName} does not have an exact Google review match in ${AGENCY_NAME}.`;
+      manualLookupRows = rows;
+      manualLookupStatus = rows.length > 0 ? 'matches' : 'missing';
+      manualLookupMessage = formatReviewSearchSummary(query, rows);
       renderManualLookupResult();
     } catch (error) {
       if (sequence !== manualLookupSequence) {
@@ -434,6 +538,7 @@
       }
 
       manualLookupStatus = 'error';
+      manualLookupRows = [];
       manualLookupMessage = `Could not check ProducerBoard: ${error.message}`;
       renderManualLookupResult();
     }
@@ -459,7 +564,7 @@
     input.className = 'ugomez-review-search-input';
     input.type = 'search';
     input.autocomplete = 'off';
-    input.placeholder = 'Client full name';
+    input.placeholder = 'Customer name...';
     input.value = manualLookupName;
 
     const button = document.createElement('button');
@@ -469,35 +574,41 @@
     button.setAttribute('aria-label', 'Search Google review');
     button.innerHTML = '<i class="far fa-search" aria-hidden="true"></i>';
 
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-
+    const updateManualLookup = (debounced) => {
       const lookupName = stripPhoneFromName(input.value);
       manualLookupName = lookupName;
+      window.clearTimeout(manualLookupTimer);
 
-      if (!lookupName) {
+      if (!shouldSearchReviewLookup(lookupName)) {
         manualLookupSequence += 1;
+        manualLookupRows = [];
         manualLookupStatus = 'idle';
-        manualLookupMessage = '';
+        manualLookupMessage = formatReviewSearchSummary(lookupName, []);
         renderManualLookupResult();
         return;
       }
 
-      if (!isLikelyCustomerFullName(lookupName)) {
-        manualLookupSequence += 1;
-        manualLookupStatus = 'error';
-        manualLookupMessage = 'Enter a full customer name to look up a Google review.';
-        renderManualLookupResult();
+      if (debounced) {
+        manualLookupTimer = window.setTimeout(() => runManualLookup(lookupName), 300);
         return;
       }
 
       runManualLookup(lookupName);
+    };
+
+    input.addEventListener('input', () => {
+      updateManualLookup(true);
+    });
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      updateManualLookup(false);
     });
 
     const result = document.createElement('div');
     result.className = `ugomez-review-manual-result ${manualResultClass()}`;
-    result.textContent = manualLookupMessage;
-    result.hidden = !manualLookupMessage;
+    result.textContent = manualLookupMessage || formatReviewSearchSummary(manualLookupName, []);
+    result.hidden = false;
 
     control.append(input, button);
     form.append(label, control, result);
@@ -655,6 +766,95 @@
     return result;
   }
 
+  function findServicePipelineCards() {
+    return Array.from(document.querySelectorAll('#servicePipeline .dd-card.referral-container, #completed-pool .dd-card.referral-container'));
+  }
+
+  function extractPipelineCardName(card) {
+    const lines = String(card.innerText || card.textContent || '')
+      .split(/\n+/)
+      .map((line) => stripPhoneFromName(line))
+      .filter(Boolean);
+
+    for (const line of lines) {
+      if (isLikelyCustomerFullName(line)) {
+        return line;
+      }
+    }
+
+    return '';
+  }
+
+  function setPipelineBadge(card, status) {
+    card.classList.add('ugomez-pipeline-review-card');
+    card.classList.remove('ugomez-reviewed', 'ugomez-missing', 'ugomez-checking');
+
+    const statusClass = status === 'reviewed' ? 'ugomez-reviewed' : status === 'missing' ? 'ugomez-missing' : 'ugomez-checking';
+    const statusLabel = status === 'reviewed' ? 'Google review found' : status === 'missing' ? 'No Google review found' : 'Checking Google review';
+
+    card.classList.add(statusClass);
+    card.title = statusLabel;
+  }
+
+  function processPipelineLookupQueue() {
+    while (pipelineLookupRunning < PIPELINE_LOOKUP_CONCURRENCY && pipelineLookupQueue.length > 0) {
+      const item = pipelineLookupQueue.shift();
+      if (!item.card.isConnected || item.card.dataset.ugomezReviewName !== item.normalizedName) {
+        continue;
+      }
+
+      pipelineLookupRunning += 1;
+      lookupReview(item.fullName)
+        .then((result) => {
+          if (!item.card.isConnected || item.card.dataset.ugomezReviewName !== item.normalizedName) {
+            return;
+          }
+
+          setPipelineBadge(item.card, result.reviewed ? 'reviewed' : 'missing');
+        })
+        .catch(() => {
+          if (!item.card.isConnected || item.card.dataset.ugomezReviewName !== item.normalizedName) {
+            return;
+          }
+
+          setPipelineBadge(item.card, 'error');
+        })
+        .finally(() => {
+          pipelineLookupRunning -= 1;
+          processPipelineLookupQueue();
+        });
+    }
+  }
+
+  function queuePipelineReviewLookup(card, fullName) {
+    const normalizedName = normalizeName(fullName);
+    if (!normalizedName) {
+      return;
+    }
+
+    if (card.dataset.ugomezReviewName === normalizedName && card.classList.contains('ugomez-pipeline-review-card')) {
+      return;
+    }
+
+    card.dataset.ugomezReviewName = normalizedName;
+    setPipelineBadge(card, 'loading');
+    pipelineLookupQueue.push({ card, fullName, normalizedName });
+    processPipelineLookupQueue();
+  }
+
+  function refreshPipelineBadges() {
+    injectStyles();
+
+    findServicePipelineCards().forEach((card) => {
+      const fullName = extractPipelineCardName(card);
+      if (!fullName) {
+        return;
+      }
+
+      queuePipelineReviewLookup(card, fullName);
+    });
+  }
+
   async function refresh() {
     const activeFullName = findActiveFullName();
     const fullName = activeFullName;
@@ -708,6 +908,12 @@
   }
 
   const observer = new MutationObserver((mutations) => {
+    if (isServicePipelinePage()) {
+      window.clearTimeout(observer.timer);
+      observer.timer = window.setTimeout(refreshPipelineBadges, 500);
+      return;
+    }
+
     const root = document.getElementById(ROOT_ID);
     if (root && mutations.every((mutation) => root.contains(mutation.target))) {
       return;
@@ -722,5 +928,9 @@
   });
 
   observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-  refresh();
+  if (isServicePipelinePage()) {
+    refreshPipelineBadges();
+  } else {
+    refresh();
+  }
 })();

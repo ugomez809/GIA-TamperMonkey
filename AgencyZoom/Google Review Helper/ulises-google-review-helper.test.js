@@ -25,6 +25,11 @@ function metadataValue(source, key) {
   return match ? match[1].trim() : '';
 }
 
+function metadataValues(source, key) {
+  return Array.from(metadataBlock(source).matchAll(new RegExp(`^//\\s*@${key}\\s+(.+)$`, 'gm')))
+    .map((match) => match[1].trim());
+}
+
 function includes(source, text, label) {
   assert.ok(source.includes(text), `${label}: ${text}`);
 }
@@ -33,6 +38,7 @@ const main = read(mainPath);
 assert.equal(metadataValue(main, 'name'), 'Ulises AgencyZoom Google Review Helper');
 assert.equal(metadataValue(main, 'namespace'), 'local.agencyzoom.ulises-google-review-helper');
 assert.equal(metadataValue(main, 'match'), 'https://app.agencyzoom.com/integration/messages/index*');
+assert.ok(metadataValues(main, 'match').includes('https://app.agencyzoom.com/pipeline/service-pipeline*'), 'main runs on service pipeline');
 assert.equal(metadataValue(main, 'connect'), 'qkjbpszojgyvhzrlopys.supabase.co');
 assert.equal(metadataValue(main, 'updateURL'), `${encodedBase}/ulises-google-review-helper.user.js`);
 assert.equal(metadataValue(main, 'downloadURL'), `${encodedBase}/ulises-google-review-helper.user.js`);
@@ -40,6 +46,16 @@ includes(main, "const AGENCY_NAME = 'Ulises Gomez Agency';", 'agency name');
 includes(main, "const AGENCY_ID = 'e51d3d22-5099-425b-865e-a24924b3624c';", 'agency id');
 includes(main, "const ROOT_ID = 'ugomez-google-review-helper';", 'unique DOM root');
 includes(main, 'https://gomezagency.net/feedback/', 'Ulises feedback request URL');
+includes(main, 'const MIN_REVIEW_SEARCH_LETTERS = 2;', 'manual lookup minimum letters');
+includes(main, 'formatReviewSearchSummary', 'manual partial search summary');
+includes(main, 'ugomez-review-match-list', 'manual lookup result list');
+includes(main, "placeholder = 'Customer name...';", 'manual lookup partial-name placeholder');
+includes(main, 'function refreshPipelineBadges', 'service pipeline refresh');
+includes(main, "card.classList.add('ugomez-pipeline-review-card');", 'pipeline status marker class');
+includes(main, 'box-shadow: inset 4px 0 0 #16803c;', 'reviewed pipeline marker');
+includes(main, 'box-shadow: inset 4px 0 0 #c62828;', 'missing pipeline marker');
+assert.doesNotMatch(main, /insertBefore\(badge, card\.firstChild\)/);
+assert.doesNotMatch(main, /document\.createElement\('span'\)/);
 assert.doesNotMatch(main, /https:\/\/gomezagency\.net\/review\//);
 assert.doesNotMatch(main, /Carlos Perez Agency|CARLOS_AGENCY_ID|cpagy\.com\/review|cpagy-google-review-helper/);
 
@@ -47,6 +63,7 @@ const updater = read(updaterPath);
 assert.equal(metadataValue(updater, 'name'), 'Ulises AgencyZoom Google Review Helper Updater');
 assert.equal(metadataValue(updater, 'namespace'), 'local.agencyzoom.ulises-google-review-helper.updater');
 assert.equal(metadataValue(updater, 'match'), 'https://app.agencyzoom.com/integration/messages/index*');
+assert.ok(metadataValues(updater, 'match').includes('https://app.agencyzoom.com/pipeline/service-pipeline*'), 'updater runs on service pipeline');
 assert.equal(metadataValue(updater, 'updateURL'), `${encodedBase}/ulises-google-review-helper-updater.user.js`);
 assert.equal(metadataValue(updater, 'downloadURL'), `${encodedBase}/ulises-google-review-helper-updater.user.js`);
 includes(updater, '// @connect      api.github.com', 'GitHub API connect');
@@ -56,6 +73,7 @@ includes(updater, "const TARGET_ID = 'ulises-agencyzoom-google-review-helper';",
 includes(updater, "const TARGET_FILE = 'ulises-google-review-helper.user.js';", 'updater target file');
 includes(updater, `const BASE_URL = '${encodedBase}';`, 'updater base URL');
 includes(updater, "const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';", 'commit API URL');
+includes(updater, 'isAgencyZoomReviewHelperPage', 'updater allows SMS and service pipeline');
 assert.ok(!updater.includes('window.location.reload()'), 'updater must not reload AgencyZoom by default');
 assert.ok(!updater.includes('location.reload()'), 'updater must not reload AgencyZoom by default');
 assert.ok(!updater.includes('location.assign('), 'updater must not navigate AgencyZoom after cache updates');
