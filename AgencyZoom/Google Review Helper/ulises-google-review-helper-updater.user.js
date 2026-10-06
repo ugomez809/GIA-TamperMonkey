@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper Updater
 // @namespace    local.agencyzoom.ulises-google-review-helper.updater
-// @version      0.1.1
+// @version      0.1.2
 // @description  Loads and auto-updates the Ulises AgencyZoom Google Review Helper from GitHub.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
@@ -25,7 +25,7 @@
 (function loadUlisesAgencyZoomGoogleReviewHelper() {
   'use strict';
 
-  const LOADER_VERSION = '0.1.1';
+  const LOADER_VERSION = '0.1.2';
   const TARGET_ID = 'ulises-agencyzoom-google-review-helper';
   const TARGET_LABEL = 'Ulises AgencyZoom Google Review Helper';
   const TARGET_FILE = 'ulises-google-review-helper.user.js';
