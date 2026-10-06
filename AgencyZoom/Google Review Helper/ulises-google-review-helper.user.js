@@ -7,7 +7,7 @@
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
 // @supportURL   https://github.com/ugomez809/GIA-TamperMonkey/issues
 // @match        https://app.agencyzoom.com/integration/messages/index*
-// @match        https://app.agencyzoom.com/pipeline/service-pipeline*
+// @match        https://app.agencyzoom.com/pipeline/service*
 // @connect      qkjbpszojgyvhzrlopys.supabase.co
 // @grant        GM_xmlhttpRequest
 // @run-at       document-idle
@@ -116,7 +116,8 @@
   }
 
   function isServicePipelinePage() {
-    return window.location.pathname.indexOf('/pipeline/service-pipeline') !== -1;
+    const path = String(window.location.pathname || '');
+    return path.startsWith('/pipeline/service');
   }
 
   function formatReviewSearchSummary(query, rows) {

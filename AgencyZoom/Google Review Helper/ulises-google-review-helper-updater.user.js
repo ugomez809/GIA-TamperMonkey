@@ -7,7 +7,7 @@
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
 // @supportURL   https://github.com/ugomez809/GIA-TamperMonkey/issues
 // @match        https://app.agencyzoom.com/integration/messages/index*
-// @match        https://app.agencyzoom.com/pipeline/service-pipeline*
+// @match        https://app.agencyzoom.com/pipeline/service*
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
 // @connect      qkjbpszojgyvhzrlopys.supabase.co
@@ -75,7 +75,7 @@
 
     const path = String(location.pathname || '');
     return path.startsWith('/integration/messages/index') ||
-      path.startsWith('/pipeline/service-pipeline');
+      path.startsWith('/pipeline/service');
   }
 
   async function refreshTarget() {
