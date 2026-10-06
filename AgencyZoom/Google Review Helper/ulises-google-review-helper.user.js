@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.1.5
+// @version      0.1.6
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
@@ -126,7 +126,7 @@
 
   function hasServicePipelineHeader() {
     return Array.from(document.querySelectorAll('h2'))
-      .some((heading) => /^1\.\s*Service Pipeline$/i.test(compactText(heading.textContent)));
+      .some((heading) => compactText(heading.textContent) === '1. Service Pipeline');
   }
 
   function formatReviewSearchSummary(query, rows) {

@@ -53,7 +53,7 @@ includes(main, "placeholder = 'Customer name...';", 'manual lookup partial-name 
 includes(main, 'function refreshPipelineBadges', 'service pipeline refresh');
 includes(main, 'function isPipelinePage', 'pipeline page guard');
 includes(main, 'function hasServicePipelineHeader', 'service pipeline header detector');
-includes(main, '1\\.\\s*Service Pipeline', 'service pipeline header text match');
+includes(main, "compactText(heading.textContent) === '1. Service Pipeline'", 'exact service pipeline header text match');
 includes(main, 'if (isPipelinePage())', 'pipeline pages do not fall through to SMS helper');
 assert.doesNotMatch(main, /return path\.startsWith\('\/pipeline\/service'\) \|\|/);
 includes(main, "card.classList.add('ugomez-pipeline-review-card');", 'pipeline status marker class');
