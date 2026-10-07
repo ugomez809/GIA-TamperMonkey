@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.5.6
+// @version      2.5.7
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -226,6 +226,7 @@ function startDisplay() {
   let focusedLeadKey = '';
   let previousKeys = new Set();
   let pending = readPayload();
+  let accessHidden = false;
   let readyDocument;
   let actionPending;
   const actionMessages = new Map();
@@ -266,6 +267,18 @@ function startDisplay() {
       view.addEventListener('sdr:action', sendAction);
       view.addEventListener('sdr:notify', () => { if (!view.document.querySelector('[data-action]')) sendAction({detail:{action:'notify'}}); });
     }
+    if (pending?.disabled) {
+      if (!accessHidden) {
+        frame.style.display = 'none';
+        drafts.clear(); syncs.clear(); activeKey = '';
+        status.textContent = 'SDR script disabled';
+        accessHidden = true;
+        try { view.SDR?.reset?.(); } catch (_) {}
+      }
+      window.close();
+      return;
+    }
+    if (accessHidden) { frame.style.display = ''; accessHidden = false; }
     if (!pending) return;
     try {
       const leads = pending.leads || [pending];
@@ -410,7 +423,8 @@ function startDisplay() {
 function startController() {
   let displayWindow;
   const controllerId = crypto.randomUUID();
-  let scriptEnabled = GM_getValue(ENABLED_CACHE_KEY, 'true') !== 'false';
+  let scriptEnabled = false;
+  let authorizedName = '', configCheckId = 0;
   let disabledPublished = false;
   window.addEventListener('message', event => {
     const request = event.data;
@@ -469,18 +483,27 @@ function startController() {
     }
   }
   function checkEnabledConfig() {
+    const checkId = ++configCheckId;
     const name = readRepName();
-    if (!name || typeof GM_xmlhttpRequest !== 'function') return;
+    if (name !== authorizedName) setScriptEnabled(false);
+    const deny = () => {
+      if (checkId !== configCheckId) return;
+      authorizedName = '';
+      GM_setValue(ENABLED_CACHE_KEY, 'false');
+      setScriptEnabled(false);
+    };
+    if (!name || typeof GM_xmlhttpRequest !== 'function') { deny(); return; }
     GM_xmlhttpRequest({method:'POST', url:DEFAULT_REGISTRY_URL, timeout:15000, headers:{'Content-Type':'text/plain'}, data:JSON.stringify({name}),
       onload: response => {
-        if (response.status !== 200) return;
-        const result = parseJson(response.responseText);
-        if (!result || result.enabled === undefined) return;
-        GM_setValue(ENABLED_CACHE_KEY, String(result.enabled !== false));
-        setScriptEnabled(result.enabled !== false);
+        if (checkId !== configCheckId || name !== readRepName()) return;
+        const result = response.status === 200 ? parseJson(response.responseText) : null;
+        if (result?.ok !== true || clean(result.name).toLowerCase() !== name.toLowerCase() || result.enabled !== true) { deny(); return; }
+        authorizedName = name;
+        GM_setValue(ENABLED_CACHE_KEY, 'true');
+        setScriptEnabled(true);
       },
-      onerror: () => {},
-      ontimeout: () => {}});
+      onerror: deny,
+      ontimeout: deny});
   }
   function publish(force = false) {
     if (!scriptEnabled) { publishDisabled(); return; }

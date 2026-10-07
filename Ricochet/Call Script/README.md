@@ -28,7 +28,7 @@ The v17 guide also accepts last name, phone, additional insured, property type, 
 
 ## Files
 
-- [Main script, v2.5.6](./ricochet-sdr-sync.user.js)
+- [Main script, v2.5.7](./ricochet-sdr-sync.user.js)
 - [Updater, v1.0.0](./ricochet-sdr-sync-updater.user.js)
 - [Google Sheet web app source](./sdr-script-sheet-webapp.gs)
 
@@ -40,7 +40,11 @@ Edit [html/sdr-transfer-script.html](./html/sdr-transfer-script.html) and commit
 
 Keep `<meta name="ricochet-sdr-api" content="1">`, the placeholder mappings, and `window.SDR` methods `get`, `fill`, `reset`, `restore`, `setActions`, and `setAgency`. Preserve the `sdr:ready` and `sdr:action` events (action `notify`). The quote button opens Jotform directly from the HTML. Layout, wording, styling, and internal guide behavior can change without changing the userscript. Changes to that integration contract require a corresponding userscript update. Keep CSS/JavaScript inline or use absolute resource URLs; relative paths do not resolve against the GitHub HTML folder.
 
-Existing updater installations already grant GitHub download access and automatically receive v2.5.6 between calls.
+Existing updater installations already grant GitHub download access and automatically receive v2.5.7 between calls.
+
+## Sheet access fix (v2.5.7)
+
+The guide opens only after the Sheet confirms `TRUE` for the saved SDR name. A `FALSE` reply closes the guide and clears its visible content. Missing names, failed requests, invalid replies, and outdated replies do not grant access. If the Sheet cannot be reached, the guide stays closed until a later successful check. The controller checks every 30 seconds; existing updater installs apply this release when no lead box is open.
 
 ## Window clipping fix (v2.5.6)
 
