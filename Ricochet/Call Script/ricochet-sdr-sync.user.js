@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet SDR Transfer Script Sync
 // @namespace    local.ricochet-sdr-transfer-script-sync
-// @version      2.5.7
+// @version      2.5.8
 // @description  Sync the current Ricochet lead into the supplied home/auto SDR transfer guide.
 // @author       JKira & Mr.G
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey/tree/main/Ricochet/Call%20Script
@@ -424,7 +424,7 @@ function startController() {
   let displayWindow;
   const controllerId = crypto.randomUUID();
   let scriptEnabled = false;
-  let authorizedName = '', configCheckId = 0;
+  let authorizedName = '', configCheckId = 0, lastApprovedAt = 0;
   let disabledPublished = false;
   window.addEventListener('message', event => {
     const request = event.data;
@@ -489,21 +489,29 @@ function startController() {
     const deny = () => {
       if (checkId !== configCheckId) return;
       authorizedName = '';
+      lastApprovedAt = 0;
       GM_setValue(ENABLED_CACHE_KEY, 'false');
       setScriptEnabled(false);
     };
     if (!name || typeof GM_xmlhttpRequest !== 'function') { deny(); return; }
+    const unavailable = () => {
+      if (checkId !== configCheckId) return;
+      if (name !== readRepName() || authorizedName !== name || Date.now() - lastApprovedAt >= 300000) deny();
+      setTimeout(() => { if (checkId === configCheckId) checkEnabledConfig(); }, 5000);
+    };
     GM_xmlhttpRequest({method:'POST', url:DEFAULT_REGISTRY_URL, timeout:15000, headers:{'Content-Type':'text/plain'}, data:JSON.stringify({name}),
       onload: response => {
         if (checkId !== configCheckId || name !== readRepName()) return;
         const result = response.status === 200 ? parseJson(response.responseText) : null;
-        if (result?.ok !== true || clean(result.name).toLowerCase() !== name.toLowerCase() || result.enabled !== true) { deny(); return; }
+        if (result?.ok !== true || clean(result.name).toLowerCase() !== name.toLowerCase()) { unavailable(); return; }
+        if (result.enabled !== true) { deny(); return; }
         authorizedName = name;
+        lastApprovedAt = Date.now();
         GM_setValue(ENABLED_CACHE_KEY, 'true');
         setScriptEnabled(true);
       },
-      onerror: deny,
-      ontimeout: deny});
+      onerror: unavailable,
+      ontimeout: unavailable});
   }
   function publish(force = false) {
     if (!scriptEnabled) { publishDisabled(); return; }
