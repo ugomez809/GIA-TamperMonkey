@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ricochet Pickup & Hangup Counters Updater
 // @namespace    local.ricochet-pickup-hangup-counters.updater
-// @version      1.1.0
+// @version      1.1.1
 // @description  Loads and auto-updates only the Ricochet Pickup & Hangup Counters script from GitHub.
 // @match        https://giainc.ricochet.me/*
 // @run-at       document-idle
@@ -13,6 +13,8 @@
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
 // @connect      hooks.zapier.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Pickup%20%26%20Hangup%20Counters/ricochet-pickup-hangup-counters-updater.user.js
 // @downloadURL  https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Pickup%20%26%20Hangup%20Counters/ricochet-pickup-hangup-counters-updater.user.js
 // ==/UserScript==
@@ -20,7 +22,7 @@
 (function () {
   'use strict';
 
-  const LOADER_VERSION = '1.1.0';
+  const LOADER_VERSION = '1.1.1';
   const TARGET_ID = 'ricochet-pickup-hangup-counters';
   const TARGET_LABEL = 'Ricochet Pickup & Hangup Counters';
   const TARGET_FILE = 'ricochet-pickup-hangup-counters.user.js';

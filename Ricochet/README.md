@@ -12,6 +12,8 @@ https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/Ricochet/Voice
 
 Install only the updater for the script each PC needs. Each updater fetches, caches, and runs only the Ricochet script in its folder.
 
+Pickup & Hangup Counters v0.6.55 requires updater v1.1.1 or newer for Google Apps Script webhook permissions. Update the installed updater in Tampermonkey and accept the new Google connection permissions, then reload Ricochet.
+
 Each updater checks GitHub every 30 seconds while Ricochet is open and reloads once when it finds a script change.
 
 Direct script links:
