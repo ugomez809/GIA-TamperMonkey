@@ -27,8 +27,7 @@
   const DAILY_REPORT_HOUR = 17;
   const DAILY_REPORT_MINUTE = 25;
   const CLICK_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz7myzHeUW4X3BPLro7s3jyj9ajedxyxFx0VoxuBBuvDNIQfzYnHhZ_HfgzYwcxK13g/exec?receiver=ricochet-clicked&key=c7201db0-a352-477a-9338-024f6843b9f243f4dda7-7816-4741-8167-979bbf2bad56';
-  const REPORT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz7myzHeUW4X3BPLro7s3jyj9ajedxyxFx0VoxuBBuvDNIQfzYnHhZ_HfgzYwcxK13g/exec?receiver=ricochet-clicked&key=c7201db0-a352-477a-9338-024f6843b9f243f4dda7-7816-4741-8167-979bbf2bad56';
-
+  const REPORT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz7myzHeUW4X3BPLro7s3jyj9ajedxyxFx0VoxuBBuvDNIQfzYnHhZ_HfgzYwcxK13g/exec?receiver=ricochet-ph&key=36f12c7e-7c1c-4c2b-bd1b-1bb36f3ee3c082d9b245-424b-4719-aa98-b942683de857';
   // If Ricochet does not expose a name in the page, put the agent name here.
   const CLICKED_BY_OVERRIDE = '';
 
