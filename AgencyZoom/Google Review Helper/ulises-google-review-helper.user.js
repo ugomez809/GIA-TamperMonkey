@@ -1,15 +1,18 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.1.6
+// @version      0.2.0
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
 // @supportURL   https://github.com/ugomez809/GIA-TamperMonkey/issues
 // @match        https://app.agencyzoom.com/integration/messages/index*
 // @match        https://app.agencyzoom.com/pipeline/*
-// @connect      qkjbpszojgyvhzrlopys.supabase.co
+// @connect      docs.google.com
+// @connect      googleusercontent.com
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @run-at       document-idle
 // @noframes
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=agencyzoom.com
@@ -21,11 +24,10 @@
   'use strict';
 
   const AGENCY_NAME = 'Ulises Gomez Agency';
-  const SUPABASE_URL = 'https://qkjbpszojgyvhzrlopys.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFramJwc3pvamd5dmh6cmxvcHlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjE3MjAsImV4cCI6MjA5MDgzNzcyMH0.RdzNhybpUCitGpX-mBtOQS__fATOCx4o9HllE3_X2bg';
-  const AGENCY_ID = 'e51d3d22-5099-425b-865e-a24924b3624c';
+  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA/export?format=csv&gid=0';
+  const SHEET_CACHE_KEY = 'ulisesReviewSheet:v1:1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA:0';
   const ROOT_ID = 'ugomez-google-review-helper';
-  const CACHE_TTL_MS = 10 * 60 * 1000;
+  const SHEET_REFRESH_MS = 4 * 60 * 60 * 1000;
   const MIN_REVIEW_SEARCH_LETTERS = 2;
   const PIPELINE_LOOKUP_CONCURRENCY = 3;
 
@@ -41,7 +43,11 @@
     'Gracias por dejarnos una resena en Google. Tu opinion ayuda a nuestra agencia a reconocer el buen servicio y ayuda a otros clientes a sentirse seguros al elegirnos. De verdad aprecio que hayas tomado el tiempo.'
   ].join('\n');
 
-  const cache = new Map();
+  const reviewStore = createReviewStore({
+    fetchCsv: requestSheetCsv,
+    read: () => typeof GM_getValue === 'function' ? GM_getValue(SHEET_CACHE_KEY, '') : '',
+    write: value => { if (typeof GM_setValue === 'function') GM_setValue(SHEET_CACHE_KEY, value); }
+  });
   let lastRenderedName = '';
   let manualLookupName = '';
   let manualLookupStatus = 'idle';
@@ -540,7 +546,7 @@
 
       manualLookupRows = rows;
       manualLookupStatus = rows.length > 0 ? 'matches' : 'missing';
-      manualLookupMessage = formatReviewSearchSummary(query, rows);
+      manualLookupMessage = formatReviewSearchSummary(query, rows) + (reviewStore.status().stale ? ' Cached list is stale; recent reviews may be missing.' : '');
       renderManualLookupResult();
     } catch (error) {
       if (sequence !== manualLookupSequence) {
@@ -549,7 +555,7 @@
 
       manualLookupStatus = 'error';
       manualLookupRows = [];
-      manualLookupMessage = `Could not check ProducerBoard: ${error.message}`;
+      manualLookupMessage = `Could not read review sheet: ${error.message}`;
       renderManualLookupResult();
     }
   }
@@ -630,7 +636,7 @@
     const root = ensureRoot();
     const statusClass = state.status === 'reviewed' ? 'ugomez-ok' : state.status === 'missing' ? 'ugomez-no' : 'ugomez-warn';
     const symbol = state.status === 'reviewed' ? '✓' : state.status === 'missing' ? 'X' : '...';
-    const label = state.status === 'reviewed' ? 'GOOGLE REVIEW' : state.status === 'missing' ? 'NO GOOGLE REVIEW' : 'REVIEW CHECK';
+    const label = state.status === 'reviewed' ? 'GOOGLE REVIEW' : state.status === 'missing' ? 'NO EXACT MATCH' : state.status === 'stale' ? 'STALE REVIEW LIST' : 'REVIEW CHECK';
     const buttonText = state.status === 'reviewed' ? 'Thanks for the Google Review' : 'Send Google Review Request';
 
     root.innerHTML = '';
@@ -666,6 +672,21 @@
     note.className = 'ugomez-review-note';
     note.textContent = state.message;
     stack.appendChild(note);
+    const sheetStatus = document.createElement('div');
+    sheetStatus.className = 'ugomez-review-note ugomez-sheet-status';
+    sheetStatus.textContent = sheetStatusText();
+    const refreshButton = document.createElement('button');
+    refreshButton.type = 'button';
+    refreshButton.textContent = 'Refresh review sheet';
+    refreshButton.addEventListener('click', async () => {
+      refreshButton.disabled = true;
+      refreshButton.textContent = 'Refreshing…';
+      await refreshSheetAndView(true);
+      refreshButton.disabled = false;
+      refreshButton.textContent = 'Refresh review sheet';
+      sheetStatus.textContent = sheetStatusText();
+    });
+    stack.append(sheetStatus, refreshButton);
   }
 
   function setNativeValue(element, value) {
@@ -708,72 +729,148 @@
     return false;
   }
 
-  function escapePostgrestLike(value) {
-    return String(value || '').replace(/[\\%_]/g, (character) => `\\${character}`);
+  // Parse RFC-style CSV without splitting quoted comments containing commas/newlines.
+  function parseReviewCsv(text) {
+    text = String(text || '').replace(/^\uFEFF/, '');
+    if (/^\s*</.test(text)) throw new Error('Google returned a sign-in page instead of CSV. Check sheet sharing.');
+    const grid = [];
+    let row = [], cell = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (c === '"') {
+        if (quoted && text[i + 1] === '"') { cell += '"'; i++; }
+        else quoted = !quoted;
+      } else if (!quoted && (c === ',' || c === '\r' || c === '\n')) {
+        row.push(cell); cell = '';
+        if (c !== ',') { grid.push(row); row = []; if (c === '\r' && text[i + 1] === '\n') i++; }
+      } else cell += c;
+    }
+    if (quoted) throw new Error('Incomplete CSV download.');
+    if (cell || row.length) { row.push(cell); grid.push(row); }
+    const headers = (grid.shift() || []).map(value => value.trim().toLowerCase());
+    const nameIndex = headers.indexOf('name');
+    const dateIndex = headers.indexOf('timestamp');
+    const ratingIndex = headers.indexOf('rating 1-5');
+    const idIndex = headers.indexOf('review id');
+    if (nameIndex < 0 || dateIndex < 0 || ratingIndex < 0) throw new Error('Sheet needs Name, Timestamp and Rating 1-5 columns.');
+    const rows = grid.filter(values => values.some(value => value.trim())).map(values => {
+      if (values.length !== headers.length) throw new Error('Incomplete or malformed CSV row.');
+      return { reviewer_name: values[nameIndex].trim(), rating: values[ratingIndex].trim(),
+        original_review_date: values[dateIndex].trim(), id: idIndex < 0 ? '' : values[idIndex].trim() };
+    }).filter(value => normalizeName(value.reviewer_name));
+    if (!rows.length) throw new Error('Sheet has no reviewer names; keeping previous data.');
+    rows.sort((a, b) => b.original_review_date.localeCompare(a.original_review_date));
+    return rows;
   }
 
-  function buildReviewLookupUrl(fullName) {
-    const params = new URLSearchParams({
-      select: 'id,agency_id,reviewer_name,rating,comment,original_review_date,review_date',
-      agency_id: `eq.${AGENCY_ID}`,
-      reviewer_name: `ilike.*${escapePostgrestLike(fullName)}*`,
-      order: 'original_review_date.desc.nullslast',
-      limit: '50'
-    });
-
-    return `${SUPABASE_URL}/rest/v1/google_reviews?${params.toString()}`;
+  function createReviewStore({ fetchCsv, read, write, now = () => Date.now() }) {
+    let rows = [], index = new Map(), fetchedAt = 0, inFlight = null, retryAt = 0, error = '';
+    let lastStorageRead = -Infinity;
+    function install(data) {
+      rows = data.rows; fetchedAt = data.fetchedAt;
+      index = new Map();
+      rows.forEach(row => {
+        const key = normalizeName(row.reviewer_name);
+        if (!index.has(key)) index.set(key, []);
+        index.get(key).push(row);
+      });
+    }
+    function loadSaved() {
+      if (now() - lastStorageRead < 60000) return;
+      lastStorageRead = now();
+      try {
+        const saved = JSON.parse(read() || 'null');
+        if (saved && saved.version === 1 && Number.isFinite(saved.fetchedAt) && saved.fetchedAt > fetchedAt && saved.fetchedAt <= now() &&
+          Array.isArray(saved.rows) && saved.rows.length && saved.rows.every(row => row && typeof row.reviewer_name === 'string' && normalizeName(row.reviewer_name))) install(saved);
+      } catch { /* Unavailable storage or corrupt cache: download a fresh copy. */ }
+    }
+    loadSaved();
+    async function ensure(force = false) {
+      loadSaved();
+      if (inFlight) return inFlight;
+      if (!force && rows.length && now() - fetchedAt < SHEET_REFRESH_MS) return;
+      if (!force && now() < retryAt) {
+        if (!rows.length) throw new Error(error || 'Review sheet unavailable.');
+        return;
+      }
+      inFlight = (async () => {
+        try {
+          const nextRows = parseReviewCsv(await fetchCsv());
+          const data = { version: 1, fetchedAt: now(), rows: nextRows };
+          install(data); error = ''; retryAt = 0;
+          try { write(JSON.stringify(data)); } catch { /* Keep working from memory if storage is full. */ }
+        } catch (failure) {
+          error = failure.message || String(failure); retryAt = now() + 5 * 60 * 1000;
+          if (!rows.length) throw failure;
+        }
+      })();
+      try { await inFlight; } finally { inFlight = null; }
+    }
+    return {
+      ensure,
+      exact: name => index.get(normalizeName(name)) || [],
+      search: name => {
+        const query = normalizeName(name), result = [];
+        if (!query) return result;
+        for (const row of rows) {
+          if (normalizeName(row.reviewer_name).includes(query)) result.push(row);
+          if (result.length >= 50) break;
+        }
+        return result;
+      },
+      status: () => ({ fetchedAt, count: rows.length, stale: !fetchedAt || now() - fetchedAt >= SHEET_REFRESH_MS, error })
+    };
   }
 
-  function requestJson(url) {
+  function requestSheetCsv() {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
-        method: 'GET',
-        url,
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        method: 'GET', url: SHEET_URL + '&_=' + Date.now(), anonymous: true, timeout: 30000,
+        onload: response => {
+          if (response.status !== 200) { reject(new Error('Sheet download returned HTTP ' + response.status)); return; }
+          resolve(String(response.responseText || ''));
         },
-        timeout: 15000,
-        onload: (response) => {
-          if (response.status < 200 || response.status >= 300) {
-            reject(new Error(`Review lookup returned ${response.status}`));
-            return;
-          }
-
-          try {
-            resolve(JSON.parse(response.responseText || '[]'));
-          } catch {
-            reject(new Error('Review lookup returned invalid JSON'));
-          }
-        },
-        onerror: () => reject(new Error('Review lookup request failed')),
-        ontimeout: () => reject(new Error('Review lookup request timed out'))
+        onerror: () => reject(new Error('Sheet download failed. Check connection and sharing.')),
+        ontimeout: () => reject(new Error('Sheet download timed out.'))
       });
     });
   }
 
   async function lookupReviewRows(fullName) {
-    return requestJson(buildReviewLookupUrl(fullName));
+    await reviewStore.ensure();
+    return reviewStore.search(fullName);
   }
 
   async function lookupReview(fullName) {
-    const normalized = normalizeName(fullName);
-    const cached = cache.get(normalized);
-    if (cached && Date.now() - cached.checkedAt < CACHE_TTL_MS) {
-      return cached;
-    }
+    await reviewStore.ensure();
+    const rows = reviewStore.exact(fullName);
+    return { reviewed: rows.length > 0, rows, reviewNames: rows.map(row => row.reviewer_name) };
+  }
 
-    const rows = await lookupReviewRows(fullName);
-    const reviewNames = rows.map((row) => row.reviewer_name).filter(Boolean);
-    const reviewed = reviewNames.some((name) => normalizeName(name) === normalized);
-    const result = {
-      checkedAt: Date.now(),
-      reviewed,
-      reviewNames,
-      rows
-    };
-    cache.set(normalized, result);
-    return result;
+  function sheetStatusText() {
+    const state = reviewStore.status();
+    if (!state.fetchedAt) return state.error || 'Review sheet has not loaded yet.';
+    return state.count + ' reviews · Updated ' + new Date(state.fetchedAt).toLocaleString() +
+      (state.stale ? ' · STALE — latest reviews may be missing.' : '') +
+      (state.error ? ' · Refresh failed: ' + state.error : '');
+  }
+
+  async function refreshSheetAndView(force = false) {
+    const before = JSON.stringify(reviewStore.status());
+    try { await reviewStore.ensure(force); } catch { /* Show unavailable state through normal UI. */ }
+    if (!force && before === JSON.stringify(reviewStore.status())) return;
+    lastRenderedName = '';
+    findServicePipelineCards().forEach(card => { delete card.dataset.ugomezReviewName; });
+    if (isServicePipelinePage()) refreshPipelineBadges();
+    else if (!isPipelinePage()) {
+      if (!force && helperHasFocus()) {
+        const status = document.querySelector('#' + ROOT_ID + ' .ugomez-sheet-status');
+        if (status) status.textContent = sheetStatusText();
+        return;
+      }
+      await refresh();
+      if (shouldSearchReviewLookup(manualLookupName)) runManualLookup(manualLookupName);
+    }
   }
 
   function findServicePipelineCards() {
@@ -800,10 +897,10 @@
     card.classList.remove('ugomez-reviewed', 'ugomez-missing', 'ugomez-checking');
 
     const statusClass = status === 'reviewed' ? 'ugomez-reviewed' : status === 'missing' ? 'ugomez-missing' : 'ugomez-checking';
-    const statusLabel = status === 'reviewed' ? 'Google review found' : status === 'missing' ? 'No Google review found' : 'Checking Google review';
+    const statusLabel = status === 'reviewed' ? 'Google review found' : status === 'missing' ? 'No exact review name match in sheet' : status === 'error' ? 'Review sheet unavailable' : status === 'stale' ? 'Stale review list; refresh needed' : 'Checking Google review';
 
     card.classList.add(statusClass);
-    card.title = statusLabel;
+    card.title = statusLabel + ' · ' + sheetStatusText();
   }
 
   function processPipelineLookupQueue() {
@@ -820,7 +917,7 @@
             return;
           }
 
-          setPipelineBadge(item.card, result.reviewed ? 'reviewed' : 'missing');
+          setPipelineBadge(item.card, result.reviewed ? 'reviewed' : reviewStore.status().stale ? 'stale' : 'missing');
         })
         .catch(() => {
           if (!item.card.isConnected || item.card.dataset.ugomezReviewName !== item.normalizedName) {
@@ -898,11 +995,11 @@
       }
 
       renderState({
-        status: result.reviewed ? 'reviewed' : 'missing',
+        status: result.reviewed ? 'reviewed' : reviewStore.status().stale ? 'stale' : 'missing',
         fullName,
         message: result.reviewed
           ? `${fullName} has an exact Google review match in ${AGENCY_NAME}.`
-          : `${fullName} does not have an exact Google review match in ${AGENCY_NAME}.`
+          : `${fullName} has no exact name match in the review sheet.`
       });
     } catch (error) {
       if (sequence !== lookupSequence) {
@@ -912,7 +1009,7 @@
       renderState({
         status: 'error',
         fullName,
-        message: `Could not check ProducerBoard: ${error.message}`
+        message: `Could not read review sheet: ${error.message}`
       });
     }
   }
@@ -941,6 +1038,9 @@
     observer.timer = window.setTimeout(refresh, 300);
   });
 
+  // Timer also refreshes long-lived tabs; shared GM storage avoids repeat downloads on navigation.
+  window.setInterval(() => { if (!document.hidden) refreshSheetAndView(); }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSheetAndView(); });
   observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   if (isServicePipelinePage()) {
     refreshPipelineBadges();
