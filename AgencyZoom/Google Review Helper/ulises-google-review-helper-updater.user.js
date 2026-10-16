@@ -1,18 +1,20 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper Updater
 // @namespace    local.agencyzoom.ulises-google-review-helper.updater
-// @version      0.2.0
+// @version      0.4.2
 // @description  Loads and auto-updates the Ulises AgencyZoom Google Review Helper from GitHub.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
 // @supportURL   https://github.com/ugomez809/GIA-TamperMonkey/issues
 // @match        https://app.agencyzoom.com/integration/messages/index*
-// @match        https://app.agencyzoom.com/pipeline/service*
+// @match        https://app.agencyzoom.com/pipeline/*
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
+// @connect      script.google.com
 // @connect      docs.google.com
 // @connect      googleusercontent.com
 // @grant        GM_xmlhttpRequest
+// @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
@@ -26,7 +28,7 @@
 (function loadUlisesAgencyZoomGoogleReviewHelper() {
   'use strict';
 
-  const LOADER_VERSION = '0.2.0';
+  const LOADER_VERSION = '0.4.2';
   const TARGET_ID = 'ulises-agencyzoom-google-review-helper';
   const TARGET_LABEL = 'Ulises AgencyZoom Google Review Helper';
   const TARGET_FILE = 'ulises-google-review-helper.user.js';
@@ -36,7 +38,7 @@
   const COMMIT_API_URL = 'https://api.github.com/repos/ugomez809/GIA-TamperMonkey/commits/main';
   const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
-  const CACHE_KEY = `tmStaffPerScriptUpdater:${TARGET_ID}:sheet-v1:code`;
+  const CACHE_KEY = `tmStaffPerScriptUpdater:${TARGET_ID}:sheet-v3:code`;
   const VERSION_KEY = `tmStaffPerScriptUpdater:${TARGET_ID}:version`;
   const COMMIT_KEY = `tmStaffPerScriptUpdater:${TARGET_ID}:commit`;
   const LAST_CHECK_KEY = `tmStaffPerScriptUpdater:${TARGET_ID}:lastCheck`;
@@ -78,7 +80,7 @@
 
     const path = String(location.pathname || '');
     return path.startsWith('/integration/messages/index') ||
-      path.startsWith('/pipeline/service');
+      path.startsWith('/pipeline/');
   }
 
   async function refreshTarget() {
@@ -137,7 +139,7 @@
       return Boolean(document.getElementById(TARGET_ROOT_ID));
     }
 
-    if (path.startsWith('/pipeline/service')) {
+    if (path.startsWith('/pipeline/')) {
       return Boolean(document.querySelector(`.${TARGET_PIPELINE_MARKER_CLASS}`));
     }
 

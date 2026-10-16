@@ -1,16 +1,18 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.2.0
+// @version      0.4.2
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
 // @supportURL   https://github.com/ugomez809/GIA-TamperMonkey/issues
 // @match        https://app.agencyzoom.com/integration/messages/index*
 // @match        https://app.agencyzoom.com/pipeline/*
+// @connect      script.google.com
 // @connect      docs.google.com
 // @connect      googleusercontent.com
 // @grant        GM_xmlhttpRequest
+// @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @run-at       document-idle
@@ -23,11 +25,13 @@
 (function attachUlisesReviewHelper() {
   'use strict';
 
+  const MATCH_SERVICE_URL = 'https://script.google.com/macros/s/AKfycbxSQX_8WnbX54WJQTqJJB9jB6x4s68yeAKAsP7nsSrMo1r-LXwPyVHSs0gTgSc0YgKt/exec'; // Deployed service; staff key is stored locally.
+  const MATCH_CONFIG_KEY = 'ulisesReviewMatches:config';
   const AGENCY_NAME = 'Ulises Gomez Agency';
   const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA/export?format=csv&gid=0';
-  const SHEET_CACHE_KEY = 'ulisesReviewSheet:v1:1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA:0';
+  const SHEET_CACHE_KEY = 'ulisesReviewSheet:v3:1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA:0';
   const ROOT_ID = 'ugomez-google-review-helper';
-  const SHEET_REFRESH_MS = 4 * 60 * 60 * 1000;
+  const SHEET_REFRESH_MS = 60 * 60 * 1000;
   const MIN_REVIEW_SEARCH_LETTERS = 2;
   const PIPELINE_LOOKUP_CONCURRENCY = 3;
 
@@ -46,7 +50,9 @@
   const reviewStore = createReviewStore({
     fetchCsv: requestSheetCsv,
     read: () => typeof GM_getValue === 'function' ? GM_getValue(SHEET_CACHE_KEY, '') : '',
-    write: value => { if (typeof GM_setValue === 'function') GM_setValue(SHEET_CACHE_KEY, value); }
+    write: value => { if (typeof GM_setValue === 'function') GM_setValue(SHEET_CACHE_KEY, value); },
+    readConfirmation: row => typeof GM_getValue === 'function' ? GM_getValue(SHEET_CACHE_KEY + ':match:' + reviewIdentity(row), '') : '',
+    writeConfirmation: (row,value) => { if (typeof GM_setValue === 'function') GM_setValue(SHEET_CACHE_KEY + ':match:' + reviewIdentity(row), value); }
   });
   let lastRenderedName = '';
   let manualLookupName = '';
@@ -58,6 +64,11 @@
   let manualLookupTimer = 0;
   let pipelineLookupRunning = 0;
   const pipelineLookupQueue = [];
+  const surfaceStates = new WeakMap();
+  const smsRowStates = new WeakMap();
+  let reviewPopover = null;
+  let popoverOwner = null;
+  let popoverCloseTimer = 0;
 
   function normalizeName(value) {
     return String(value || '')
@@ -67,6 +78,14 @@
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
+  }
+
+  function nameWords(value) {
+    return [...new Set(normalizeName(value).split(' ').filter(word => word.length > 1 && /[a-z]/.test(word)))];
+  }
+
+  function isKnownReviewName(value) {
+    return Boolean(nameWords(value).length) && !/^(unknown|unmatched|no name|loading)(\b|$)/i.test(compactText(value));
   }
 
   function compactText(value) {
@@ -102,7 +121,8 @@
       'review check',
       'messages from',
       'acct producer csr',
-      'at a glance'
+      'at a glance',
+      'visit history'
     ];
 
     if (blockedPhrases.some((phrase) => normalized.includes(phrase))) {
@@ -188,6 +208,11 @@
   }
 
   function findActiveFullName() {
+    const contact = document.querySelector('.tm-header-title .contact-name');
+    if (contact) {
+      const name = stripPhoneFromName(contact.textContent);
+      return isKnownReviewName(name) ? name : '';
+    }
     const panelMatch = findInfoBoxesPanel();
     const panelName = findCustomerNameInPanel(panelMatch && panelMatch.content, panelMatch && panelMatch.infoBoxes);
     if (panelName) {
@@ -463,6 +488,41 @@
       .ugomez-pipeline-review-card.ugomez-missing {
         box-shadow: inset 4px 0 0 #c62828;
       }
+      .ugomez-pipeline-review-card.ugomez-partial {
+        box-shadow: inset 4px 0 0 #e0a000;
+      }
+      #${ROOT_ID} .ugomez-partial { background: #fff3bf; color: #664d03; }
+      [data-ugomez-review-status="reviewed"] { --ugomez-review-tint: rgba(22, 128, 60, .13); --ugomez-review-border: #16803c; }
+      [data-ugomez-review-status="partial"] { --ugomez-review-tint: rgba(224, 160, 0, .16); --ugomez-review-border: #d99a00; }
+      [data-ugomez-review-status="missing"] { --ugomez-review-tint: rgba(198, 40, 40, .12); --ugomez-review-border: #c62828; }
+      #threadContainer a.thread[data-ugomez-review-status] {
+        box-shadow: inset 4px 0 0 var(--ugomez-review-border);
+      }
+      #threadContainer h6.thread-name { display: inline; }
+      #threadContainer .ugomez-review-icon { width: 24px; height: 24px; margin-left: 6px; }
+      .ugomez-confirm-review { margin: 6px 0 6px 8px; padding: 3px 7px; cursor: pointer; border: 1px solid #16803c; border-radius: 4px; background: white; color: #146c32; }
+      .ugomez-confirm-feedback { display: block; font-size: 12px; white-space: normal; }
+      .ugomez-review-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; margin-left: 8px; padding: 4px;
+        border: 1px solid #dadce0; border-radius: 50%; background: #fff;
+        cursor: pointer; vertical-align: middle; flex-shrink: 0;
+      }
+      .ugomez-review-icon svg { width: 18px; height: 18px; pointer-events: none; }
+      .ugomez-review-icon:focus-visible { outline: 2px solid #4285f4; outline-offset: 2px; }
+      .ugomez-review-popover {
+        position: fixed; z-index: 2147483646; width: 390px; max-width: calc(100vw - 16px);
+        max-height: min(480px, calc(100vh - 24px)); overflow: auto; overscroll-behavior: contain;
+        box-sizing: border-box; padding: 16px; border: 1px solid #d5dbe2; border-radius: 10px;
+        background: #fff; color: #202124; box-shadow: 0 8px 30px #0003;
+        font: 13px/1.5 Arial, sans-serif; text-align: left;
+      }
+      .ugomez-review-popover h4 { font: bold 15px/1.4 Arial, sans-serif; margin: 0 0 6px; color: inherit; }
+      .ugomez-review-popover .ugomez-review-disclaimer { color: #705300; margin: 0 0 10px; }
+      .ugomez-review-popover article { border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 10px; }
+      .ugomez-review-match .ugomez-review-comment,
+      .ugomez-review-popover .ugomez-review-comment { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 6px; }
+      .ugomez-review-popover .ugomez-review-meta { color: #5f6368; font-size: 12px; }
       .ugomez-pipeline-review-card.ugomez-checking {
         box-shadow: inset 4px 0 0 #6b7280;
       }
@@ -514,7 +574,12 @@
         const rating = row.rating ? `${row.rating} star${Number(row.rating) === 1 ? '' : 's'}` : '';
         meta.textContent = [rating, date].filter(Boolean).join(' · ');
 
-        item.append(name, meta);
+        const comment = document.createElement('div');
+        comment.className = 'ugomez-review-comment';
+        comment.textContent = row.comment || 'No review text provided.';
+
+        name.append(createConfirmationControl(row, activeConfirmationName));
+        item.append(name, meta, comment);
         list.appendChild(item);
       });
 
@@ -634,12 +699,24 @@
 
   function renderState(state) {
     const root = ensureRoot();
-    const statusClass = state.status === 'reviewed' ? 'ugomez-ok' : state.status === 'missing' ? 'ugomez-no' : 'ugomez-warn';
+    const statusClass = state.status === 'reviewed' ? 'ugomez-ok' : state.status === 'missing' ? 'ugomez-no' : state.status === 'partial' ? 'ugomez-partial' : 'ugomez-warn';
     const symbol = state.status === 'reviewed' ? '✓' : state.status === 'missing' ? 'X' : '...';
-    const label = state.status === 'reviewed' ? 'GOOGLE REVIEW' : state.status === 'missing' ? 'NO EXACT MATCH' : state.status === 'stale' ? 'STALE REVIEW LIST' : 'REVIEW CHECK';
+    const label = state.status === 'reviewed' ? 'GOOGLE REVIEW' : state.status === 'missing' ? 'NO NAME MATCH' : state.status === 'partial' ? 'POSSIBLE REVIEW' : state.status === 'stale' ? 'STALE REVIEW LIST' : 'REVIEW CHECK';
     const buttonText = state.status === 'reviewed' ? 'Thanks for the Google Review' : 'Send Google Review Request';
 
     root.innerHTML = '';
+    if (!state.fullName) {
+      const lookupStack = document.createElement('div');
+      lookupStack.className = 'ugomez-review-stack';
+      root.appendChild(lookupStack);
+      addManualLookupBox(lookupStack, state);
+      const note = document.createElement('div');
+      note.className = 'ugomez-review-note';
+      note.textContent = 'Missing name';
+      lookupStack.appendChild(note);
+      renderManualLookupResult();
+      return;
+    }
 
     const stack = document.createElement('div');
     stack.className = 'ugomez-review-stack';
@@ -675,18 +752,8 @@
     const sheetStatus = document.createElement('div');
     sheetStatus.className = 'ugomez-review-note ugomez-sheet-status';
     sheetStatus.textContent = sheetStatusText();
-    const refreshButton = document.createElement('button');
-    refreshButton.type = 'button';
-    refreshButton.textContent = 'Refresh review sheet';
-    refreshButton.addEventListener('click', async () => {
-      refreshButton.disabled = true;
-      refreshButton.textContent = 'Refreshing…';
-      await refreshSheetAndView(true);
-      refreshButton.disabled = false;
-      refreshButton.textContent = 'Refresh review sheet';
-      sheetStatus.textContent = sheetStatusText();
-    });
-    stack.append(sheetStatus, refreshButton);
+    stack.append(sheetStatus);
+    renderManualLookupResult();
   }
 
   function setNativeValue(element, value) {
@@ -729,6 +796,151 @@
     return false;
   }
 
+  function reviewIdentity(row) {
+    return JSON.stringify([row.id || '', row.reviewer_name || '', row.original_review_date || '', row.rating || '', row.comment || '', row.page || '']);
+  }
+
+  function hasConfirmation(row, name) {
+    return (row.confirmedNames || []).some(value => normalizeName(value) === normalizeName(name));
+  }
+
+  function activeConfirmationName() {
+    const ticket = document.querySelector('#serviceDetailDock');
+    const header = ticket && !ticket.classList.contains('d-none') && ticket.querySelector('#currentCustomerName');
+    const name = header ? stripPhoneFromName(header.textContent) : findActiveFullName();
+    return isKnownReviewName(name) ? name : '';
+  }
+
+  function readMatchConfig() {
+    try {
+      const value = JSON.parse(GM_getValue(MATCH_CONFIG_KEY, '{}'));
+      return {url: value.url || MATCH_SERVICE_URL, token: value.token || ''};
+    } catch { return {url: MATCH_SERVICE_URL, token: ''}; }
+  }
+
+  function configureMatchWrites() {
+    const saved = readMatchConfig();
+    const url = window.prompt('Shared review save URL (Apps Script /exec URL):', saved.url);
+    if (url === null) return;
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/.test(url.trim())) {
+      window.alert('Use the deployed Apps Script /exec URL.'); return;
+    }
+    const token = window.prompt('Staff review-save key (provided by your administrator):', '');
+    if (token === null) return;
+    if (token.trim().length < 32) { window.alert('The save key must be at least 32 characters.'); return; }
+    GM_setValue(MATCH_CONFIG_KEY, JSON.stringify({url:url.trim(),token:token.trim()}));
+    window.alert('Shared review saves configured. Reload AgencyZoom to apply.');
+  }
+
+  function postMatchRequests(requests) {
+    const config = readMatchConfig();
+    if (!config.url || !config.token) return Promise.reject(Error('Shared saves need setup. Use Tampermonkey → Configure shared review saves.'));
+    return new Promise((resolve,reject) => {
+      GM_xmlhttpRequest({method:'POST', url:config.url, anonymous:true, timeout:30000,
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        data:JSON.stringify({token:config.token,requests}),
+        onload:response => {
+          try {
+            if (response.status < 200 || response.status >= 300) throw Error('Save service returned HTTP ' + response.status);
+            const data = JSON.parse(response.responseText);
+            if (!data.ok || !Array.isArray(data.results) || data.results.length !== requests.length) throw Error(data.error || 'Invalid save response.');
+            resolve(data.results);
+          } catch (error) { reject(Error(error.message.startsWith('Unexpected') ? 'Save service is unavailable or requires sign-in.' : error.message)); }
+        }, onerror:()=>reject(Error('Could not reach the save service. Nothing was confirmed locally.')),
+        ontimeout:()=>reject(Error('Save timed out. Retry safely; duplicate confirmations are ignored.'))
+      });
+    });
+  }
+
+  function updateConfirmedViews() {
+    lastRenderedName = '';
+    findServicePipelineCards().forEach(card => { delete card.dataset.ugomezReviewName; });
+    if (isServicePipelinePage()) refreshPipelineBadges();
+    else refresh();
+  }
+
+  function createConfirmationControl(row, getName) {
+    const wrap = document.createElement('span');
+    const button = document.createElement('button');
+    const feedback = document.createElement('span');
+    button.type = 'button'; button.className = 'ugomez-confirm-review';
+    feedback.className = 'ugomez-confirm-feedback'; feedback.setAttribute('role','status');
+    const customerName = getName();
+    let confirmed = hasConfirmation(row,customerName);
+    const exact = normalizeName(row.reviewer_name) === normalizeName(customerName);
+    function paint() {
+      button.textContent = confirmed ? (exact ? '✓ Confirmed' : '✓ Confirmed · Undo') : '✓';
+      button.disabled = !isKnownReviewName(customerName) || (confirmed && exact);
+      button.title = !customerName ? 'Open a customer with a name to confirm this review.' :
+        (confirmed ? 'Confirmed for ' : 'Confirm review for ') + customerName;
+      button.setAttribute('aria-label',button.title);
+    }
+    paint();
+    button.addEventListener('click', async event => {
+      event.preventDefault(); event.stopPropagation();
+      if (normalizeName(getName()) !== normalizeName(customerName)) { feedback.textContent='Customer changed. Reopen the review results.'; return; }
+      button.disabled = true; feedback.textContent = 'Saving…';
+      try {
+        const [result] = await postMatchRequests([{review:row,customerName,action:confirmed ? 'remove' : 'confirm'}]);
+        if (!result.ok || !Array.isArray(result.names)) throw Error(result.error || 'Confirmation was not saved.');
+        const names = reviewStore.applyConfirmation(row,result.names,result.revision);
+        row.confirmedNames = names || result.names;
+        confirmed = hasConfirmation(row,customerName);
+        feedback.textContent = confirmed ? 'Saved for ' + customerName : 'Confirmation removed';
+        updateConfirmedViews();
+      } catch (error) { feedback.textContent = error.message; }
+      paint();
+    });
+    wrap.append(button,feedback);
+    return wrap;
+  }
+
+  const automaticMatchQueue = new Map();
+  const automaticMatchRetry = new Map();
+  const automaticMatchAttempts = new Map();
+  let automaticMatchTimer = 0, automaticMatchRunning = false;
+  function queueAutomaticMatches(name, rows) {
+    const config = readMatchConfig();
+    if (!config.url || !config.token) return;
+    rows.forEach(row => {
+      if (normalizeName(row.reviewer_name) !== normalizeName(name) || hasConfirmation(row,name)) return;
+      const key = reviewIdentity(row) + normalizeName(name);
+      if ((automaticMatchAttempts.get(key) || 0) >= 3 || (automaticMatchRetry.get(key) || 0) > Date.now()) return;
+      automaticMatchQueue.set(key,{review:row,customerName:name,action:'auto'});
+    });
+    if (automaticMatchQueue.size && !automaticMatchTimer && !automaticMatchRunning) automaticMatchTimer = window.setTimeout(flushAutomaticMatches,1500);
+  }
+  async function flushAutomaticMatches() {
+    automaticMatchTimer = 0;
+    if (automaticMatchRunning) return;
+    automaticMatchRunning = true;
+    const batch = [...automaticMatchQueue.entries()].filter(([key]) => (automaticMatchRetry.get(key) || 0) <= Date.now()).slice(0,25);
+    batch.forEach(([key]) => { automaticMatchQueue.delete(key); automaticMatchRetry.set(key,Date.now()+5*60*1000); });
+    let changed = false;
+    try {
+      if (!batch.length) return;
+      const results = await postMatchRequests(batch.map(([,request])=>request));
+      results.forEach((result,i) => {
+        if (!result.ok || !Array.isArray(result.names)) return;
+        reviewStore.applyConfirmation(batch[i][1].review,result.names,result.revision); automaticMatchAttempts.delete(batch[i][0]); changed = true;
+      });
+    } catch {
+      batch.forEach(([key,request]) => {
+        const attempts = (automaticMatchAttempts.get(key) || 0) + 1;
+        automaticMatchAttempts.set(key,attempts);
+        if (attempts < 3) automaticMatchQueue.set(key,request);
+      });
+    }
+    finally {
+      automaticMatchRunning = false;
+      if (changed) updateConfirmedViews();
+      if (automaticMatchQueue.size) {
+        const next = Math.min(...[...automaticMatchQueue.keys()].map(key => automaticMatchRetry.get(key) || 0));
+        automaticMatchTimer = window.setTimeout(flushAutomaticMatches,Math.max(1500,next-Date.now()));
+      }
+    }
+  }
+
   // Parse RFC-style CSV without splitting quoted comments containing commas/newlines.
   function parseReviewCsv(text) {
     text = String(text || '').replace(/^\uFEFF/, '');
@@ -752,27 +964,49 @@
     const dateIndex = headers.indexOf('timestamp');
     const ratingIndex = headers.indexOf('rating 1-5');
     const idIndex = headers.indexOf('review id');
+    const commentIndex = headers.indexOf('comments');
+    const pageIndex = headers.indexOf('gmb page');
+    const matchesIndex = headers[8] === 'agencyzoom matches' ? 8 : -1;
     if (nameIndex < 0 || dateIndex < 0 || ratingIndex < 0) throw new Error('Sheet needs Name, Timestamp and Rating 1-5 columns.');
     const rows = grid.filter(values => values.some(value => value.trim())).map(values => {
       if (values.length !== headers.length) throw new Error('Incomplete or malformed CSV row.');
       return { reviewer_name: values[nameIndex].trim(), rating: values[ratingIndex].trim(),
-        original_review_date: values[dateIndex].trim(), id: idIndex < 0 ? '' : values[idIndex].trim() };
+        original_review_date: values[dateIndex].trim(), id: idIndex < 0 ? '' : values[idIndex].trim(),
+        comment: commentIndex < 0 ? '' : values[commentIndex].trim(), page: pageIndex < 0 ? '' : values[pageIndex].trim(),
+        confirmedNames: matchesIndex < 0 ? [] : values[matchesIndex].split(/\r?\n/).map(name => name.trim()).filter(isKnownReviewName) };
     }).filter(value => normalizeName(value.reviewer_name));
     if (!rows.length) throw new Error('Sheet has no reviewer names; keeping previous data.');
     rows.sort((a, b) => b.original_review_date.localeCompare(a.original_review_date));
     return rows;
   }
 
-  function createReviewStore({ fetchCsv, read, write, now = () => Date.now() }) {
-    let rows = [], index = new Map(), fetchedAt = 0, inFlight = null, retryAt = 0, error = '';
+  function createReviewStore({ fetchCsv, read, write, readConfirmation = () => '', writeConfirmation = () => {}, now = () => Date.now() }) {
+    let rows = [], index = new Map(), tokenIndex = new Map(), fetchedAt = 0, snapshotStartedAt = 0, updatedAt = 0, revision = 0, inFlight = null, retryAt = 0, error = '';
     let lastStorageRead = -Infinity;
-    function install(data) {
-      rows = data.rows; fetchedAt = data.fetchedAt;
+    function savedConfirmation(row) {
+      try {
+        const saved = JSON.parse(readConfirmation(row) || 'null');
+        return saved && Number.isFinite(saved.revision) && Number.isFinite(saved.receivedAt) && Array.isArray(saved.names) && saved.names.every(n => typeof n === 'string') ? saved : null;
+      } catch { return null; }
+    }
+    function install(data, overlays = true) {
+      rows = data.rows; fetchedAt = data.fetchedAt; snapshotStartedAt = data.fetchStartedAt || fetchedAt; updatedAt = data.updatedAt || fetchedAt; revision++;
+      if (overlays) rows.forEach(row => {
+        const saved = savedConfirmation(row);
+        if (saved && saved.receivedAt >= snapshotStartedAt) row.confirmedNames = saved.names;
+      });
       index = new Map();
+      tokenIndex = new Map();
       rows.forEach(row => {
-        const key = normalizeName(row.reviewer_name);
-        if (!index.has(key)) index.set(key, []);
-        index.get(key).push(row);
+        const names = [row.reviewer_name, ...(row.confirmedNames || [])];
+        [...new Set(names.map(normalizeName))].forEach(key => {
+          if (!index.has(key)) index.set(key, []);
+          index.get(key).push(row);
+          nameWords(key).forEach(word => {
+            if (!tokenIndex.has(word)) tokenIndex.set(word, new Set());
+            tokenIndex.get(word).add(row);
+          });
+        });
       });
     }
     function loadSaved() {
@@ -780,8 +1014,8 @@
       lastStorageRead = now();
       try {
         const saved = JSON.parse(read() || 'null');
-        if (saved && saved.version === 1 && Number.isFinite(saved.fetchedAt) && saved.fetchedAt > fetchedAt && saved.fetchedAt <= now() &&
-          Array.isArray(saved.rows) && saved.rows.length && saved.rows.every(row => row && typeof row.reviewer_name === 'string' && normalizeName(row.reviewer_name))) install(saved);
+        if (saved && saved.version === 3 && Number.isFinite(saved.fetchedAt) && (saved.updatedAt || saved.fetchedAt) > updatedAt && saved.fetchedAt <= now() &&
+          Array.isArray(saved.rows) && saved.rows.length && saved.rows.every(row => row && typeof row.reviewer_name === 'string' && normalizeName(row.reviewer_name) && Array.isArray(row.confirmedNames) && row.confirmedNames.every(n => typeof n === 'string'))) install(saved);
       } catch { /* Unavailable storage or corrupt cache: download a fresh copy. */ }
     }
     loadSaved();
@@ -794,9 +1028,10 @@
         return;
       }
       inFlight = (async () => {
+        const fetchStartedAt = now();
         try {
           const nextRows = parseReviewCsv(await fetchCsv());
-          const data = { version: 1, fetchedAt: now(), rows: nextRows };
+          const data = { version: 3, fetchStartedAt, fetchedAt: now(), updatedAt: now(), rows: nextRows };
           install(data); error = ''; retryAt = 0;
           try { write(JSON.stringify(data)); } catch { /* Keep working from memory if storage is full. */ }
         } catch (failure) {
@@ -808,7 +1043,27 @@
     }
     return {
       ensure,
+      applyConfirmation: (review, names, serverRevision = Math.max(now(),updatedAt+1)) => {
+        const target = rows.find(row => reviewIdentity(row) === reviewIdentity(review));
+        if (!target) return;
+        const saved = savedConfirmation(review);
+        if (saved && saved.revision > serverRevision) names = saved.names;
+        else {
+          try { writeConfirmation(review,JSON.stringify({revision:serverRevision,receivedAt:now(),names})); } catch { /* Keep current tab usable. */ }
+        }
+        target.confirmedNames = names;
+        install({fetchedAt,fetchStartedAt:snapshotStartedAt,updatedAt:Math.max(now(),updatedAt+1),rows},false);
+        return names;
+      },
       exact: name => index.get(normalizeName(name)) || [],
+      match: name => {
+        const exactRows = index.get(normalizeName(name)) || [];
+        const candidates = new Set(exactRows);
+        nameWords(name).forEach(word => (tokenIndex.get(word) || []).forEach(row => candidates.add(row)));
+        const exactSet = new Set(exactRows);
+        const matches = [...exactRows, ...rows.filter(row => candidates.has(row) && !exactSet.has(row))];
+        return { status: exactRows.length ? 'reviewed' : matches.length ? 'partial' : 'missing', rows: matches, exactRows };
+      },
       search: name => {
         const query = normalizeName(name), result = [];
         if (!query) return result;
@@ -818,7 +1073,7 @@
         }
         return result;
       },
-      status: () => ({ fetchedAt, count: rows.length, stale: !fetchedAt || now() - fetchedAt >= SHEET_REFRESH_MS, error })
+      status: () => ({ fetchedAt, revision, count: rows.length, stale: !fetchedAt || now() - fetchedAt >= SHEET_REFRESH_MS, error })
     };
   }
 
@@ -843,8 +1098,9 @@
 
   async function lookupReview(fullName) {
     await reviewStore.ensure();
-    const rows = reviewStore.exact(fullName);
-    return { reviewed: rows.length > 0, rows, reviewNames: rows.map(row => row.reviewer_name) };
+    const result = reviewStore.match(fullName);
+    queueAutomaticMatches(fullName, result.exactRows);
+    return { ...result, reviewed: result.status === 'reviewed', reviewNames: result.rows.map(row => row.reviewer_name) };
   }
 
   function sheetStatusText() {
@@ -860,6 +1116,7 @@
     try { await reviewStore.ensure(force); } catch { /* Show unavailable state through normal UI. */ }
     if (!force && before === JSON.stringify(reviewStore.status())) return;
     lastRenderedName = '';
+    refreshReviewSurfaces();
     findServicePipelineCards().forEach(card => { delete card.dataset.ugomezReviewName; });
     if (isServicePipelinePage()) refreshPipelineBadges();
     else if (!isPipelinePage()) {
@@ -877,7 +1134,182 @@
     return Array.from(document.querySelectorAll('#servicePipeline .dd-card.referral-container, #completed-pool .dd-card.referral-container'));
   }
 
+  function isReviewUiMutation(mutation) {
+    const owned = node => node && node.nodeType === 1 &&
+      (node.matches('.ugomez-review-icon, .ugomez-review-popover') || node.closest('.ugomez-review-icon, .ugomez-review-popover'));
+    if (owned(mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement)) return true;
+    const nodes = [...mutation.addedNodes, ...mutation.removedNodes];
+    return nodes.length > 0 && nodes.every(owned);
+  }
+
+  function closeReviewPopover() {
+    window.clearTimeout(popoverCloseTimer);
+    reviewPopover?.remove();
+    if (popoverOwner) popoverOwner.setAttribute('aria-expanded', 'false');
+    reviewPopover = null;
+    popoverOwner = null;
+  }
+
+  function schedulePopoverClose() {
+    window.clearTimeout(popoverCloseTimer);
+    popoverCloseTimer = window.setTimeout(closeReviewPopover, 250);
+  }
+
+  function showReviewPopover(button, name, result) {
+    closeReviewPopover();
+    popoverOwner = button;
+    button.setAttribute('aria-expanded', 'true');
+    const panel = document.createElement('div');
+    panel.id = ROOT_ID + '-reviews';
+    panel.className = 'ugomez-review-popover';
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-label', 'Matching Google reviews');
+    panel.tabIndex = 0;
+    const heading = document.createElement('h4');
+    heading.textContent = result.status === 'unnamed' ? 'Missing name' : name + ' · ' + result.rows.length + ' matching reviews';
+    const disclaimer = document.createElement('p');
+    disclaimer.className = 'ugomez-review-disclaimer';
+    disclaimer.textContent = result.status === 'unnamed' ? 'Use Review Lookup Name on the right to search for this customer.' : result.status === 'error' ? 'Review sheet unavailable. Try again after refreshing.' :
+      result.rows.length ? 'Shared names are possible matches, not proof of identity. Exact names appear first.' :
+      'No matching name words in the cached review sheet.';
+    const cacheNote = document.createElement('div');
+    cacheNote.className = 'ugomez-review-meta';
+    cacheNote.textContent = sheetStatusText();
+    panel.append(heading, disclaimer);
+    if (result.status !== 'unnamed') panel.append(cacheNote);
+    result.rows.forEach(row => {
+      const article = document.createElement('article');
+      const title = document.createElement('strong');
+      title.textContent = row.reviewer_name;
+      const meta = document.createElement('div');
+      meta.className = 'ugomez-review-meta';
+      meta.textContent = [row.rating ? row.rating + '/5 stars' : '', row.original_review_date,
+        row.page, normalizeName(row.reviewer_name) === normalizeName(name) ? 'Exact name' : hasConfirmation(row, name) ? 'Confirmed match' : 'Possible match'].filter(Boolean).join(' · ');
+      const comment = document.createElement('div');
+      comment.className = 'ugomez-review-comment';
+      comment.textContent = row.comment || 'No review text provided.';
+      const reviewHeading = document.createElement('div');
+      reviewHeading.append(title, createConfirmationControl(row, () => name));
+      article.append(reviewHeading, meta, comment);
+      panel.appendChild(article);
+    });
+    panel.addEventListener('mouseenter', () => window.clearTimeout(popoverCloseTimer));
+    panel.addEventListener('mouseleave', schedulePopoverClose);
+    panel.addEventListener('focusin', () => window.clearTimeout(popoverCloseTimer));
+    panel.addEventListener('focusout', event => { if (!panel.contains(event.relatedTarget)) schedulePopoverClose(); });
+    panel.addEventListener('keydown', event => { if (event.key === 'Escape') { closeReviewPopover(); button.suppressReviewFocus = true; button.focus(); } });
+    document.body.appendChild(panel);
+    reviewPopover = panel;
+    const rect = button.getBoundingClientRect();
+    const height = panel.getBoundingClientRect().height;
+    panel.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - panel.offsetWidth - 8)) + 'px';
+    panel.style.top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8)) + 'px';
+  }
+
+  function mountReviewIcon(header, name, result) {
+    let button = header.parentElement.querySelector('.ugomez-review-icon');
+    if (!button) {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ugomez-review-icon';
+      button.setAttribute('aria-controls', ROOT_ID + '-reviews');
+      button.setAttribute('aria-expanded', 'false');
+      // Inline logo: no image fetch or tracking request on hover.
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.36z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.96-3.38.96-2.61 0-4.83-1.76-5.62-4.12H3.04v2.59A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.38 13.92A6 6 0 0 1 6.07 12c0-.67.11-1.32.31-1.92V7.49H3.04A10 10 0 0 0 2 12c0 1.61.38 3.14 1.04 4.51z"/><path fill="#EA4335" d="M12 5.96c1.47 0 2.79.51 3.82 1.51l2.87-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.96 5.49l3.34 2.59C7.17 7.72 9.39 5.96 12 5.96z"/></svg>';
+      header.insertAdjacentElement('afterend', button);
+      button.addEventListener('mouseenter', () => button.openReviews());
+      button.addEventListener('mouseleave', schedulePopoverClose);
+      button.addEventListener('focus', () => {
+        if (button.suppressReviewFocus) button.suppressReviewFocus = false;
+        else button.openReviews();
+      });
+      button.addEventListener('blur', event => { if (!reviewPopover?.contains(event.relatedTarget)) schedulePopoverClose(); });
+      button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); button.openReviews(); reviewPopover?.focus(); });
+      button.addEventListener('keydown', event => { if (event.key === 'Escape') closeReviewPopover(); });
+    }
+    button.setAttribute('aria-label', result.status === 'unnamed' ? 'Google reviews: Missing name' : 'Google reviews for ' + name + ': ' + result.rows.length + ' matches');
+    button.openReviews = () => showReviewPopover(button, name, result);
+  }
+
+  function setSurfaceTint(background, status) {
+    const value = ['reviewed', 'partial', 'missing'].includes(status) ? status : '';
+    if (background.getAttribute('data-ugomez-review-status') === (value || null)) return;
+    if (value) background.setAttribute('data-ugomez-review-status', value);
+    else background.removeAttribute('data-ugomez-review-status');
+  }
+
+  async function refreshReviewSurface(header, background, tint = true) {
+    if (!header || !background) return;
+    const name = stripPhoneFromName(header.textContent);
+    const signature = name + JSON.stringify(reviewStore.status());
+    const previous = surfaceStates.get(header);
+    if (previous?.signature === signature && previous.background === background &&
+        (previous.pending || !isKnownReviewName(name) || header.parentElement.querySelector('.ugomez-review-icon'))) return;
+    if (popoverOwner && header.parentElement.contains(popoverOwner)) closeReviewPopover();
+    header.parentElement.querySelector('.ugomez-review-icon')?.remove();
+    setSurfaceTint(background, 'loading');
+    const state = { signature, background, pending: true };
+    surfaceStates.set(header, state);
+    if (!isKnownReviewName(name)) {
+      if (header.matches('.contact-name')) mountReviewIcon(header, '', { status: 'unnamed', rows: [] });
+      state.pending = false; return;
+    }
+    let result;
+    try { result = await lookupReview(name); }
+    catch { result = {status: 'error', rows: []}; }
+    if (!header.isConnected || surfaceStates.get(header) !== state || stripPhoneFromName(header.textContent) !== name) return;
+    const status = result.status === 'missing' && reviewStore.status().stale ? 'stale' : result.status;
+    setSurfaceTint(background, tint ? status : '');
+    mountReviewIcon(header, name, result);
+    state.pending = false;
+    state.signature = name + JSON.stringify(reviewStore.status());
+  }
+
+  function refreshReviewSurfaces() {
+    if (popoverOwner && (!popoverOwner.isConnected || !popoverOwner.getClientRects().length)) closeReviewPopover();
+    injectStyles();
+    const ticket = document.querySelector('#serviceDetailDock');
+    refreshReviewSurface(ticket?.querySelector('#currentCustomerName'), ticket, false);
+    const smsHeader = document.querySelector('.tm-header-title .contact-name');
+    const messages = document.querySelector('#message-container');
+    if (messages) setSurfaceTint(messages, '');
+    refreshReviewSurface(smsHeader, messages, false);
+    document.querySelectorAll('#threadContainer a.thread').forEach(refreshSmsRow);
+  }
+
+  function extractSmsRowName(row) {
+    const name = stripPhoneFromName(row.querySelector('h6.thread-name')?.textContent || '');
+    return isKnownReviewName(name) ? name : '';
+  }
+
+  async function refreshSmsRow(row) {
+    const name = extractSmsRowName(row);
+    const signature = name + JSON.stringify(reviewStore.status());
+    const previous = smsRowStates.get(row);
+    if (previous?.signature === signature && (previous.pending || row.querySelector('.ugomez-review-icon'))) return;
+    if (popoverOwner && row.contains(popoverOwner)) closeReviewPopover();
+    row.querySelector('.ugomez-review-icon')?.remove();
+    const state = { signature, pending: true };
+    smsRowStates.set(row, state);
+    setSurfaceTint(row, '');
+    if (!name) {
+      const header = row.querySelector('h6.thread-name');
+      if (header) mountReviewIcon(header, '', { status: 'unnamed', rows: [] });
+      state.pending = false; return;
+    }
+    let result;
+    try { result = await lookupReview(name); }
+    catch { result = { status: 'error', rows: [] }; }
+    if (!row.isConnected || smsRowStates.get(row) !== state || extractSmsRowName(row) !== name) return;
+    setSurfaceTint(row, result.status === 'missing' && reviewStore.status().stale ? 'stale' : result.status);
+    mountReviewIcon(row.querySelector('h6.thread-name'), name, result);
+    state.pending = false;
+    state.signature = name + JSON.stringify(reviewStore.status());
+  }
+
   function extractPipelineCardName(card) {
+    const name = card.querySelector('.cardes-template-item[gs-id="name"] a.customer');
+    if (name) return stripPhoneFromName(name.textContent);
     const lines = String(card.innerText || card.textContent || '')
       .split(/\n+/)
       .map((line) => stripPhoneFromName(line))
@@ -894,10 +1326,10 @@
 
   function setPipelineBadge(card, status) {
     card.classList.add('ugomez-pipeline-review-card');
-    card.classList.remove('ugomez-reviewed', 'ugomez-missing', 'ugomez-checking');
+    card.classList.remove('ugomez-reviewed', 'ugomez-partial', 'ugomez-missing', 'ugomez-checking');
 
-    const statusClass = status === 'reviewed' ? 'ugomez-reviewed' : status === 'missing' ? 'ugomez-missing' : 'ugomez-checking';
-    const statusLabel = status === 'reviewed' ? 'Google review found' : status === 'missing' ? 'No exact review name match in sheet' : status === 'error' ? 'Review sheet unavailable' : status === 'stale' ? 'Stale review list; refresh needed' : 'Checking Google review';
+    const statusClass = status === 'reviewed' ? 'ugomez-reviewed' : status === 'missing' ? 'ugomez-missing' : status === 'partial' ? 'ugomez-partial' : 'ugomez-checking';
+    const statusLabel = status === 'reviewed' ? 'Google review found' : status === 'missing' ? 'No review name match in sheet' : status === 'partial' ? 'Possible review match — shared name word' : status === 'error' ? 'Review sheet unavailable' : status === 'stale' ? 'Stale review list; refresh needed' : 'Checking Google review';
 
     card.classList.add(statusClass);
     card.title = statusLabel + ' · ' + sheetStatusText();
@@ -917,7 +1349,7 @@
             return;
           }
 
-          setPipelineBadge(item.card, result.reviewed ? 'reviewed' : reviewStore.status().stale ? 'stale' : 'missing');
+          setPipelineBadge(item.card, result.status === 'missing' && reviewStore.status().stale ? 'stale' : result.status);
         })
         .catch(() => {
           if (!item.card.isConnected || item.card.dataset.ugomezReviewName !== item.normalizedName) {
@@ -939,11 +1371,12 @@
       return;
     }
 
-    if (card.dataset.ugomezReviewName === normalizedName && card.classList.contains('ugomez-pipeline-review-card')) {
+    if (card.dataset.ugomezReviewName === normalizedName && card.dataset.ugomezReviewVersion === '0.4.0' && card.classList.contains('ugomez-pipeline-review-card')) {
       return;
     }
 
     card.dataset.ugomezReviewName = normalizedName;
+    card.dataset.ugomezReviewVersion = '0.4.0';
     setPipelineBadge(card, 'loading');
     pipelineLookupQueue.push({ card, fullName, normalizedName });
     processPipelineLookupQueue();
@@ -951,6 +1384,7 @@
 
   function refreshPipelineBadges() {
     injectStyles();
+    refreshReviewSurfaces();
 
     findServicePipelineCards().forEach((card) => {
       const fullName = extractPipelineCardName(card);
@@ -963,14 +1397,16 @@
   }
 
   async function refresh() {
+    refreshReviewSurfaces();
     const activeFullName = findActiveFullName();
     const fullName = activeFullName;
     if (!fullName) {
       lastRenderedName = '';
+      ++lookupSequence;
       renderState({
         status: 'idle',
         fullName: '',
-        message: 'Open a conversation with a full customer name to check for a Google review.'
+        message: 'Missing name'
       });
       return;
     }
@@ -995,11 +1431,12 @@
       }
 
       renderState({
-        status: result.reviewed ? 'reviewed' : reviewStore.status().stale ? 'stale' : 'missing',
+        status: result.status === 'missing' && reviewStore.status().stale ? 'stale' : result.status,
         fullName,
         message: result.reviewed
-          ? `${fullName} has an exact Google review match in ${AGENCY_NAME}.`
-          : `${fullName} has no exact name match in the review sheet.`
+          ? `${fullName} has an exact or confirmed Google review match in ${AGENCY_NAME}.`
+          : result.status === 'partial' ? `${fullName} has possible matches by name. Check the Google icon before deciding.`
+          : `${fullName} has no name match in the review sheet.`
       });
     } catch (error) {
       if (sequence !== lookupSequence) {
@@ -1014,7 +1451,10 @@
     }
   }
 
+  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('Configure shared review saves', configureMatchWrites);
+
   const observer = new MutationObserver((mutations) => {
+    if (mutations.every(mutation => isReviewUiMutation(mutation))) return;
     if (isPipelinePage()) {
       if (!isServicePipelinePage()) {
         return;
@@ -1041,6 +1481,10 @@
   // Timer also refreshes long-lived tabs; shared GM storage avoids repeat downloads on navigation.
   window.setInterval(() => { if (!document.hidden) refreshSheetAndView(); }, 60 * 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSheetAndView(); });
+  document.addEventListener('pointerdown', event => {
+    if (reviewPopover && !reviewPopover.contains(event.target) && !popoverOwner?.contains(event.target)) closeReviewPopover();
+  }, true);
+  window.addEventListener('resize', closeReviewPopover);
   observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   if (isServicePipelinePage()) {
     refreshPipelineBadges();

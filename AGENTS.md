@@ -24,3 +24,7 @@ Read this before making changes in either GIA automation repository.
   - `Admins/Spam Guru Risk Ratings/ricochet-spam-guru-risk-ratings.user.js`
   - `PolicyCenter/Reconstruction Calculator/policycenter-reconstruction-button.user.js`
   - `PolicyCenter/Zillow & Google Maps Links/policycenter-zillow-googlemaps.user.js`
+
+## Review Helper versioning
+
+- Increment the Google Review Helper userscript version for every delivered script revision, including minor fixes. Give each test download a matching, unique versioned filename.
