@@ -35,7 +35,7 @@ test('ambiguous, changed, unrelated column I and invalid names are rejected with
   assert.throws(()=>b.planMatchWrite([headers,row],{...request,customerName:'=IMPORTXML("x")'}),/name/i);
 });
 
-test('endpoint authenticates before sheet access and merges a batch under one lock', () => {
+test('endpoint accepts keyless saves, validates batch before sheet access, and merges under one lock', () => {
   const b=backend(); const grid=[headers,[...row]]; const writes=[];
   let locks=0,opens=0,releases=0;
   b.PropertiesService={getScriptProperties:()=>({getProperty:()=> 'x'.repeat(32),setProperty(){}})};
@@ -44,15 +44,15 @@ test('endpoint authenticates before sheet access and merges a batch under one lo
   const sheet={getSheetId:()=>0,getLastRow:()=>grid.length,getRange:(r,c)=>({getDisplayValues:()=>grid,setNumberFormat(){return this;},setValue(value){writes.push({r,c,value});grid[r-1][c-1]=value;return this;}})};
   b.SpreadsheetApp={openById(){opens++;return {getSheets:()=>[sheet]};},flush(){}};
   const send=input=>JSON.parse(b.doPost({postData:{contents:JSON.stringify(input)}}).text);
-  assert.equal(send({token:'bad',requests:[]}).ok,false);
+  assert.equal(send({requests:[]}).ok,false);
   assert.equal(opens,0);
   const request={review,customerName:'Carlos Perez',action:'confirm'};
-  const result=send({token:'x'.repeat(32),requests:[request,{...request,customerName:'Jane Perez'}]});
+  const result=send({requests:[request,{...request,customerName:'Jane Perez'}]});
   assert.equal(result.results.every(r=>r.ok),true);
   assert.equal(grid[1][8],'Carlos Perez\nJane Perez');
   assert.equal(writes.every(w=>w.c===9),true);
   assert.equal(locks,1); assert.equal(releases,1);
   const count=writes.length;
-  send({token:'x'.repeat(32),requests:[request]});
+  send({requests:[request]});
   assert.equal(writes.length,count);
 });

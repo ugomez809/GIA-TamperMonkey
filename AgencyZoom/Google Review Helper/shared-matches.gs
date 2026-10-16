@@ -1,5 +1,5 @@
-// Ulises Google Review shared confirmations — service v0.4.0.
-// Deploy as owner. Set MATCH_WRITE_KEY in Script Properties before deployment.
+// Ulises Google Review shared confirmations — service v0.4.3.
+// Deploy as owner with Anyone access. Match submissions require no staff setup.
 // Only the fixed review sheet, gid 0, column I can be modified by this service.
 const MATCH_SHEET_ID = '1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA';
 const MATCH_HEADER = 'AgencyZoom Matches';
@@ -45,7 +45,7 @@ function matchJson(value) {
   return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
 }
 function doGet() {
-  return matchJson({ ok: true, service: 'ulises-review-matches', version: '0.4.0' });
+  return matchJson({ ok: true, service: 'ulises-review-matches', version: '0.4.3' });
 }
 function doPost(event) {
   let lock;
@@ -53,8 +53,6 @@ function doPost(event) {
     const body = event && event.postData && event.postData.contents;
     if (!body || body.length > 200000) throw Error('Invalid request size.');
     const input = JSON.parse(body);
-    const key = PropertiesService.getScriptProperties().getProperty('MATCH_WRITE_KEY');
-    if (!key || key.length < 32 || input.token !== key) throw Error('Unauthorized save key.');
     if (!Array.isArray(input.requests) || !input.requests.length || input.requests.length > 25) throw Error('Send between 1 and 25 match requests.');
     lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) throw Error('Sheet busy. Please retry.');

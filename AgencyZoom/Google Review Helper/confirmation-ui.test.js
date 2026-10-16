@@ -16,7 +16,7 @@ function harness(){
     .replace(/  function updateConfirmedViews\(\) \{[\s\S]*?\n  \}/,'  function updateConfirmedViews() { globalThis.refreshCalls++; }')
     .replace(/  const observer = new MutationObserver[\s\S]*$/,'globalThis.api={createConfirmationControl,reviewStore,queueAutomaticMatches,flushAutomaticMatches};})();');
   const context={console,Date:TestDate,refreshCalls:0,document:{createElement:tag=>new Element(tag)},window:{setTimeout:(callback,delay)=>{state.timers.push({callback,delay});return state.timers.length;}},
-    GM_getValue:key=>key.includes(':config')?JSON.stringify({url:'https://script.google.com/macros/s/test/exec',token:'test-key'}):'',
+    GM_getValue:()=>'',
     GM_setValue(){},GM_xmlhttpRequest(options){
       if(options.method==='GET')return options.onload({status:200,responseText:'Timestamp,Name,Email,Comments,Rating 1-5,ChatGPT Response,GMB Page,Review ID\n2026,Selina Perez,,Great,5,,GIA,\n'});
       const body=JSON.parse(options.data); state.writes.push(body.requests);

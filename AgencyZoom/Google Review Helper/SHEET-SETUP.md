@@ -1,4 +1,4 @@
-# Google Sheet review helper v0.4.2
+# Google Sheet review helper v0.4.3
 
 Review sheet: https://docs.google.com/spreadsheets/d/1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA/edit?gid=0
 
@@ -23,21 +23,14 @@ Header: `AgencyZoom Matches`. Each cell contains one confirmed AgencyZoom name p
 
 Project: https://script.google.com/home/projects/1VRbvLMBC5vbBcxHI9LKfgyybazLlwZZ32Ejb3BzLkZE1nRZc6ws_Rgzy/edit
 
-Source: `shared-matches.gs`. Deploy as the owner, access Anyone; the POST handler requires the private `MATCH_WRITE_KEY` Script Property. GET returns service/version health only. The code fixes the target spreadsheet and gid 0 and can write only column I. It locks the read/merge/write operation so simultaneous staff saves preserve existing names. It rejects an unrelated I header, non-exact automatic confirmations, invalid names, changed rows, and ambiguous identical review rows. It identifies reviews by their displayed name/date/rating/comment/page/ID, not a mutable row number. Never put the staff key in the public repository.
-
-## Install the standalone test
-
-1. Disable the Review Helper Updater and any older duplicate main helper.
-2. Replace the main helper in Tampermonkey with v0.4.2; save and reload AgencyZoom. Accept its new `script.google.com` connection permission if prompted.
-3. The private preconfigured test download initializes the save settings in this helper's Tampermonkey storage. Keep that copy private; it contains the staff save key. Public repository source contains the endpoint URL but no key.
-4. When using the public source instead, choose Tampermonkey → Configure shared review saves. Accept the prefilled URL and enter the private staff key.
-
-Configuration is per Tampermonkey script/browser profile. The main helper and updater have separate storage: configure the updater too when switching to it. Cache schema v3 includes column-I confirmations and causes one initial CSV download after upgrading.
+Source: `shared-matches.gs`. Deploy as the owner, access Anyone. Match submissions do not require a key; anyone with the endpoint can submit or undo valid name mappings in column I. GET returns service/version health only. The code fixes the target spreadsheet and gid 0 and can write only column I. It locks the read/merge/write operation so simultaneous staff saves preserve existing names. It rejects an unrelated I header, non-exact automatic confirmations, invalid names, changed rows, and ambiguous identical review rows. It identifies reviews by their displayed name/date/rating/comment/page/ID, not a mutable row number. Never put the staff key in the public repository.
 
 ## Staff rollout
 
-Main and updater are both v0.4.2. The updater needs reinstall/update because the new save endpoint and configuration menu require new grants. Do not run standalone and updater together. Install the v0.4.2 updater from GitHub, reload AgencyZoom, then use Configure shared review saves to enter the private staff key. The key must be shared privately and is not included in public downloads. Future public main updates retain saved staff configuration.
+Install the v0.4.3 updater from GitHub and reload AgencyZoom. No endpoint or staff-key setup is required. Do not run the standalone helper and updater together. The updater includes permission to reach the Apps Script service. Staff still on v0.2.0 need the updater upgrade for that permission.
+
+Deploy the v0.4.3 Apps Script service before publishing the keyless client. Existing keyed clients remain compatible because the server ignores their extra token field. Old locally stored save settings are no longer read.
 
 ## Verification
 
-Run all Node tests in this folder, plus syntax checks on both userscripts and `git diff --check`. Tests cover CSV/cache TTL, shared aliases, undo, stale-customer protection, failed writes, batch deduplication, authorization-before-access, write-column limits, ambiguous rows, and locked merging. Live setup on 2026-10-16 verified endpoint health, invalid-key rejection, and an exact Chaelynn Kim confirmation written to I and read back through public CSV. No fabricated customer/review relationship was written to the live sheet.
+Run all Node tests in this folder, plus syntax checks on both userscripts and `git diff --check`. Tests cover CSV/cache TTL, shared aliases, undo, stale-customer protection, failed writes, batch deduplication, keyless saves and batch validation before access, write-column limits, ambiguous rows, and locked merging. Live setup on 2026-10-16 verified endpoint health, invalid-key rejection, and an exact Chaelynn Kim confirmation written to I and read back through public CSV. No fabricated customer/review relationship was written to the live sheet.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.4.2
+// @version      0.4.3
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
@@ -12,7 +12,6 @@
 // @connect      docs.google.com
 // @connect      googleusercontent.com
 // @grant        GM_xmlhttpRequest
-// @grant        GM_registerMenuCommand
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @run-at       document-idle
@@ -26,7 +25,6 @@
   'use strict';
 
   const MATCH_SERVICE_URL = 'https://script.google.com/macros/s/AKfycbxSQX_8WnbX54WJQTqJJB9jB6x4s68yeAKAsP7nsSrMo1r-LXwPyVHSs0gTgSc0YgKt/exec'; // Deployed service; staff key is stored locally.
-  const MATCH_CONFIG_KEY = 'ulisesReviewMatches:config';
   const AGENCY_NAME = 'Ulises Gomez Agency';
   const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA/export?format=csv&gid=0';
   const SHEET_CACHE_KEY = 'ulisesReviewSheet:v3:1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA:0';
@@ -811,34 +809,11 @@
     return isKnownReviewName(name) ? name : '';
   }
 
-  function readMatchConfig() {
-    try {
-      const value = JSON.parse(GM_getValue(MATCH_CONFIG_KEY, '{}'));
-      return {url: value.url || MATCH_SERVICE_URL, token: value.token || ''};
-    } catch { return {url: MATCH_SERVICE_URL, token: ''}; }
-  }
-
-  function configureMatchWrites() {
-    const saved = readMatchConfig();
-    const url = window.prompt('Shared review save URL (Apps Script /exec URL):', saved.url);
-    if (url === null) return;
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/.test(url.trim())) {
-      window.alert('Use the deployed Apps Script /exec URL.'); return;
-    }
-    const token = window.prompt('Staff review-save key (provided by your administrator):', '');
-    if (token === null) return;
-    if (token.trim().length < 32) { window.alert('The save key must be at least 32 characters.'); return; }
-    GM_setValue(MATCH_CONFIG_KEY, JSON.stringify({url:url.trim(),token:token.trim()}));
-    window.alert('Shared review saves configured. Reload AgencyZoom to apply.');
-  }
-
   function postMatchRequests(requests) {
-    const config = readMatchConfig();
-    if (!config.url || !config.token) return Promise.reject(Error('Shared saves need setup. Use Tampermonkey → Configure shared review saves.'));
     return new Promise((resolve,reject) => {
-      GM_xmlhttpRequest({method:'POST', url:config.url, anonymous:true, timeout:30000,
+      GM_xmlhttpRequest({method:'POST', url:MATCH_SERVICE_URL, anonymous:true, timeout:30000,
         headers:{'Content-Type':'text/plain;charset=utf-8'},
-        data:JSON.stringify({token:config.token,requests}),
+        data:JSON.stringify({requests}),
         onload:response => {
           try {
             if (response.status < 200 || response.status >= 300) throw Error('Save service returned HTTP ' + response.status);
@@ -900,8 +875,6 @@
   const automaticMatchAttempts = new Map();
   let automaticMatchTimer = 0, automaticMatchRunning = false;
   function queueAutomaticMatches(name, rows) {
-    const config = readMatchConfig();
-    if (!config.url || !config.token) return;
     rows.forEach(row => {
       if (normalizeName(row.reviewer_name) !== normalizeName(name) || hasConfirmation(row,name)) return;
       const key = reviewIdentity(row) + normalizeName(name);
@@ -1451,7 +1424,6 @@
     }
   }
 
-  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('Configure shared review saves', configureMatchWrites);
 
   const observer = new MutationObserver((mutations) => {
     if (mutations.every(mutation => isReviewUiMutation(mutation))) return;
