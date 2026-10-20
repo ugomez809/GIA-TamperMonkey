@@ -8,6 +8,7 @@ on:
     paths:
       - "updater-installers.html"
       - "Installer/**"
+      - "General Utilities/Mileage Calculator/mileage-calculator-popup.html"
       - ".github/workflows/deploy-updater-installers.yml"
 
 permissions:
@@ -33,6 +34,8 @@ jobs:
           cp updater-installers.html _site/updater-installers.html
           mkdir -p _site/Installer
           cp -R Installer/. _site/Installer/
+          mkdir -p "_site/General Utilities/Mileage Calculator"
+          cp "General Utilities/Mileage Calculator/mileage-calculator-popup.html" "_site/General Utilities/Mileage Calculator/"
           cat > _site/index.html <<'HTML'
           <!doctype html>
           <html lang="en">

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mileage Popup Widget</title>
+</head>
+<body>
+
+<!-- PREVIEW ONLY: page background for viewing this file on its own. Drop this block when injecting into Guidewire. -->
+<style>
+body { background: #e9edf1; color: #1b2733; padding-block: 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+</style>
+
+<!-- WIDGET: everything below is self-contained. All CSS is scoped to #gmc-root, all JS is inside one function, no external files. -->
+<style>
+#gmc-root { --gmc-bg: #ffffff; --gmc-fg: #1b2733; --gmc-muted: #5d6b78; --gmc-line: #d5dce3; --gmc-field: #f5f7f9;
+  --gmc-accent: #0e6e8c; --gmc-dial: #10161c; --gmc-digits: #f5c451;
+  --gmc-ok: #15803d; --gmc-ok-bg: #e3f4e8; --gmc-warn: #8a5a00; --gmc-warn-bg: #fbf1d6; --gmc-err: #b42318;
+  width: 300px; max-width: 100%; background: var(--gmc-bg); color: var(--gmc-fg); border: 1px solid var(--gmc-line);
+  border-radius: 8px; box-shadow: 0 6px 24px rgb(16 22 28 / .18); overflow: hidden;
+  font: 14px/1.4 "Segoe UI", system-ui, -apple-system, Arial, sans-serif; color-scheme: light; text-align: left; }
+#gmc-root * { box-sizing: border-box; font-family: inherit; }
+#gmc-root .gmc-head { background: var(--gmc-dial); color: #ffffff; padding: 9px 12px; font-weight: 600; font-size: 14px; letter-spacing: .02em; }
+#gmc-root .gmc-body { padding: 12px; display: grid; gap: 10px; }
+#gmc-root .gmc-tabs { display: flex; gap: 4px; background: var(--gmc-field); padding: 3px; border-radius: 6px; }
+#gmc-root .gmc-tabs button { flex: 1; margin: 0; border: 0; background: transparent; color: var(--gmc-muted); padding: 6px 4px;
+  border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; }
+#gmc-root .gmc-tabs button[aria-selected="true"] { background: var(--gmc-bg); color: var(--gmc-fg); box-shadow: 0 1px 2px rgb(0 0 0 / .14); }
+#gmc-root .gmc-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#gmc-root .gmc-full { grid-column: 1 / -1; }
+#gmc-root label { display: grid; gap: 3px; margin: 0; font-size: 12px; font-weight: 600; color: var(--gmc-muted); }
+#gmc-root input { width: 100%; margin: 0; height: auto; font: 500 15px/1.2 ui-monospace, Consolas, monospace; color: var(--gmc-fg);
+  background: var(--gmc-field); border: 1px solid var(--gmc-line); border-radius: 4px; padding: 7px 8px; font-variant-numeric: tabular-nums; }
+#gmc-root .gmc-lbl { font-size: 12px; font-weight: 600; color: var(--gmc-muted); margin-bottom: -4px; }
+#gmc-root .gmc-chips { display: flex; gap: 4px; }
+#gmc-root .gmc-chips button { flex: 1; margin: 0; border: 1px solid var(--gmc-line); background: var(--gmc-field); color: var(--gmc-fg);
+  padding: 6px 0; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; }
+#gmc-root .gmc-chips button[aria-pressed="true"] { background: var(--gmc-accent); border-color: var(--gmc-accent); color: #ffffff; }
+#gmc-root input::placeholder { color: #9aa6b1; }
+#gmc-root button:focus-visible, #gmc-root input:focus-visible { outline: 2px solid var(--gmc-accent); outline-offset: 1px; }
+#gmc-root .gmc-dial { background: var(--gmc-dial); border-radius: 6px; padding: 10px; display: flex; align-items: baseline; justify-content: center; gap: 8px; }
+#gmc-root .gmc-num { font: 700 30px/1 ui-monospace, Consolas, monospace; color: var(--gmc-digits); font-variant-numeric: tabular-nums; }
+#gmc-root .gmc-unit { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #8b7a45; }
+#gmc-root .gmc-msg { margin: 0; font-size: 12px; min-height: 17px; color: var(--gmc-muted); }
+#gmc-root .gmc-msg.ok { color: var(--gmc-ok); }
+#gmc-root .gmc-msg.warn { color: var(--gmc-warn); background: var(--gmc-warn-bg); padding: 4px 6px; border-radius: 4px; }
+#gmc-root .gmc-msg.err { color: var(--gmc-err); }
+#gmc-root .gmc-copy { margin: 0; border: 0; background: var(--gmc-accent); color: #ffffff; font-size: 14px; font-weight: 600;
+  padding: 8px; border-radius: 5px; cursor: pointer; }
+#gmc-root .gmc-copy:disabled { opacity: .45; cursor: default; }
+#gmc-root [hidden] { display: none !important; }
+</style>
+
+<div id="gmc-root" role="dialog" aria-label="Annual mileage calculator">
+  <div class="gmc-head">Annual mileage calculator</div>
+  <div class="gmc-body">
+    <div class="gmc-tabs" role="tablist">
+      <button type="button" role="tab" data-mode="odo" aria-selected="true">Odometer</button>
+      <button type="button" role="tab" data-mode="habits" aria-selected="false">Driving habits</button>
+    </div>
+
+    <div class="gmc-fields" data-panel="odo">
+      <label>Odometer today <input data-f="now" type="text" inputmode="numeric" placeholder="48,210" autocomplete="off"></label>
+      <label>Earlier reading <input data-f="then" type="text" inputmode="numeric" placeholder="41,950" autocomplete="off"></label>
+      <div class="gmc-full gmc-lbl">How long ago was the earlier reading?</div>
+      <div class="gmc-full gmc-chips">
+        <button type="button" data-months="3" aria-pressed="false">3 mo</button>
+        <button type="button" data-months="6" aria-pressed="false">6 mo</button>
+        <button type="button" data-months="12" aria-pressed="false">1 yr</button>
+        <button type="button" data-months="24" aria-pressed="false">2 yr</button>
+      </div>
+      <label>Months ago <input data-f="months" type="text" inputmode="decimal" placeholder="4" autocomplete="off"></label>
+      <label>Or exact date <input data-f="date" type="date"></label>
+    </div>
+
+    <div class="gmc-fields" data-panel="habits" hidden>
+      <label>Commute one way (mi) <input data-f="oneWay" type="text" inputmode="decimal" placeholder="14" autocomplete="off"></label>
+      <label>Days per week <input data-f="days" type="text" inputmode="numeric" placeholder="5" autocomplete="off"></label>
+      <label>Other miles / week <input data-f="other" type="text" inputmode="decimal" placeholder="60" autocomplete="off"></label>
+      <label>Trip miles / year <input data-f="trips" type="text" inputmode="decimal" placeholder="1,200" autocomplete="off"></label>
+    </div>
+
+    <div class="gmc-dial" aria-live="polite"><span class="gmc-num" data-out="miles">—</span><span class="gmc-unit">mi / yr</span></div>
+    <p class="gmc-msg" data-out="msg">Enter the readings to see the yearly miles.</p>
+    <button type="button" class="gmc-copy" data-act="copy" disabled>Copy miles</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const root = document.getElementById('gmc-root');
+  if (!root) return;
+  const $ = s => root.querySelector(s);
+  const field = name => $(`[data-f="${name}"]`);
+  const num = name => { const v = field(name).value.replace(/[^\d.]/g, ''); return v === '' ? NaN : Number(v); };
+  const fmt = n => Math.round(n).toLocaleString('en-US');
+  const DAY = 86400000, WORK_WEEKS = 50;
+
+  const fromOdometer = (now, then, days) => (now - then) / days * 365;
+  const fromHabits = (oneWay, days, otherWk, tripsYr) => oneWay * 2 * days * WORK_WEEKS + otherWk * 52 + tripsYr;
+
+  let mode = 'odo', miles = null;
+
+  function calc() {
+    if (mode === 'odo') {
+      const now = num('now'), then = num('then'), months = num('months'), d = field('date').value;
+      if (Number.isNaN(now) || Number.isNaN(then)) return { hint: 'Enter both odometer readings.' };
+      let days;
+      if (months > 0) days = Math.round(months * 30.44);
+      else if (d) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const [y, m, dd] = d.split('-').map(Number);
+        days = Math.round((today - new Date(y, m - 1, dd)) / DAY);
+      } else return { hint: 'Pick how long ago the earlier reading was.' };
+      if (days <= 0) return { err: 'The earlier date has to be before today.' };
+      if (now <= then) return { err: "Today's reading has to be higher than the earlier one." };
+      return { miles: fromOdometer(now, then, days), short: days < 60 };
+    }
+    const v = ['oneWay', 'days', 'other', 'trips'].map(n => num(n) || 0);
+    if (v[1] > 7) return { err: 'Days per week can be 7 at most.' };
+    const total = fromHabits(...v);
+    return total > 0 ? { miles: total } : { hint: 'Enter at least one kind of driving.' };
+  }
+
+  function render() {
+    const r = calc(), msg = $('[data-out="msg"]');
+    root.querySelectorAll('[data-months]').forEach(b => b.setAttribute('aria-pressed', field('months').value.trim() === b.dataset.months));
+    miles = r.miles == null ? null : Math.round(r.miles);
+    $('[data-out="miles"]').textContent = miles == null ? '—' : fmt(miles);
+    $('[data-act="copy"]').disabled = miles == null;
+    msg.className = 'gmc-msg';
+    if (r.err) { msg.textContent = r.err; msg.classList.add('err'); }
+    else if (r.hint) { msg.textContent = r.hint; }
+    else if (miles < 7500) { msg.textContent = 'Low. Confirm why (retired, works from home, second car) and note it.'; msg.classList.add('warn'); }
+    else if (miles > 20000) { msg.textContent = 'High. Double-check the readings or commute.'; msg.classList.add('warn'); }
+    else { msg.textContent = r.short ? 'Readings under 60 days apart; ask for an older one if they have it.' : 'Typical range. U.S. average is 13,476.'; msg.classList.add(r.short ? 'warn' : 'ok'); }
+  }
+
+  root.querySelectorAll('[data-mode]').forEach(tab => tab.addEventListener('click', () => {
+    mode = tab.dataset.mode;
+    root.querySelectorAll('[data-mode]').forEach(t => t.setAttribute('aria-selected', t === tab));
+    root.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== mode; });
+    render();
+  }));
+  // Months and exact date are either/or: filling one clears the other.
+  root.querySelectorAll('input').forEach(el => el.addEventListener('input', () => {
+    if (el === field('months')) field('date').value = '';
+    if (el === field('date')) field('months').value = '';
+    render();
+  }));
+  root.querySelectorAll('[data-months]').forEach(b => b.addEventListener('click', () => {
+    field('months').value = b.dataset.months;
+    field('date').value = '';
+    render();
+  }));
+  field('date').max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+  $('[data-act="copy"]').addEventListener('click', () => {
+    if (miles == null) return;
+    // Hook for later: listen for 'gmc:mileage' on document to drop the number into Guidewire's mileage field.
+    root.dispatchEvent(new CustomEvent('gmc:mileage', { detail: miles, bubbles: true }));
+    const btn = $('[data-act="copy"]');
+    const done = () => { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy miles'; }, 1500); };
+    (navigator.clipboard ? navigator.clipboard.writeText(String(miles)) : Promise.reject()).then(done).catch(() => {});
+  });
+
+  render();
+  console.assert(fromOdometer(48210, 41950, 200) === 6260 / 200 * 365, 'odometer math');
+  console.assert(fromHabits(14, 5, 60, 1200) === 7000 + 3120 + 1200, 'habits math');
+})();
+</script>
+
+</body>
+</html>
