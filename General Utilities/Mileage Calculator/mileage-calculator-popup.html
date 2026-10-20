@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mileage Popup Widget</title>
+<script>
+if (new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window) {
+  document.documentElement.classList.add('gmc-embedded');
+}
+</script>
 </head>
 <body>
 
@@ -11,6 +16,9 @@
 <style>
 body { background: #e9edf1; color: #1b2733; padding-block: 32px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+html.gmc-embedded, html.gmc-embedded body { margin: 0; padding: 0; background: transparent; }
+html.gmc-embedded body { width: max-content; }
+html.gmc-embedded #gmc-root { box-sizing: border-box; max-width: none; margin: 0; border-radius: 0; box-shadow: none; }
 </style>
 
 <!-- WIDGET: everything below is self-contained. All CSS is scoped to #gmc-root, all JS is inside one function, no external files. -->
@@ -92,6 +100,25 @@ body { background: #e9edf1; color: #1b2733; padding-block: 32px;
 (() => {
   const root = document.getElementById('gmc-root');
   if (!root) return;
+  if (document.documentElement.classList.contains('gmc-embedded')) {
+    const requestedOrigin = new URLSearchParams(location.search).get('parentOrigin');
+    let parentOrigin;
+    try {
+      const parsed = new URL(requestedOrigin);
+      if (['http:', 'https:'].includes(parsed.protocol) && parsed.origin === requestedOrigin) parentOrigin = parsed.origin;
+    } catch { /* Standalone previews do not need a parent origin. */ }
+    if (parentOrigin) {
+      const reportSize = () => {
+        const rect = root.getBoundingClientRect();
+        window.parent.postMessage({ type: 'gia-mileage:resize', width: Math.ceil(rect.width), height: Math.ceil(rect.height) }, parentOrigin);
+      };
+      new ResizeObserver(reportSize).observe(root);
+      reportSize();
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') window.parent.postMessage({ type: 'gia-mileage:close' }, parentOrigin);
+      });
+    }
+  }
   const $ = s => root.querySelector(s);
   const field = name => $(`[data-f="${name}"]`);
   const num = name => { const v = field(name).value.replace(/[^\d.]/g, ''); return v === '' ? NaN : Number(v); };
