@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter - Hosted Mileage Calculator
 // @namespace    local.policycenter.hosted-mileage
-// @version      1.3.0
+// @version      1.4.0
 // @description  Opens a fitted, draggable mileage calculator and fills Annual Miles for the chosen vehicle.
 // @match        https://policycenter.farmersinsurance.com/pc/*
 // @match        https://policycenter-2.farmersinsurance.com/pc/*
@@ -17,19 +17,23 @@
   const CALCULATOR_URL = 'https://ugomez809.github.io/GIA-TamperMonkey/General%20Utilities/Mileage%20Calculator/mileage-calculator-popup.html';
   const calculatorOrigin = new URL(CALCULATOR_URL).origin;
   const positionKey = 'gia-mileage-calculator-position';
-  const selector = 'input[name$="-AnnualMileageCA_DV"]';
-  const retrieveSelector = '[id$="-PAVehiclesExtPanelSet-VehiclesLV_tb-VehiclesScreen_RetrievePurchaseDate"]';
+  const prefillSelector = '[id$="-PAVehiclesExtPanelSet-VehiclesLV"] input[name$="-AnnualMileage"]';
+  const selector = `input[name$="-AnnualMileageCA_DV"], ${prefillSelector}`;
   const margin = 12;
   const style = document.createElement('style');
   style.textContent = `
     .gia-mileage-row {display:flex!important;align-items:center;gap:6px;}
     .gia-mileage-row > input {flex:1 1 0;min-width:0;width:0;}
+    .gia-mileage-prefill-row {gap:4px;}
+    .gia-mileage-prefill-row > input {
+      box-sizing:border-box;flex:0 0 calc(6ch + 16px);min-width:calc(6ch + 16px);width:calc(6ch + 16px);
+    }
+    .gia-mileage-prefill-row .gia-mileage-launch {padding:3px 6px;font-size:11px;}
     .gia-mileage-launch {
       flex:none;padding:4px 9px;border:1px solid #209bc0;border-radius:4px;
       background:#007b9e;color:#fff;font:inherit;line-height:1.2;white-space:nowrap;cursor:pointer;
     }
     .gia-mileage-launch:hover {background:#006783;}
-    .gia-mileage-toolbar-launch {margin-left:6px;padding:3px 9px;align-self:center;vertical-align:middle;}
     .gia-mileage-launch:focus-visible,#gia-mileage-popup :focus-visible {
       outline:2px solid #50cfff;outline-offset:2px;
     }
@@ -211,14 +215,8 @@
 
   function mileageTarget() {
     if (!activeAnchor?.isConnected) throw new Error('The vehicle page changed. Reopen the calculator.');
-    if (activeAnchor.matches(selector)) return activeAnchor;
-    const panel = activeAnchor.closest('[id$="-PAVehiclesExtPanelSet-VehiclesLV"]');
-    if (!panel) throw new Error('Annual Miles could not be found on this page.');
-    const selected = Array.from(panel.querySelectorAll('input[name$="-AnnualMileage"]')).filter(input =>
-      input.closest('tr')?.querySelector('[role="checkbox"][id$="-_Checkbox_checkboxDiv"][aria-checked="true"]'));
-    if (selected.length === 0) throw new Error('Select one vehicle using its checkbox, then click Copy miles again.');
-    if (selected.length > 1) throw new Error('Select only one vehicle, then click Copy miles again.');
-    return selected[0];
+    if (!activeAnchor.matches(selector)) throw new Error('Annual Miles could not be found on this page.');
+    return activeAnchor;
   }
 
   function fillAnnualMiles(miles) {
@@ -277,14 +275,8 @@
       const row = input.parentElement;
       if (row.querySelector('.gia-mileage-launch')) return;
       row.classList.add('gia-mileage-row');
+      if (input.matches(prefillSelector)) row.classList.add('gia-mileage-prefill-row');
       input.insertAdjacentElement('afterend', makeLauncher(input));
-    });
-    document.querySelectorAll(retrieveSelector).forEach(retrieve => {
-      if (retrieve.parentElement.querySelector('.gia-mileage-toolbar-launch')) return;
-      const button = makeLauncher(retrieve);
-      button.classList.add('gia-mileage-toolbar-launch');
-      // Keep our control outside the vendor action's disabled container.
-      retrieve.insertAdjacentElement('afterend', button);
     });
   }
   document.addEventListener('keydown', event => {

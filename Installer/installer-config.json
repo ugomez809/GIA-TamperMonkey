@@ -16,8 +16,8 @@
       "path": "General Utilities/Mileage Calculator/policycenter-mileage-calculator-updater.user.js",
       "positions": [],
       "tags": [],
-      "summary": "Calculates annual mileage and fills the selected PolicyCenter vehicle's Annual Miles field.",
-      "details": "Adds the hosted, draggable Mileage Calculator beside Annual Miles or Retrieve Purchase Date. Copy miles fills the checked vehicle on Auto Data Prefill. Updates are cached for the next page load. Future Google Sheets network permissions are declared; no sheet is connected. Assign positions in the Installer manager when ready for staff rollout."
+      "summary": "Calculates annual mileage and fills the chosen PolicyCenter vehicle's Annual Miles field.",
+      "details": "Adds the hosted, draggable Mileage Calculator beside Annual Miles, including one button per vehicle on Auto Data Prefill. Copy miles fills the field beside the button that opened it. Updates are cached for the next page load. Future Google Sheets network permissions are declared; no sheet is connected. Assign positions in the Installer manager when ready for staff rollout."
     },
     {
       "path": "AgencyZoom/Hidden Tag Manager/agencyzoom-hidden-tag-manager-updater.user.js",

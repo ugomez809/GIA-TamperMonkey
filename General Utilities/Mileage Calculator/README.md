@@ -1,7 +1,7 @@
 # Mileage Calculator
 
 - `mileage-calculator-popup.html` contains the calculator UI and calculations.
-- `policycenter-mileage-calculator.user.js` adds the option 1 text button beside Annual Miles on vehicle-detail pages and beside Retrieve Purchase Date on Auto Data Prefill. It opens the hosted calculator outside the vehicle-details panel.
+- `policycenter-mileage-calculator.user.js` adds the option 1 text button beside Annual Miles on vehicle-detail pages and beside each Annual Miles input on Auto Data Prefill. It opens the hosted calculator outside the vehicle-details panel.
 - `policycenter-mileage-calculator-updater.user.js` installs once and loads the launcher from this repository, following the Google Review Helper updater's cached-load pattern.
 
 ## Install
@@ -24,6 +24,8 @@ Version 1.2.0 supports Auto Data Prefill on `policycenter.farmersinsurance.com` 
 
 Version 1.3.0 makes Copy miles fill Annual Miles directly. On Auto Data Prefill, check exactly one vehicle before clicking Copy miles. The checkbox selection at the time of the click determines the target, even if selection changed while the calculator was open. Zero or multiple selected vehicles produce an inline message and no field changes. On a vehicle-detail page, the target is the Annual Miles input beside the launcher that opened the calculator.
 
+Version 1.4.0 replaces the shared Auto Data Prefill toolbar launcher with a button beside each vehicle's Annual Miles field. Each compact field keeps its existing six-digit limit. Copy miles always fills the input beside the button that opened the calculator; checkboxes are no longer used for targeting. Opening another row's button changes the target to that row. Vehicle-detail page behavior is preserved.
+
 ## Future Google Sheets integration
 
 The updater declares `GM_xmlhttpRequest` and network access to `script.google.com`, `script.googleusercontent.com`, `docs.google.com`, `spreadsheets.google.com`, and `sheets.googleapis.com`. These cover the existing repository's Apps Script approach, its response redirects, and the Sheets API. The launcher loaded by the updater can use that request grant when a future Sheets integration is implemented.
@@ -31,6 +33,8 @@ The updater declares `GM_xmlhttpRequest` and network access to `script.google.co
 These are Tampermonkey network permissions, not Google account authorization or permission to a particular spreadsheet. No spreadsheet, endpoint, OAuth token, or Google request is configured now, and no results are being sent to Google. Future work must add the chosen destination and its authentication or sharing setup. The embedded calculator does not inherit Tampermonkey APIs; any privileged future request belongs in the parent launcher, using a validated message from the iframe.
 
 ## Update the calculator
+
+Read [HTML_EDITING_RULES.md](HTML_EDITING_RULES.md) before changing the hosted HTML. It specifies the sizing, messaging, security, and Copy miles contract that must remain compatible with Tampermonkey.
 
 Edit `mileage-calculator-popup.html` in this folder and commit it to `main`. The existing GitHub Pages workflow automatically publishes it to:
 
@@ -44,7 +48,7 @@ The first opening uses empty space to the right of the vehicle-details card, or 
 
 Drag the top title bar to move the popup. Closing it after moving saves its last position in this browser for this PolicyCenter origin, including across page reloads. A manually chosen position takes precedence over automatic placement. Positions are clamped to the current viewport. The focused title bar also supports arrow keys (10px) and Shift+arrow keys (40px).
 
-The userscript does not send customer or vehicle details to the calculator. Copy miles fills only the chosen Annual Miles field and raises input/change events so Guidewire can process the edit. It rejects non-integer/negative values, results longer than the field permits, and read-only/disabled targets. The calculator reports Filled only after the launcher acknowledges the edit. It also attempts the original clipboard copy; browser clipboard permissions may apply. Standalone calculator pages retain clipboard-only behavior. The launcher does not click Save Draft, Quote, or submit the policy.
+The userscript does not send customer or vehicle details to the calculator. Copy miles fills only the Annual Miles field whose button opened the calculator and raises input/change events so Guidewire can process the edit. It rejects non-integer/negative values, results longer than the field permits, and read-only/disabled targets. The calculator reports Filled only after the launcher acknowledges the edit. It also attempts the original clipboard copy; browser clipboard permissions may apply. Standalone calculator pages retain clipboard-only behavior. The launcher does not click Save Draft, Quote, or submit the policy.
 
 The iframe can be closed with its close button, by clicking the launcher again, or with Escape inside the calculator or parent page. It closes automatically when PolicyCenter replaces the active vehicle field.
 
