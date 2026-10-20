@@ -9,6 +9,8 @@ Install the userscript in Tampermonkey. Disable the earlier design-switcher/plac
 
 Version 1.1.0 adds automatic iframe sizing, dragging, and remembered position. Update the launcher once to receive these features.
 
+Version 1.1.1 resets older saved coordinates so the initial popup sits 12px beyond the white vehicle-details card, in the gray area. Automatic placement follows the current card boundary; only deliberately dragged or keyboard-moved positions are remembered. Positions saved before 1.1.1 are reset once.
+
 ## Update the calculator
 
 Edit `mileage-calculator-popup.html` in this folder and commit it to `main`. The existing GitHub Pages workflow automatically publishes it to:
@@ -21,7 +23,7 @@ Embedded mode removes standalone preview margins. A ResizeObserver reports the c
 
 The first opening uses empty space to the right of the vehicle-details card, or to its left when that space is available. If neither side fits, it opens below the card. Windows larger than the available viewport scroll instead of extending off-screen.
 
-Drag the top title bar to move the popup. Closing it saves its last position in this browser for this PolicyCenter origin, including across page reloads. A saved or manually chosen position takes precedence over automatic placement. Positions are clamped to the current viewport. The focused title bar also supports arrow keys (10px) and Shift+arrow keys (40px).
+Drag the top title bar to move the popup. Closing it after moving saves its last position in this browser for this PolicyCenter origin, including across page reloads. A manually chosen position takes precedence over automatic placement. Positions are clamped to the current viewport. The focused title bar also supports arrow keys (10px) and Shift+arrow keys (40px).
 
 The userscript does not send policy information to the calculator or change Annual Miles. The calculator's Copy miles button copies the result for manual entry. Browser clipboard permissions may apply.
 

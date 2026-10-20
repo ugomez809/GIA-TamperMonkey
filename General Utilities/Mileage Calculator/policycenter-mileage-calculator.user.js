@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PolicyCenter - Hosted Mileage Calculator
 // @namespace    local.policycenter.hosted-mileage
-// @version      1.1.0
+// @version      1.1.1
 // @description  Opens a content-sized, draggable mileage calculator outside the vehicle details.
 // @match        https://policycenter.farmersinsurance.com/pc/*
 // @run-at       document-idle
@@ -58,7 +58,8 @@
   function readPosition() {
     try {
       const saved = JSON.parse(localStorage.getItem(positionKey));
-      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) return saved;
+      // Older versions saved automatic placements too; those can drift from the panel edge.
+      if (saved?.manual === true && Number.isFinite(saved.left) && Number.isFinite(saved.top)) return saved;
     } catch { /* Position memory is optional when storage is unavailable. */ }
     return null;
   }
@@ -66,7 +67,10 @@
   function closeCalculator(returnFocus = false) {
     if (popup) {
       const {left, top} = popup.getBoundingClientRect();
-      try { localStorage.setItem(positionKey, JSON.stringify({left, top})); } catch { /* Optional preference. */ }
+      try {
+        if (position) localStorage.setItem(positionKey, JSON.stringify({left, top, manual: true}));
+        else localStorage.removeItem(positionKey);
+      } catch { /* Optional preference. */ }
       popup.remove();
     }
     popup = frame = header = loading = null;
