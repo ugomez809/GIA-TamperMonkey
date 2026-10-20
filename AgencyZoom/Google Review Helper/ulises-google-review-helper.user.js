@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Ulises AgencyZoom Google Review Helper
 // @namespace    local.agencyzoom.ulises-google-review-helper
-// @version      0.4.3
+// @version      0.5.1
 // @description  Checks Ulises Gomez Agency Google reviews for the active AgencyZoom SMS contact and fills the right SMS draft.
 // @author       Ulises Gomez Agency
 // @homepageURL  https://github.com/ugomez809/GIA-TamperMonkey
@@ -27,7 +27,7 @@
   const MATCH_SERVICE_URL = 'https://script.google.com/macros/s/AKfycbxSQX_8WnbX54WJQTqJJB9jB6x4s68yeAKAsP7nsSrMo1r-LXwPyVHSs0gTgSc0YgKt/exec'; // Deployed service; staff key is stored locally.
   const AGENCY_NAME = 'Ulises Gomez Agency';
   const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA/export?format=csv&gid=0';
-  const SHEET_CACHE_KEY = 'ulisesReviewSheet:v3:1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA:0';
+  const SHEET_CACHE_KEY = 'ulisesReviewSheet:v4:1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA:0';
   const ROOT_ID = 'ugomez-google-review-helper';
   const SHEET_REFRESH_MS = 60 * 60 * 1000;
   const MIN_REVIEW_SEARCH_LETTERS = 2;
@@ -499,6 +499,8 @@
       #threadContainer h6.thread-name { display: inline; }
       #threadContainer .ugomez-review-icon { width: 24px; height: 24px; margin-left: 6px; }
       .ugomez-confirm-review { margin: 6px 0 6px 8px; padding: 3px 7px; cursor: pointer; border: 1px solid #16803c; border-radius: 4px; background: white; color: #146c32; }
+      .ugomez-reject-review { border-color: #b42318; color: #b42318; }
+      .ugomez-confirm-review:disabled { opacity: .55; cursor: default; }
       .ugomez-confirm-feedback { display: block; font-size: 12px; white-space: normal; }
       .ugomez-review-icon {
         display: inline-flex; align-items: center; justify-content: center;
@@ -802,6 +804,14 @@
     return (row.confirmedNames || []).some(value => normalizeName(value) === normalizeName(name));
   }
 
+  function hasRejection(row, name) {
+    return (row.rejectedNames || []).some(value => normalizeName(value) === normalizeName(name));
+  }
+
+  function noMatchIdentity(row) {
+    return row.id ? JSON.stringify(['id',row.id]) : JSON.stringify(['review',row.reviewer_name || '',row.original_review_date || '',row.rating || '',row.comment || '',row.page || '']);
+  }
+
   function activeConfirmationName() {
     const ticket = document.querySelector('#serviceDetailDock');
     const header = ticket && !ticket.classList.contains('d-none') && ticket.querySelector('#currentCustomerName');
@@ -838,6 +848,7 @@
     const wrap = document.createElement('span');
     const button = document.createElement('button');
     const feedback = document.createElement('span');
+    let busy = false;
     button.type = 'button'; button.className = 'ugomez-confirm-review';
     feedback.className = 'ugomez-confirm-feedback'; feedback.setAttribute('role','status');
     const customerName = getName();
@@ -845,7 +856,7 @@
     const exact = normalizeName(row.reviewer_name) === normalizeName(customerName);
     function paint() {
       button.textContent = confirmed ? (exact ? '✓ Confirmed' : '✓ Confirmed · Undo') : '✓';
-      button.disabled = !isKnownReviewName(customerName) || (confirmed && exact);
+      button.disabled = busy || !isKnownReviewName(customerName) || (confirmed && exact) || hasRejection(row,customerName);
       button.title = !customerName ? 'Open a customer with a name to confirm this review.' :
         (confirmed ? 'Confirmed for ' : 'Confirm review for ') + customerName;
       button.setAttribute('aria-label',button.title);
@@ -854,19 +865,68 @@
     button.addEventListener('click', async event => {
       event.preventDefault(); event.stopPropagation();
       if (normalizeName(getName()) !== normalizeName(customerName)) { feedback.textContent='Customer changed. Reopen the review results.'; return; }
-      button.disabled = true; feedback.textContent = 'Saving…';
+      busy = true; paint(); feedback.textContent = 'Saving…';
       try {
         const [result] = await postMatchRequests([{review:row,customerName,action:confirmed ? 'remove' : 'confirm'}]);
         if (!result.ok || !Array.isArray(result.names)) throw Error(result.error || 'Confirmation was not saved.');
-        const names = reviewStore.applyConfirmation(row,result.names,result.revision);
+        const names = reviewStore.applyConfirmation(row,result.names,result.revision,result.rejectedNames);
         row.confirmedNames = names || result.names;
         confirmed = hasConfirmation(row,customerName);
         feedback.textContent = confirmed ? 'Saved for ' + customerName : 'Confirmation removed';
         updateConfirmedViews();
       } catch (error) { feedback.textContent = error.message; }
-      paint();
+      busy = false; paint();
     });
     wrap.append(button,feedback);
+    return wrap;
+  }
+
+  function createNoMatchControl(customerName, shownResult, getName) {
+    const wrap = document.createElement('span');
+    const button = document.createElement('button');
+    const feedback = document.createElement('span');
+    button.type = 'button'; button.className = 'ugomez-confirm-review ugomez-reject-review';
+    feedback.className = 'ugomez-confirm-feedback'; feedback.setAttribute('role','status');
+    // Only dismiss suggestions this person actually saw, never reviews arriving later.
+    const shown = new Set([...shownResult.rows,...(shownResult.dismissedRows || [])].map(reviewIdentity));
+    let busy = false;
+    function selection() {
+      const current = reviewStore.match(customerName);
+      const eligible = current.rows.filter(row => shown.has(reviewIdentity(row)));
+      const undo = !eligible.length;
+      return {current,undo,rows:(undo ? current.dismissedRows : eligible).filter(row => shown.has(reviewIdentity(row)))};
+    }
+    function paint() {
+      const state = selection();
+      button.textContent = state.undo && state.rows.length ? 'No match · Undo' : 'No match';
+      button.disabled = busy || !isKnownReviewName(customerName) || state.current.status === 'reviewed' || !state.rows.length;
+      button.title = 'None of the displayed suggestions belong to ' + customerName;
+      button.setAttribute('aria-label',button.title);
+    }
+    button.addEventListener('click', async event => {
+      event.preventDefault(); event.stopPropagation();
+      if (busy) return;
+      if (normalizeName(getName()) !== normalizeName(customerName)) { feedback.textContent='Customer changed. Reopen the review results.'; return; }
+      const state = selection();
+      if (state.current.status === 'reviewed' || !isKnownReviewName(customerName) || !state.rows.length) return;
+      busy = true; paint(); feedback.textContent = 'Saving…';
+      let changed = false;
+      const errors = [];
+      try {
+        for (let i=0;i<state.rows.length;i+=25) {
+          const batch = state.rows.slice(i,i+25);
+          const results = await postMatchRequests(batch.map(review => ({review,customerName,action:state.undo ? 'restore' : 'reject'})));
+          results.forEach((result,j) => {
+            if (!result.ok || !Array.isArray(result.names) || !Array.isArray(result.rejectedNames)) { errors.push(result.error || 'A suggestion was not saved.'); return; }
+            reviewStore.applyConfirmation(batch[j],result.names,result.revision,result.rejectedNames); changed = true;
+          });
+        }
+        if (errors.length) throw Error(errors[0] + ' Unsaved suggestions remain eligible; retry No match.');
+        feedback.textContent = state.undo ? 'No match undone.' : 'None of these suggestions match. Ask this customer for a review.';
+      } catch (error) { feedback.textContent = error.message; }
+      finally { busy = false; paint(); if (changed) updateConfirmedViews(); }
+    });
+    paint(); wrap.append(button,feedback);
     return wrap;
   }
 
@@ -876,7 +936,7 @@
   let automaticMatchTimer = 0, automaticMatchRunning = false;
   function queueAutomaticMatches(name, rows) {
     rows.forEach(row => {
-      if (normalizeName(row.reviewer_name) !== normalizeName(name) || hasConfirmation(row,name)) return;
+      if (normalizeName(row.reviewer_name) !== normalizeName(name) || hasConfirmation(row,name) || hasRejection(row,name)) return;
       const key = reviewIdentity(row) + normalizeName(name);
       if ((automaticMatchAttempts.get(key) || 0) >= 3 || (automaticMatchRetry.get(key) || 0) > Date.now()) return;
       automaticMatchQueue.set(key,{review:row,customerName:name,action:'auto'});
@@ -895,7 +955,7 @@
       const results = await postMatchRequests(batch.map(([,request])=>request));
       results.forEach((result,i) => {
         if (!result.ok || !Array.isArray(result.names)) return;
-        reviewStore.applyConfirmation(batch[i][1].review,result.names,result.revision); automaticMatchAttempts.delete(batch[i][0]); changed = true;
+        reviewStore.applyConfirmation(batch[i][1].review,result.names,result.revision,result.rejectedNames); automaticMatchAttempts.delete(batch[i][0]); changed = true;
       });
     } catch {
       batch.forEach(([key,request]) => {
@@ -941,6 +1001,16 @@
     const pageIndex = headers.indexOf('gmb page');
     const matchesIndex = headers[8] === 'agencyzoom matches' ? 8 : -1;
     if (nameIndex < 0 || dateIndex < 0 || ratingIndex < 0) throw new Error('Sheet needs Name, Timestamp and Rating 1-5 columns.');
+    const rejected = new Map();
+    const rejectionHeaders = ['no match customer','google reviewer','google review id','review date','rating','review text','google page','marked at (utc)','no match status'];
+    if (rejectionHeaders.every((value,i) => headers[11+i] === value)) {
+      grid.forEach(values => {
+        if (values[19] !== 'No match' || !isKnownReviewName(values[11])) return;
+        const key = noMatchIdentity({reviewer_name:values[12],id:values[13],original_review_date:values[14],rating:values[15],comment:values[16],page:values[17]});
+        if (!rejected.has(key)) rejected.set(key,[]);
+        rejected.get(key).push(values[11]);
+      });
+    }
     const rows = grid.filter(values => values.some(value => value.trim())).map(values => {
       if (values.length !== headers.length) throw new Error('Incomplete or malformed CSV row.');
       return { reviewer_name: values[nameIndex].trim(), rating: values[ratingIndex].trim(),
@@ -949,6 +1019,7 @@
         confirmedNames: matchesIndex < 0 ? [] : values[matchesIndex].split(/\r?\n/).map(name => name.trim()).filter(isKnownReviewName) };
     }).filter(value => normalizeName(value.reviewer_name));
     if (!rows.length) throw new Error('Sheet has no reviewer names; keeping previous data.');
+    rows.forEach(row => { row.rejectedNames = rejected.get(noMatchIdentity(row)) || []; });
     rows.sort((a, b) => b.original_review_date.localeCompare(a.original_review_date));
     return rows;
   }
@@ -966,7 +1037,7 @@
       rows = data.rows; fetchedAt = data.fetchedAt; snapshotStartedAt = data.fetchStartedAt || fetchedAt; updatedAt = data.updatedAt || fetchedAt; revision++;
       if (overlays) rows.forEach(row => {
         const saved = savedConfirmation(row);
-        if (saved && saved.receivedAt >= snapshotStartedAt) row.confirmedNames = saved.names;
+        if (saved && saved.receivedAt >= snapshotStartedAt) { row.confirmedNames = saved.names; row.rejectedNames = saved.rejectedNames || row.rejectedNames || []; }
       });
       index = new Map();
       tokenIndex = new Map();
@@ -987,7 +1058,7 @@
       lastStorageRead = now();
       try {
         const saved = JSON.parse(read() || 'null');
-        if (saved && saved.version === 3 && Number.isFinite(saved.fetchedAt) && (saved.updatedAt || saved.fetchedAt) > updatedAt && saved.fetchedAt <= now() &&
+        if (saved && saved.version === 4 && Number.isFinite(saved.fetchedAt) && (saved.updatedAt || saved.fetchedAt) > updatedAt && saved.fetchedAt <= now() &&
           Array.isArray(saved.rows) && saved.rows.length && saved.rows.every(row => row && typeof row.reviewer_name === 'string' && normalizeName(row.reviewer_name) && Array.isArray(row.confirmedNames) && row.confirmedNames.every(n => typeof n === 'string'))) install(saved);
       } catch { /* Unavailable storage or corrupt cache: download a fresh copy. */ }
     }
@@ -1004,7 +1075,7 @@
         const fetchStartedAt = now();
         try {
           const nextRows = parseReviewCsv(await fetchCsv());
-          const data = { version: 3, fetchStartedAt, fetchedAt: now(), updatedAt: now(), rows: nextRows };
+          const data = { version: 4, fetchStartedAt, fetchedAt: now(), updatedAt: now(), rows: nextRows };
           install(data); error = ''; retryAt = 0;
           try { write(JSON.stringify(data)); } catch { /* Keep working from memory if storage is full. */ }
         } catch (failure) {
@@ -1016,15 +1087,16 @@
     }
     return {
       ensure,
-      applyConfirmation: (review, names, serverRevision = Math.max(now(),updatedAt+1)) => {
+      applyConfirmation: (review, names, serverRevision = Math.max(now(),updatedAt+1), rejectedNames) => {
         const target = rows.find(row => reviewIdentity(row) === reviewIdentity(review));
         if (!target) return;
         const saved = savedConfirmation(review);
-        if (saved && saved.revision > serverRevision) names = saved.names;
+        if (saved && saved.revision > serverRevision) { names = saved.names; rejectedNames = saved.rejectedNames || target.rejectedNames || []; }
         else {
-          try { writeConfirmation(review,JSON.stringify({revision:serverRevision,receivedAt:now(),names})); } catch { /* Keep current tab usable. */ }
+          try { writeConfirmation(review,JSON.stringify({revision:serverRevision,receivedAt:now(),names,rejectedNames:rejectedNames || target.rejectedNames || []})); } catch { /* Keep current tab usable. */ }
         }
         target.confirmedNames = names;
+        target.rejectedNames = rejectedNames || target.rejectedNames || [];
         install({fetchedAt,fetchStartedAt:snapshotStartedAt,updatedAt:Math.max(now(),updatedAt+1),rows},false);
         return names;
       },
@@ -1035,7 +1107,9 @@
         nameWords(name).forEach(word => (tokenIndex.get(word) || []).forEach(row => candidates.add(row)));
         const exactSet = new Set(exactRows);
         const matches = [...exactRows, ...rows.filter(row => candidates.has(row) && !exactSet.has(row))];
-        return { status: exactRows.length ? 'reviewed' : matches.length ? 'partial' : 'missing', rows: matches, exactRows };
+        const dismissedRows = matches.filter(row => !exactSet.has(row) && hasRejection(row,name));
+        const eligible = matches.filter(row => exactSet.has(row) || !hasRejection(row,name));
+        return { status: exactRows.length ? 'reviewed' : eligible.length ? 'partial' : 'missing', rows: eligible, exactRows, dismissedRows };
       },
       search: name => {
         const query = normalizeName(name), result = [];
@@ -1140,24 +1214,25 @@
     panel.tabIndex = 0;
     const heading = document.createElement('h4');
     heading.textContent = result.status === 'unnamed' ? 'Missing name' : name + ' · ' + result.rows.length + ' matching reviews';
+    if (isKnownReviewName(name)) heading.append(createNoMatchControl(name,result,() => button.reviewCustomerName));
     const disclaimer = document.createElement('p');
     disclaimer.className = 'ugomez-review-disclaimer';
     disclaimer.textContent = result.status === 'unnamed' ? 'Use Review Lookup Name on the right to search for this customer.' : result.status === 'error' ? 'Review sheet unavailable. Try again after refreshing.' :
       result.rows.length ? 'Shared names are possible matches, not proof of identity. Exact names appear first.' :
-      'No matching name words in the cached review sheet.';
+      result.dismissedRows && result.dismissedRows.length ? 'All current suggestions were marked No match. New reviews are still checked. Use Undo beside the customer name to restore the suggestions.' : 'No matching name words in the cached review sheet.';
     const cacheNote = document.createElement('div');
     cacheNote.className = 'ugomez-review-meta';
     cacheNote.textContent = sheetStatusText();
     panel.append(heading, disclaimer);
     if (result.status !== 'unnamed') panel.append(cacheNote);
-    result.rows.forEach(row => {
+    [...result.rows, ...(result.dismissedRows || [])].forEach(row => {
       const article = document.createElement('article');
       const title = document.createElement('strong');
       title.textContent = row.reviewer_name;
       const meta = document.createElement('div');
       meta.className = 'ugomez-review-meta';
       meta.textContent = [row.rating ? row.rating + '/5 stars' : '', row.original_review_date,
-        row.page, normalizeName(row.reviewer_name) === normalizeName(name) ? 'Exact name' : hasConfirmation(row, name) ? 'Confirmed match' : 'Possible match'].filter(Boolean).join(' · ');
+        row.page, normalizeName(row.reviewer_name) === normalizeName(name) ? 'Exact name' : hasConfirmation(row, name) ? 'Confirmed match' : hasRejection(row,name) ? 'Marked No match' : 'Possible match'].filter(Boolean).join(' · ');
       const comment = document.createElement('div');
       comment.className = 'ugomez-review-comment';
       comment.textContent = row.comment || 'No review text provided.';
@@ -1201,6 +1276,7 @@
       button.addEventListener('keydown', event => { if (event.key === 'Escape') closeReviewPopover(); });
     }
     button.setAttribute('aria-label', result.status === 'unnamed' ? 'Google reviews: Missing name' : 'Google reviews for ' + name + ': ' + result.rows.length + ' matches');
+    button.reviewCustomerName = name;
     button.openReviews = () => showReviewPopover(button, name, result);
   }
 

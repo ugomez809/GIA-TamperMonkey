@@ -79,7 +79,7 @@ includes(updater, '// @connect      api.github.com', 'GitHub API connect');
 includes(updater, '// @connect      raw.githubusercontent.com', 'raw GitHub connect');
 includes(updater, '// @connect      docs.google.com', 'Google connect for eval target');
 includes(updater, '// @connect      googleusercontent.com', 'Google CSV redirect permission');
-includes(updater, ':sheet-v3:code', 'invalidate old Supabase code cache');
+includes(updater, ':sheet-v4:code', 'invalidate old Supabase code cache');
 assert.doesNotMatch(updater, /supabase/);
 includes(updater, "const TARGET_ID = 'ulises-agencyzoom-google-review-helper';", 'updater target id');
 includes(updater, "const TARGET_FILE = 'ulises-google-review-helper.user.js';", 'updater target file');

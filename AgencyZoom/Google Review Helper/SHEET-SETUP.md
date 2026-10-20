@@ -1,4 +1,4 @@
-# Google Sheet review helper v0.4.3
+# Google Sheet review helper v0.5.1
 
 Review sheet: https://docs.google.com/spreadsheets/d/1oAcXoR9E-Qi9P7aJDCGrYLjzS1VLb5ZwEeiBEnUxYNA/edit?gid=0
 
@@ -19,18 +19,32 @@ Header: `AgencyZoom Matches`. Each cell contains one confirmed AgencyZoom name p
 - A successful save updates the current browser immediately. Per-review local acknowledgments carry ordered server revisions, so separate tabs do not overwrite each other’s confirmation cache; an overlapping CSV download cannot discard a save acknowledged while it was in flight. Other browsers receive it on their next regular refresh; this is not a real-time push.
 - Keep column I intact when adding new reviews. If the incoming integration overwrites I, saved confirmations will be lost.
 
+## No Match table (L:T)
+
+L:T is an independent audit table: No Match Customer, Google Reviewer, Google Review ID, Review Date, Rating, Review Text, Google Page, Marked At (UTC), No Match Status. J:K remain untouched. Setup refuses occupied unrelated headers or formulas. Each customer/review pair has one row, with status No match or Undone; undo retains its details and timestamp. Re-marking after undo updates the marked-at timestamp.
+
+No match excludes only that review for that customer. A Google Review ID identifies the review when available; otherwise reviewer/date/rating/text/page identify it. A new review with a different ID or details remains eligible. Dismissed suggestions remain in Google popovers/manual search with Undo but no longer count toward yellow. Exact/confirmed matches cannot be dismissed: undo a manual confirmation first. Changes take effect locally only after a successful save and sync to other staff on the hourly CSV pull. New schema4 forces a fresh read on upgrade.
+
+Run setupNoMatchTable in Apps Script once to create the L:T header. No fake review records are needed. Deploy the backend before using the v0.5.0 client; earlier clients can continue their existing confirmation workflow.
+
 ## Apps Script service
 
 Project: https://script.google.com/home/projects/1VRbvLMBC5vbBcxHI9LKfgyybazLlwZZ32Ejb3BzLkZE1nRZc6ws_Rgzy/edit
 
-Source: `shared-matches.gs`. Deploy as the owner, access Anyone. Match submissions do not require a key; anyone with the endpoint can submit or undo valid name mappings in column I. GET returns service/version health only. The code fixes the target spreadsheet and gid 0 and can write only column I. It locks the read/merge/write operation so simultaneous staff saves preserve existing names. It rejects an unrelated I header, non-exact automatic confirmations, invalid names, changed rows, and ambiguous identical review rows. It identifies reviews by their displayed name/date/rating/comment/page/ID, not a mutable row number. Never put the staff key in the public repository.
+Source: `shared-matches.gs`. Deploy as the owner, access Anyone. Match submissions do not require a key; anyone with the endpoint can submit or undo valid confirmations in column I and dismissals in L:T. GET returns service/version health only. The code fixes the target spreadsheet and gid 0 and can write column I and the No Match table L:T. It locks the read/merge/write operation so simultaneous staff saves preserve existing names. It rejects an unrelated I header, non-exact automatic confirmations, invalid names, changed rows, and ambiguous identical review rows. It identifies reviews by their displayed name/date/rating/comment/page/ID, not a mutable row number. No staff save key is required.
 
 ## Staff rollout
 
-Install the v0.4.3 updater from GitHub and reload AgencyZoom. No endpoint or staff-key setup is required. Do not run the standalone helper and updater together. The updater includes permission to reach the Apps Script service. Staff still on v0.2.0 need the updater upgrade for that permission.
+Install the v0.5.1 updater from GitHub and reload AgencyZoom. No endpoint or staff-key setup is required. Do not run the standalone helper and updater together. The updater includes permission to reach the Apps Script service. Staff still on v0.2.0 need the updater upgrade for that permission.
 
-Deploy the v0.4.3 Apps Script service before publishing the keyless client. Existing keyed clients remain compatible because the server ignores their extra token field. Old locally stored save settings are no longer read.
+Deploy the v0.5.0 Apps Script service before publishing the keyless client. Existing keyed clients remain compatible because the server ignores their extra token field. Old locally stored save settings are no longer read.
 
 ## Verification
 
 Run all Node tests in this folder, plus syntax checks on both userscripts and `git diff --check`. Tests cover CSV/cache TTL, shared aliases, undo, stale-customer protection, failed writes, batch deduplication, keyless saves and batch validation before access, write-column limits, ambiguous rows, and locked merging. Live setup on 2026-10-16 verified endpoint health, invalid-key rejection, and an exact Chaelynn Kim confirmation written to I and read back through public CSV. No fabricated customer/review relationship was written to the live sheet.
+
+No Match v0.5.0 verification on 2026-10-20: L:T headers created and read back; backend deployment version5 health verified; live exact-name dismissal rejected without adding an audit record. The v0.5.1 release passes 36 automated tests and uses the deployed v0.5.0 backend.
+
+## v0.5.1 dropdown action
+
+One No match button beside the customer name in the Google dropdown dismisses all currently displayed suggestions, using batches of at most 25 writes. Each underlying review is still recorded in L:T so future reviews remain eligible. The individual result rows retain only their confirmation checkmark. Undo at the top restores the displayed dismissed suggestions. Failed saves remain eligible. No server schema or deployment change is needed from v0.5.0.

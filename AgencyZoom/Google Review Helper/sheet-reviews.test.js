@@ -185,3 +185,41 @@ test('a CSV download started before a save cannot erase that acknowledged match'
   s.advance(1000);finish(csv);await pending;
   assert.equal(store.match('Carlos Perez').status,'reviewed');
 });
+
+
+test('No match is customer-and-review scoped; new reviews remain eligible and Undo restores yellow', async () => {
+  const headers=['Timestamp','Name','Email','Comments','Rating 1-5','ChatGPT Response','GMB Page','Review ID','AgencyZoom Matches','','','No Match Customer','Google Reviewer','Google Review ID','Review Date','Rating','Review Text','Google Page','Marked At (UTC)','No Match Status'];
+  const quote=v=>'"'+String(v).replace(/"/g,'""')+'"';
+  const old=['2026','Selina Perez','','Great','5','','GIA','old-id',''];
+  const audit=['Carlos Perez','Selina Perez','old-id','2026','5','Great','GIA','2026-10-20T00:00:00Z','No match'];
+  const serialize=rows=>[headers,...rows].map(r=>r.map(quote).join(',')).join('\n');
+  let response=serialize([[...old,'','',...audit]]);
+  const store=api().createReviewStore({fetchCsv:async()=>response,read:()=>'',write:()=>{}});
+  await store.ensure();
+  assert.equal(store.match('Carlos Perez').status,'missing');
+  assert.equal(store.match('Carlos Perez').dismissedRows.length,1);
+  assert.equal(store.match('Juan Perez').status,'partial');
+  assert.equal(store.match('Selina Perez').status,'reviewed');
+  response=serialize([[...old,'','',...audit],['2027','Selina Perez','','New review','5','','GIA','new-id','',...Array(11).fill('')]]);
+  await store.ensure(true);
+  assert.equal(store.match('Carlos Perez').status,'partial');
+  assert.equal(store.match('Carlos Perez').rows[0].id,'new-id');
+  response=serialize([[...old,'','',...audit.slice(0,8),'Undone']]);
+  await store.ensure(true);
+  assert.equal(store.match('Carlos Perez').status,'partial');
+});
+
+
+test('No match acknowledgments survive reload and older responses cannot restore dismissed reviews',async()=>{
+  const s=setup();await s.store.ensure();
+  const row=s.store.match('Jane Doe').rows[0];
+  s.store.applyConfirmation(row,[],100,['Carlos Doe']);
+  assert.equal(s.store.match('Carlos Doe').status,'missing');
+  s.store.applyConfirmation(row,[],99,[]);
+  assert.equal(s.store.match('Carlos Doe').status,'missing');
+  const second=api().createReviewStore(s.options);
+  assert.equal(second.match('Carlos Doe').status,'missing');
+  assert.equal(second.match('Carlos Doe').dismissedRows.length,1);
+  second.applyConfirmation(row,[],101,[]);
+  assert.equal(second.match('Carlos Doe').status,'partial');
+});
