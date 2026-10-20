@@ -91,7 +91,7 @@ html.gmc-embedded #gmc-root { box-sizing: border-box; max-width: none; margin: 0
     </div>
 
     <div class="gmc-dial" aria-live="polite"><span class="gmc-num" data-out="miles">—</span><span class="gmc-unit">mi / yr</span></div>
-    <p class="gmc-msg" data-out="msg">Enter the readings to see the yearly miles.</p>
+    <p class="gmc-msg" data-out="msg" role="status">Enter the readings to see the yearly miles.</p>
     <button type="button" class="gmc-copy" data-act="copy" disabled>Copy miles</button>
   </div>
 </div>
@@ -100,9 +100,9 @@ html.gmc-embedded #gmc-root { box-sizing: border-box; max-width: none; margin: 0
 (() => {
   const root = document.getElementById('gmc-root');
   if (!root) return;
+  let parentOrigin = null;
   if (document.documentElement.classList.contains('gmc-embedded')) {
     const requestedOrigin = new URLSearchParams(location.search).get('parentOrigin');
-    let parentOrigin;
     try {
       const parsed = new URL(requestedOrigin);
       if (['http:', 'https:'].includes(parsed.protocol) && parsed.origin === requestedOrigin) parentOrigin = parsed.origin;
@@ -128,7 +128,8 @@ html.gmc-embedded #gmc-root { box-sizing: border-box; max-width: none; margin: 0
   const fromOdometer = (now, then, days) => (now - then) / days * 365;
   const fromHabits = (oneWay, days, otherWk, tripsYr) => oneWay * 2 * days * WORK_WEEKS + otherWk * 52 + tripsYr;
 
-  let mode = 'odo', miles = null;
+  let mode = 'odo', miles = null, pendingApply = null, nextRequest = 0;
+  let applyTimer = null, labelTimer = null;
 
   function calc() {
     if (mode === 'odo') {
@@ -156,7 +157,7 @@ html.gmc-embedded #gmc-root { box-sizing: border-box; max-width: none; margin: 0
     root.querySelectorAll('[data-months]').forEach(b => b.setAttribute('aria-pressed', field('months').value.trim() === b.dataset.months));
     miles = r.miles == null ? null : Math.round(r.miles);
     $('[data-out="miles"]').textContent = miles == null ? '—' : fmt(miles);
-    $('[data-act="copy"]').disabled = miles == null;
+    $('[data-act="copy"]').disabled = miles == null || pendingApply !== null;
     msg.className = 'gmc-msg';
     if (r.err) { msg.textContent = r.err; msg.classList.add('err'); }
     else if (r.hint) { msg.textContent = r.hint; }
@@ -184,12 +185,42 @@ html.gmc-embedded #gmc-root { box-sizing: border-box; max-width: none; margin: 0
   }));
   field('date').max = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
+  window.addEventListener('message', event => {
+    if (!parentOrigin || event.origin !== parentOrigin || event.source !== window.parent) return;
+    const data = event.data;
+    if (pendingApply === null || data?.type !== 'gia-mileage:applied' || data.requestId !== pendingApply) return;
+    clearTimeout(applyTimer);
+    pendingApply = null;
+    const btn = $('[data-act="copy"]'), msg = $('[data-out="msg"]');
+    btn.disabled = miles == null;
+    btn.textContent = data.ok === true ? 'Filled' : 'Copy miles';
+    msg.textContent = typeof data.message === 'string' ? data.message : 'Annual Miles could not be filled.';
+    msg.className = 'gmc-msg ' + (data.ok === true ? 'ok' : 'err');
+    if (data.ok === true) labelTimer = setTimeout(() => { btn.textContent = 'Copy miles'; }, 1500);
+  });
+
   $('[data-act="copy"]').addEventListener('click', () => {
-    if (miles == null) return;
-    // Hook for later: listen for 'gmc:mileage' on document to drop the number into Guidewire's mileage field.
+    if (miles == null || pendingApply !== null) return;
+    clearTimeout(labelTimer);
     root.dispatchEvent(new CustomEvent('gmc:mileage', { detail: miles, bubbles: true }));
     const btn = $('[data-act="copy"]');
-    const done = () => { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy miles'; }, 1500); };
+    if (parentOrigin) {
+      pendingApply = ++nextRequest;
+      btn.disabled = true;
+      btn.textContent = 'Filling…';
+      applyTimer = setTimeout(() => {
+        pendingApply = null;
+        btn.disabled = miles == null;
+        btn.textContent = 'Copy miles';
+        const msg = $('[data-out="msg"]');
+        msg.textContent = 'Direct fill is unavailable. Update the PolicyCenter calculator script and reopen.';
+        msg.className = 'gmc-msg err';
+      }, 5000);
+      window.parent.postMessage({type: 'gia-mileage:apply', requestId: pendingApply, miles}, parentOrigin);
+      if (navigator.clipboard) navigator.clipboard.writeText(String(miles)).catch(() => {});
+      return;
+    }
+    const done = () => { btn.textContent = 'Copied'; labelTimer = setTimeout(() => { btn.textContent = 'Copy miles'; }, 1500); };
     (navigator.clipboard ? navigator.clipboard.writeText(String(miles)) : Promise.reject()).then(done).catch(() => {});
   });
 

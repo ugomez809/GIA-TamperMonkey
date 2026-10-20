@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PolicyCenter - Hosted Mileage Calculator
 // @namespace    local.policycenter.hosted-mileage
-// @version      1.2.0
-// @description  Opens a content-sized, draggable mileage calculator outside the vehicle details.
+// @version      1.3.0
+// @description  Opens a fitted, draggable mileage calculator and fills Annual Miles for the chosen vehicle.
 // @match        https://policycenter.farmersinsurance.com/pc/*
 // @match        https://policycenter-2.farmersinsurance.com/pc/*
 // @run-at       document-idle
@@ -209,9 +209,47 @@
     close.focus();
   }
 
+  function mileageTarget() {
+    if (!activeAnchor?.isConnected) throw new Error('The vehicle page changed. Reopen the calculator.');
+    if (activeAnchor.matches(selector)) return activeAnchor;
+    const panel = activeAnchor.closest('[id$="-PAVehiclesExtPanelSet-VehiclesLV"]');
+    if (!panel) throw new Error('Annual Miles could not be found on this page.');
+    const selected = Array.from(panel.querySelectorAll('input[name$="-AnnualMileage"]')).filter(input =>
+      input.closest('tr')?.querySelector('[role="checkbox"][id$="-_Checkbox_checkboxDiv"][aria-checked="true"]'));
+    if (selected.length === 0) throw new Error('Select one vehicle using its checkbox, then click Copy miles again.');
+    if (selected.length > 1) throw new Error('Select only one vehicle, then click Copy miles again.');
+    return selected[0];
+  }
+
+  function fillAnnualMiles(miles) {
+    if (!Number.isSafeInteger(miles) || miles < 0) throw new Error('Calculate a valid whole number of annual miles first.');
+    const input = mileageTarget();
+    if (input.disabled || input.readOnly) throw new Error('Annual Miles is not editable for this vehicle.');
+    const value = String(miles);
+    if (input.maxLength > 0 && value.length > input.maxLength) throw new Error('The result is too large for the Annual Miles field.');
+    if (input.value === value) return;
+    input.focus({preventScroll: true});
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    input.dispatchEvent(new Event('change', {bubbles: true}));
+    input.blur();
+  }
+
   window.addEventListener('message', event => {
-    if (!popup || event.origin !== calculatorOrigin || event.source !== frame?.contentWindow) return;
+    if (!popup || !frame?.contentWindow || event.origin !== calculatorOrigin || event.source !== frame.contentWindow) return;
     const data = event.data;
+    if (data?.type === 'gia-mileage:apply') {
+      if (!Number.isSafeInteger(data.requestId) || data.requestId < 1) return;
+      let reply;
+      try {
+        fillAnnualMiles(data.miles);
+        reply = {ok: true, message: 'Annual Miles filled.'};
+      } catch (error) {
+        reply = {ok: false, message: error.message || 'Annual Miles could not be filled.'};
+      }
+      event.source.postMessage({type: 'gia-mileage:applied', requestId: data.requestId, ...reply}, event.origin);
+      return;
+    }
     if (data?.type === 'gia-mileage:close') return closeCalculator(true);
     if (data?.type !== 'gia-mileage:resize' || !Number.isFinite(data.width) || !Number.isFinite(data.height)
       || data.width <= 0 || data.height <= 0 || data.width > 10000 || data.height > 10000) return;
