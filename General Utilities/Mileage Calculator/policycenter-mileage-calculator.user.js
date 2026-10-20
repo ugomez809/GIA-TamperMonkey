@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         PolicyCenter - Hosted Mileage Calculator
 // @namespace    local.policycenter.hosted-mileage
-// @version      1.1.1
+// @version      1.2.0
 // @description  Opens a content-sized, draggable mileage calculator outside the vehicle details.
 // @match        https://policycenter.farmersinsurance.com/pc/*
+// @match        https://policycenter-2.farmersinsurance.com/pc/*
 // @run-at       document-idle
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/ugomez809/GIA-TamperMonkey/main/General%20Utilities/Mileage%20Calculator/policycenter-mileage-calculator.user.js
@@ -17,6 +18,7 @@
   const calculatorOrigin = new URL(CALCULATOR_URL).origin;
   const positionKey = 'gia-mileage-calculator-position';
   const selector = 'input[name$="-AnnualMileageCA_DV"]';
+  const retrieveSelector = '[id$="-PAVehiclesExtPanelSet-VehiclesLV_tb-VehiclesScreen_RetrievePurchaseDate"]';
   const margin = 12;
   const style = document.createElement('style');
   style.textContent = `
@@ -27,6 +29,7 @@
       background:#007b9e;color:#fff;font:inherit;line-height:1.2;white-space:nowrap;cursor:pointer;
     }
     .gia-mileage-launch:hover {background:#006783;}
+    .gia-mileage-toolbar-launch {margin-left:6px;padding:3px 9px;align-self:center;vertical-align:middle;}
     .gia-mileage-launch:focus-visible,#gia-mileage-popup :focus-visible {
       outline:2px solid #50cfff;outline-offset:2px;
     }
@@ -51,7 +54,7 @@
   document.head.append(style);
 
   let popup = null, frame = null, header = null, loading = null;
-  let activeInput = null, activeButton = null;
+  let activeAnchor = null, activeButton = null;
   let contentSize = null, position = null, drag = null;
   const clamp = (value, min, max) => Math.min(Math.max(value, min), Math.max(min, max));
 
@@ -77,13 +80,13 @@
     drag = null;
     activeButton?.setAttribute('aria-expanded', 'false');
     if (returnFocus && activeButton?.isConnected) activeButton.focus();
-    activeInput = activeButton = null;
+    activeAnchor = activeButton = null;
   }
 
   function positionCalculator() {
     if (!popup) return;
-    if (!activeInput?.isConnected) return closeCalculator();
-    const field = activeInput.getBoundingClientRect();
+    if (!activeAnchor?.isConnected) return closeCalculator();
+    const field = activeAnchor.getBoundingClientRect();
     const vw = document.documentElement.clientWidth, vh = window.innerHeight;
     const css = getComputedStyle(popup);
     const borderX = parseFloat(css.borderLeftWidth) + parseFloat(css.borderRightWidth);
@@ -97,10 +100,10 @@
       left = clamp(position.left, margin, vw - width - margin);
       top = clamp(position.top, margin, vh - height - margin);
     } else {
-      const panel = activeInput.closest('[id$="-VehicleDetailCard"], [data-gia-mileage-panel]')
-        || activeInput.closest('.gw-DetailViewWidget') || activeInput.parentElement;
+      const panel = activeAnchor.closest('[id$="-VehicleDetailCard"], [id$="-PAVehiclesExtPanelSet-VehiclesLV"], [data-gia-mileage-panel]')
+        || activeAnchor.closest('.gw-DetailViewWidget') || activeAnchor.parentElement;
       const bounds = panel.getBoundingClientRect();
-      const mainLeft = activeInput.closest('#gw-center-panel')?.getBoundingClientRect().left || 0;
+      const mainLeft = activeAnchor.closest('#gw-center-panel')?.getBoundingClientRect().left || 0;
       if (bounds.right + margin + width <= vw - margin) {
         left = bounds.right + margin;
         top = clamp(field.top, margin, vh - height - margin);
@@ -162,10 +165,10 @@
     });
   }
 
-  function openCalculator(input, button) {
-    if (popup && activeInput === input) return closeCalculator(true);
+  function openCalculator(anchor, button) {
+    if (popup && activeAnchor === anchor) return closeCalculator(true);
     closeCalculator();
-    activeInput = input;
+    activeAnchor = anchor;
     activeButton = button;
     position = readPosition();
     contentSize = null;
@@ -218,21 +221,32 @@
     positionCalculator();
   });
 
+  function makeLauncher(anchor) {
+    const button = document.createElement('button');
+    button.type = 'button';button.className = 'gia-mileage-launch';
+    button.textContent = 'Mileage Calculator';
+    button.setAttribute('aria-haspopup', 'dialog');button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-controls', 'gia-mileage-popup');
+    button.addEventListener('click', event => {
+      event.preventDefault();event.stopPropagation();openCalculator(anchor, button);
+    });
+    return button;
+  }
+
   function refresh() {
-    if (popup && !activeInput?.isConnected) closeCalculator();
+    if (popup && !activeAnchor?.isConnected) closeCalculator();
     document.querySelectorAll(selector).forEach(input => {
       const row = input.parentElement;
       if (row.querySelector('.gia-mileage-launch')) return;
       row.classList.add('gia-mileage-row');
-      const button = document.createElement('button');
-      button.type = 'button';button.className = 'gia-mileage-launch';
-      button.textContent = 'Mileage Calculator';
-      button.setAttribute('aria-haspopup', 'dialog');button.setAttribute('aria-expanded', 'false');
-      button.setAttribute('aria-controls', 'gia-mileage-popup');
-      button.addEventListener('click', event => {
-        event.preventDefault();event.stopPropagation();openCalculator(input, button);
-      });
-      input.insertAdjacentElement('afterend', button);
+      input.insertAdjacentElement('afterend', makeLauncher(input));
+    });
+    document.querySelectorAll(retrieveSelector).forEach(retrieve => {
+      if (retrieve.parentElement.querySelector('.gia-mileage-toolbar-launch')) return;
+      const button = makeLauncher(retrieve);
+      button.classList.add('gia-mileage-toolbar-launch');
+      // Keep our control outside the vendor action's disabled container.
+      retrieve.insertAdjacentElement('afterend', button);
     });
   }
   document.addEventListener('keydown', event => {

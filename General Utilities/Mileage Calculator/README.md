@@ -1,7 +1,7 @@
 # Mileage Calculator
 
 - `mileage-calculator-popup.html` contains the calculator UI and calculations.
-- `policycenter-mileage-calculator.user.js` adds the option 1 text button beside Annual Miles in PolicyCenter. It opens the hosted calculator outside the full vehicle-details card.
+- `policycenter-mileage-calculator.user.js` adds the option 1 text button beside Annual Miles on vehicle-detail pages and beside Retrieve Purchase Date on Auto Data Prefill. It opens the hosted calculator outside the vehicle-details panel.
 
 ## Install
 
@@ -10,6 +10,8 @@ Install the userscript in Tampermonkey. Disable the earlier design-switcher/plac
 Version 1.1.0 adds automatic iframe sizing, dragging, and remembered position. Update the launcher once to receive these features.
 
 Version 1.1.1 resets older saved coordinates so the initial popup sits 12px beyond the white vehicle-details card, in the gray area. Automatic placement follows the current card boundary; only deliberately dragged or keyboard-moved positions are remembered. Positions saved before 1.1.1 are reset once.
+
+Version 1.2.0 supports Auto Data Prefill on `policycenter.farmersinsurance.com` and `policycenter-2.farmersinsurance.com`. Its toolbar button sits immediately after Retrieve Purchase Date and remains available when the vendor action is disabled. It does not retrieve purchase data or require a vehicle selection. The Annual Miles placement on existing vehicle-detail pages is preserved.
 
 ## Update the calculator
 
