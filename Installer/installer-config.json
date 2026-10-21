@@ -6,7 +6,7 @@
     "CSR",
     "SDR",
     "Admins",
-    "ALL 15"
+    "ALL"
   ],
   "tags": [
     "Ulises Gomez",
@@ -16,7 +16,7 @@
     {
       "path": "General Utilities/Mileage Calculator/policycenter-mileage-calculator-updater.user.js",
       "positions": [
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Calculates annual mileage and fills the chosen PolicyCenter vehicle's Annual Miles field.",
@@ -25,7 +25,7 @@
     {
       "path": "AgencyZoom/Hidden Tag Manager/agencyzoom-hidden-tag-manager-updater.user.js",
       "positions": [
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Manager tool for selecting AgencyZoom tags hidden from producer views.",
@@ -36,7 +36,7 @@
       "positions": [
         "PRODUCER",
         "CSR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Cleans AgencyZoom location fields and forces USA in country dropdowns.",
@@ -47,7 +47,7 @@
       "positions": [
         "PRODUCER",
         "CSR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Adds call, SMS, email, and note actions to AgencyZoom pipeline views.",
@@ -58,7 +58,7 @@
       "positions": [
         "PRODUCER",
         "CSR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [
         "Ulises Gomez"
@@ -70,7 +70,7 @@
       "path": "AgencyZoom/Producer Tag Hider/agencyzoom-producer-tag-hider-updater.user.js",
       "positions": [
         "PRODUCER",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Hides manager-selected AgencyZoom card tags from producer views.",
@@ -90,7 +90,7 @@
       "positions": [
         "PRODUCER",
         "CSR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Generates a downloadable PDF from the CFP quick quote platform.",
@@ -101,7 +101,7 @@
       "positions": [
         "PRODUCER",
         "CSR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [
         "Carlos Perez"
@@ -113,7 +113,7 @@
       "path": "PolicyCenter/Property Tools/gwpc-property-tools-updater.user.js",
       "positions": [
         "CSR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Adds property helper buttons to PolicyCenter.",
@@ -123,7 +123,7 @@
       "path": "Ricochet/Pickup & Hangup Counters/ricochet-pickup-hangup-counters-updater.user.js",
       "positions": [
         "SDR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Adds pickup and hangup counters to Ricochet.",
@@ -142,7 +142,7 @@
       "path": "Ricochet/Voicemail Lead Watcher/ricochet-voicemail-lead-watcher-updater.user.js",
       "positions": [
         "SDR",
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Reminds Ricochet SDRs when a lead needs voicemail handling.",
@@ -151,7 +151,7 @@
     {
       "path": "ALTA/Reconstruction Button/alta-reconstruction-button-updater.user.js",
       "positions": [
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Loads and auto-updates the ALTA Reconstruction Calculator Button script from GitHub.",
@@ -160,7 +160,7 @@
     {
       "path": "AgencyZoom/Service Category Hover Notes/agencyzoom-service-category-hover-notes-updater.user.js",
       "positions": [
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Loads and auto-updates only the AgencyZoom Service Category Hover Notes script from GitHub.",
@@ -169,7 +169,7 @@
     {
       "path": "General Utilities/CFP Quote Summary PDF/cfp-quote-summary-pdf-updater.user.js",
       "positions": [
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Loads and auto-updates the CFP Quote Summary PDF script from GitHub.",
@@ -178,7 +178,7 @@
     {
       "path": "Ricochet/Call Script/ricochet-sdr-sync-updater.user.js",
       "positions": [
-        "ALL 15"
+        "ALL"
       ],
       "tags": [],
       "summary": "Loads and auto-updates only the Ricochet SDR Transfer Script Sync script from GitHub.",
