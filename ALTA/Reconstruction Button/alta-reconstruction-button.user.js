@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ALTA Reconstruction Calculator Button
 // @namespace    GPG_Scripts
-// @version      0.7
+// @version      0.8
 // @description  Add Reconstruction Calculator links next to ALTA Google Maps links
 // @match        https://alta.farmers.com/*
 // @run-at       document-idle
@@ -636,8 +636,21 @@ app-home-features .map-links-section [data-test-id="Google_Maps_Launch"] mat-ico
     const findSquareFootage = () => findSquareFootageByDirectSelectors() || findSquareFootageByLabels();
 
     const getReconstructionLookup = (googleMapsLaunch) => {
-        const liveZipCode = findZipCode(googleMapsLaunch);
-        const liveSquareFootage = findSquareFootage();
+        let storedHome = null;
+        try {
+            // Read ALTA's quote data without requiring a Home Features page scan.
+            storedHome = JSON.parse(window.sessionStorage.getItem('appStore'))?.home;
+        } catch (_error) {
+            // Keep the page/cache fallback when storage is unavailable or malformed.
+        }
+        const storedZipCode = normalizeZipCode(storedHome?.addressForm?.fields?.[0]?.zipCode);
+        const liveZipCode = storedZipCode || findZipCode(googleMapsLaunch);
+        const storedSquareFootage = liveZipCode && liveZipCode === storedZipCode
+            ? normalizeSquareFootage(storedHome?.propertyForm?.fields?.[0]?.sqFeet)
+            : '';
+        const liveSquareFootage = storedSquareFootage
+            ? { value: storedSquareFootage, rawValue: storedSquareFootage }
+            : findSquareFootage();
 
         if (liveZipCode && liveSquareFootage) {
             saveLookupCache(googleMapsLaunch, liveZipCode, liveSquareFootage);
